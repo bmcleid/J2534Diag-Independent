@@ -23,13 +23,28 @@ jobs:
         uses: NuGet/setup-nuget@v2
       - name: Restore packages.config dependencies
         run: nuget restore J2534Diag.sln -NonInteractive
-      - name: Build .NET Framework 4.8.1 application
-        run: msbuild J2534Diag.sln /m /p:Configuration=Release /p:Platform="Any CPU" /verbosity:minimal
+      - name: Build with preserved diagnostics
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path diagnostics | Out-Null
+          & msbuild.exe J2534Diag.sln '/p:Configuration=Release' '/p:Platform=Any CPU' '/verbosity:diagnostic' '/flp:logfile=diagnostics/msbuild.log;verbosity=diagnostic' '/bl:diagnostics/msbuild.binlog'
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host '=== Compilation errors and final log entries ==='
+            Select-String -Path diagnostics/msbuild.log -Pattern 'error (CS|MSB|NU)[0-9]+|error :|Build FAILED|warning MSB3270' | Select-Object -Last 60 | ForEach-Object { $_.Line }
+            exit $LASTEXITCODE
+          }
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: J2534Diag-build-diagnostics
+          path: diagnostics/**
+          if-no-files-found: warn
+          retention-days: 14
       - name: Upload build output
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: J2534Diag-baseline-windows
-          path: |
-            bin/Release/**
+          path: bin/Release/**
           if-no-files-found: error

@@ -1,0 +1,35 @@
+name: Windows baseline build
+
+on:
+  push:
+    branches:
+      - dev/independent-baseline
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+      - name: Restore packages.config dependencies
+        run: nuget restore J2534Diag.sln -NonInteractive
+      - name: Build .NET Framework 4.8.1 application
+        run: msbuild J2534Diag.sln /m /p:Configuration=Release /p:Platform="Any CPU" /verbosity:minimal
+      - name: Upload build output
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: J2534Diag-baseline-windows
+          path: |
+            bin/Release/**
+          if-no-files-found: error

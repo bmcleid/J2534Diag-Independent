@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,7 +25,13 @@ namespace J2534Diag
         private readonly BindingList<CanMessage> _messages = new BindingList<CanMessage>();
         private readonly List<CanMessage> _allMessages = new List<CanMessage>();
         private readonly object _allMessagesLock = new object();
-        private readonly ConcurrentQueue<byte[]> _pendingRawData = new ConcurrentQueue<byte[]>();
+        private sealed class CapturedCanFrame
+        {
+            public byte[] Data;
+            public string ReceivedAtUtc;
+        }
+
+        private readonly ConcurrentQueue<CapturedCanFrame> _pendingRawData = new ConcurrentQueue<CapturedCanFrame>();
         private long _lastFilteredIndex = 0;
         private readonly HashSet<(string ArbId, string Data)> _distinctSet = new HashSet<(string, string)>();
         private Thread _processingThread;
@@ -42,6 +50,13 @@ namespace J2534Diag
                 HeaderText = "Index",
                 DataPropertyName = "Index",
                 Width = 60
+            });
+            dataGridViewMessages.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "ReceivedAtUtc",
+                HeaderText = "Received UTC (host)",
+                DataPropertyName = "ReceivedAtUtc",
+                Width = 215
             });
             dataGridViewMessages.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -90,7 +105,12 @@ namespace J2534Diag
                             StopListening();
                             return;
                         }
-                        _pendingRawData.Enqueue(msg.Data);
+                        // This is the host receive/queue time, not an ECU or bus timestamp.
+                        _pendingRawData.Enqueue(new CapturedCanFrame
+                        {
+                            Data = msg.Data == null ? null : (byte[])msg.Data.Clone(),
+                            ReceivedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)
+                        });
                         count++;
                     }
                 }
@@ -105,31 +125,36 @@ namespace J2534Diag
 
         private void btnExportCsv_Click(object sender, EventArgs e)
         {
+            if (_isListening)
+            {
+                MessageBox.Show("Stop the CAN listener before exporting the captured frames.", "Stop capture first", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             using (var sfd = new SaveFileDialog
             {
                 Filter = "CSV Files (*.csv)|*.csv",
-                FileName = $"CAN-{DateTime.Now.ToString("yyyyMMdd-hhmmss")}.csv"
+                FileName = $"CAN-{DateTime.Now:yyyyMMdd-HHmmss}.csv"
             })
             {
-                if (sfd.ShowDialog() == DialogResult.OK)
+                if (sfd.ShowDialog() != DialogResult.OK) return;
+                try
                 {
-                    try
+                    List<CanMessage> snapshot;
+                    lock (_allMessagesLock)
                     {
-                        using (var writer = new System.IO.StreamWriter(sfd.FileName, false, System.Text.Encoding.UTF8))
-                        {
-                            // Write header
-                            writer.WriteLine("Index,ArbId,Data");
-                            foreach (var msg in _messages)
-                            {
-                                writer.WriteLine($"{msg.Index},\"{msg.ArbId}\",\"{msg.Data}\"");
-                            }
-                        }
-                        MessageBox.Show("Export complete.", "Export", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        snapshot = _allMessages.OrderBy(m => m.Index).ToList();
                     }
-                    catch (Exception ex)
+                    using (var writer = new StreamWriter(sfd.FileName, false, new System.Text.UTF8Encoding(true)))
                     {
-                        MessageBox.Show("Export failed: " + ex.Message, "Export", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        // Export the stored capture, NOT the filtered/distinct UI subset.
+                        CanCaptureCsv.Write(writer, snapshot);
                     }
+                    MessageBox.Show($"Exported {snapshot.Count} stored CAN frames.", "Export complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Export failed: " + ex.Message, "Export", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
@@ -150,26 +175,37 @@ namespace J2534Diag
                     int batchSize = 200;
                     int count = 0;
                     int allMessagesCount = _allMessages.Count; //aprox count is fine no need to lock
-                    var mylist = new List<byte[]>();
-                    while (_pendingRawData.TryDequeue(out var data) && count < batchSize && allMessagesCount + count < MAX_RECORDS && _processingActive && !_cts.IsCancellationRequested)
+                    var mylist = new List<CapturedCanFrame>();
+                    while (count < batchSize && allMessagesCount + count < MAX_RECORDS
+                        && _processingActive && !_cts.IsCancellationRequested
+                        && _pendingRawData.TryDequeue(out var frame))
                     {
-                        mylist.Add(data);
+                        mylist.Add(frame);
+                        count++;
                     }
 
-                    foreach (var data in mylist)
+                    foreach (var frame in mylist)
                     {
                         if (!_processingActive || _cts.IsCancellationRequested)
                         {
                             return;
                         }
+                        var data = frame.Data;
+                        if (data == null || data.Length < 4) continue;
                         long index = Interlocked.Increment(ref _messageIndex);
                         uint arbIdValue = (uint)(data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3]);
                         string arbId = $"0x{arbIdValue:X3}";
                         string arbIdDescription = GmCanId11Bit.KnownCanIds.TryGetValue(arbIdValue, out var desc) ? desc : "";
                         string payload = BitConverter.ToString(data, 4, data.Length - 4);
-                        var msg = new CanMessage { Index = index, ArbId = arbId, ArbIdDescription = arbIdDescription, Data = payload };
+                        var msg = new CanMessage
+                        {
+                            Index = index,
+                            ReceivedAtUtc = frame.ReceivedAtUtc,
+                            ArbId = arbId,
+                            ArbIdDescription = arbIdDescription,
+                            Data = payload
+                        };
                         newMessages.Add(msg);
-                        count++;
                     }
 
                     if (newMessages.Count > 0)
@@ -246,9 +282,9 @@ namespace J2534Diag
                         }
                     }
 
+                    _lastFilteredIndex = snapshot.Last().Index;
                     if (toAppend.Count > 0)
                     {
-                        _lastFilteredIndex = toAppend.Last().Index;
                         BeginInvoke(new Action(() =>
                         {
                             foreach (var msg in toAppend)
@@ -284,8 +320,14 @@ namespace J2534Diag
         {
             if (_isListening) return;
 
-            _allMessages.Clear();
+            lock (_allMessagesLock)
+            {
+                _allMessages.Clear();
+            }
             _messages.Clear();
+            _lastFilteredIndex = Interlocked.Read(ref _messageIndex);
+            lock (_distinctSet) _distinctSet.Clear();
+            while (_pendingRawData.TryDequeue(out _)) { }
 
             _cts = new CancellationTokenSource();
 
@@ -358,126 +400,51 @@ namespace J2534Diag
             }
         }
 
-        public class CanMessage
+        public class CanMessage : CanCaptureRecord
         {
-            public long Index { get; set; }
-            public string ArbId { get; set; }
-            public string ArbIdDescription { get; set; }
-            public string Data { get; set; }
         }
 
         private void btnLoadCsv_Click(object sender, EventArgs e)
         {
-            using (var ofd = new OpenFileDialog
+            if (_isListening)
             {
-                Filter = "CSV Files (*.csv)|*.csv"
-            })
+                MessageBox.Show("Stop the CAN listener before importing a capture.", "Stop capture first", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (var ofd = new OpenFileDialog { Filter = "CSV Files (*.csv)|*.csv" })
             {
-                if (ofd.ShowDialog() == DialogResult.OK)
+                if (ofd.ShowDialog() != DialogResult.OK) return;
+                try
                 {
-                    try
+                    List<CanCaptureRecord> imported;
+                    using (var reader = new StreamReader(ofd.FileName))
                     {
-                        var lines = System.IO.File.ReadAllLines(ofd.FileName);
-                        if (lines.Length < 2)
-                        {
-                            MessageBox.Show("CSV file is empty or missing data.", "Load CSV", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            return;
-                        }
-
-                        // Parse header
-                        var header = lines[0].Split(',').Select(h => h.Trim().ToLowerInvariant()).ToArray();
-                        int idxIndex = Array.IndexOf(header, "index");
-                        int idxArbId = Array.IndexOf(header, "arbid");
-                        int idxArbIdDesc = Array.IndexOf(header, "arbid description");
-                        int idxData = Array.IndexOf(header, "data");
-
-                        if (idxIndex == -1 || idxArbId == -1 || idxData == -1)
-                        {
-                            MessageBox.Show("CSV header missing required columns.", "Load CSV", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            return;
-                        }
-
+                        // Accept original Index/ArbId/Data CSVs and timestamped CSVs.
+                        imported = CanCaptureCsv.Read(reader);
+                    }
+                    lock (_allMessagesLock)
+                    {
                         _allMessages.Clear();
-                        _messages.Clear();
-                        foreach (var line in lines.Skip(1))
+                        _allMessages.AddRange(imported.Select(m => new CanMessage
                         {
-                            if (string.IsNullOrWhiteSpace(line)) continue;
-                            var parts = SplitCsvLine(line);
-                            if (parts.Length < header.Length) continue;
-
-                            long index = 0;
-                            long.TryParse(parts[idxIndex].Trim(), out index);
-
-                            string arbIdStr = parts[idxArbId].Trim().Trim('"');
-                            string arbIdDescription = "";
-                            string data = idxData < parts.Length ? parts[idxData].Trim().Trim('"') : "";
-
-                            // Try to get ArbIdDescription from file, else lookup
-                            if (idxArbIdDesc != -1 && idxArbIdDesc < parts.Length)
-                            {
-                                arbIdDescription = parts[idxArbIdDesc].Trim().Trim('"');
-                            }
-                            else
-                            {
-                                // Try to parse ArbId as hex (e.g., 0x100)
-                                if (arbIdStr.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    if (uint.TryParse(arbIdStr.Substring(2), System.Globalization.NumberStyles.HexNumber, null, out uint arbIdVal))
-                                    {
-                                        arbIdDescription = GmCanId11Bit.KnownCanIds.TryGetValue(arbIdVal, out var desc) ? desc : "";
-                                    }
-                                }
-                                else if (uint.TryParse(arbIdStr, out uint arbIdVal))
-                                {
-                                    arbIdDescription = GmCanId11Bit.KnownCanIds.TryGetValue(arbIdVal, out var desc) ? desc : "";
-                                }
-                            }
-
-                            var msg = new CanMessage
-                            {
-                                Index = index,
-                                ArbId = arbIdStr,
-                                ArbIdDescription = arbIdDescription,
-                                Data = data
-                            };
-
-                            _allMessages.Add(msg);
-                        }
-                        ApplyFilterAndDistinct();
+                            Index = m.Index,
+                            ReceivedAtUtc = m.ReceivedAtUtc,
+                            ArbId = m.ArbId,
+                            ArbIdDescription = m.ArbIdDescription,
+                            Data = m.Data
+                        }));
                     }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show("Failed to load CSV: " + ex.Message, "Load CSV", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
+                    _lastFilteredIndex = imported.Count == 0 ? 0 : imported.Max(m => m.Index);
+                    Interlocked.Exchange(ref _messageIndex, _lastFilteredIndex);
+                    lock (_distinctSet) _distinctSet.Clear();
+                    ApplyFilterAndDistinct();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Failed to load CSV: " + ex.Message, "Load CSV", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
-        }
-
-        // Simple CSV splitter (handles quoted fields)
-        private static string[] SplitCsvLine(string line)
-        {
-            var result = new System.Collections.Generic.List<string>();
-            var sb = new System.Text.StringBuilder();
-            bool inQuotes = false;
-            for (int i = 0; i < line.Length; i++)
-            {
-                char c = line[i];
-                if (c == '"')
-                {
-                    inQuotes = !inQuotes;
-                }
-                else if (c == ',' && !inQuotes)
-                {
-                    result.Add(sb.ToString());
-                    sb.Clear();
-                }
-                else
-                {
-                    sb.Append(c);
-                }
-            }
-            result.Add(sb.ToString());
-            return result.ToArray();
         }
 
         private void txtFilter_KeyDown(object sender, KeyEventArgs e)

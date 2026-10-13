@@ -25,7 +25,8 @@ namespace J2534Diag.Tests
                 RejectUnterminatedQuotes();
                 ExclusiveReceiveOwnership();
                 ConcurrentReceiveOwnership();
-                Console.WriteLine("PASS: " + _assertions + " assertions across seven CAN capture regression tests.");
+                int pumpAssertions = CanCapturePumpTests.RunAll();
+                Console.WriteLine("PASS: " + (_assertions + pumpAssertions) + " assertions across fourteen CAN capture regression tests.");
                 return 0;
             }
             catch (Exception ex)

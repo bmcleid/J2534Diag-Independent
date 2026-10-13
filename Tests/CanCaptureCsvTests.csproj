@@ -17,6 +17,8 @@
     </Reference>
     <Compile Include="CanCaptureCsvTests.cs" />
     <Compile Include="CanDiskCaptureLoggerTests.cs" />
+    <Compile Include="CanCaptureIntegrityReportTests.cs" />
+    <Compile Include="..\Services\CanCaptureIntegrityReport.cs"><Link>CanCaptureIntegrityReport.cs</Link></Compile>
     <Compile Include="..\Services\CanDiskCaptureLogger.cs"><Link>CanDiskCaptureLogger.cs</Link></Compile>
     <Compile Include="CanCapturePumpTests.cs" />
     <Compile Include="J2534CanFrameSourceTests.cs" />

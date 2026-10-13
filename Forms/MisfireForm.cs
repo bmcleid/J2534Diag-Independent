@@ -20,6 +20,8 @@ namespace J2534Diag
 
         private J2534Manager j2534Manager;
         readonly List<ObdPid> MisfirePids;
+        private const string ReceiveOwner = "MISFIRE";
+        private bool _ownsReceiveChannel;
         private Thread _monitorThread;
         private Thread _pollingThread;
         private CancellationTokenSource _cts;
@@ -42,7 +44,7 @@ namespace J2534Diag
 
         private void MisfireForm_Load(object sender, EventArgs e)
         {
-            StartApiAndThreads();
+            // Background polling starts only when this tab is selected.
         }
 
         private void MisfireForm_FormClosing(object sender, FormClosingEventArgs e)
@@ -52,9 +54,14 @@ namespace J2534Diag
 
         private void StartApiAndThreads()
         {
-            _cts = new CancellationTokenSource();
-
             if (j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed) return;
+            if (!j2534Manager.ReceiveGate.TryAcquire(ReceiveOwner))
+            {
+                Debug.WriteLine("Misfire monitor cannot start; receiver owned by " + j2534Manager.ReceiveGate.CurrentOwner);
+                return;
+            }
+            _ownsReceiveChannel = true;
+            _cts = new CancellationTokenSource();
 
             // Set up filters, etc.
             MessageFilter passFilter = j2534Manager.BitMode == BitType.BITS_11 ? new MessageFilter()
@@ -316,25 +323,37 @@ namespace J2534Diag
         {
             if (_monitorThread == null || !_monitorThread.IsAlive)
             {
-                _cts = new CancellationTokenSource();
                 StartApiAndThreads();
             }
         }
 
         public void StopListening()
         {
+            if (!_ownsReceiveChannel) return;
+            _cts?.Cancel();
+            bool pollingStopped = _pollingThread == null || _pollingThread.Join(3000);
+            bool monitorStopped = _monitorThread == null || _monitorThread.Join(3000);
+            if (!pollingStopped || !monitorStopped)
+            {
+                Debug.WriteLine("Misfire receive shutdown pending; retaining channel ownership.");
+                return;
+            }
+            _pollingThread = null;
+            _monitorThread = null;
             try
             {
-                _cts?.Cancel();
-                _pollingThread?.Join(500);
-                _monitorThread?.Join(500);
-                _pollingThread = null;
-                _monitorThread = null;
-                if (j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed) return;
-                j2534Manager.Channel.ClearTxBuffer();
-                j2534Manager.Channel.ClearRxBuffer();
+                if (j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
+                    j2534Manager.Channel.ClearMsgFilters();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Misfire filter cleanup failed: " + ex);
+                return;
+            }
+            _cts?.Dispose();
+            _cts = null;
+            _ownsReceiveChannel = false;
+            j2534Manager.ReceiveGate.Release(ReceiveOwner);
         }
     }
 }

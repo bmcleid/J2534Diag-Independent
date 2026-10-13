@@ -45,6 +45,8 @@ namespace J2534Diag
 
         DateTime lastFrameTime = DateTime.Now;
         string partialVin = "";
+        private const string ReceiveOwner = "FUEL_TRIM";
+        private bool _ownsReceiveChannel;
         private Thread _monitorThread;
         private Thread _pollingThread;
         private CancellationTokenSource _cts;
@@ -163,6 +165,13 @@ namespace J2534Diag
 
         private void StartApiAndThreads()
         {
+            if (j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed) return;
+            if (!j2534Manager.ReceiveGate.TryAcquire(ReceiveOwner))
+            {
+                Debug.WriteLine("Fuel trim cannot start; receiver owned by " + j2534Manager.ReceiveGate.CurrentOwner);
+                return;
+            }
+            _ownsReceiveChannel = true;
             _cts = new CancellationTokenSource();
             _liveDataProtocolWindowStart = DateTime.UtcNow;
             _lastObdResponseTime = DateTime.MinValue;
@@ -170,7 +179,6 @@ namespace J2534Diag
 
             try
             {
-                if (j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed) return;
 
                 // Set up filters, etc.
                 MessageFilter passFilter = j2534Manager.BitMode == BitType.BITS_11 ? new MessageFilter()
@@ -288,7 +296,7 @@ namespace J2534Diag
             catch (J2534Exception ex)
             {
                 Debug.WriteLine($"Error starting API and threads: {ex.Message}");
-                j2534Manager.Disconnect();
+                StopListening();
             }
         }
 
@@ -705,23 +713,32 @@ namespace J2534Diag
 
         public void StopListening()
         {
+            if (!_ownsReceiveChannel) return;
+            _cts?.Cancel();
+            // Do not release the exclusive reader until both worker threads exit.
+            bool pollingStopped = _pollingThread == null || _pollingThread.Join(3000);
+            bool monitorStopped = _monitorThread == null || _monitorThread.Join(3000);
+            if (!pollingStopped || !monitorStopped)
+            {
+                Debug.WriteLine("Fuel trim receive shutdown pending; retaining channel ownership.");
+                return;
+            }
+            _pollingThread = null;
+            _monitorThread = null;
             try
             {
-                _cts?.Cancel();
                 if (j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
-                {
                     j2534Manager.Channel.ClearMsgFilters();
-                    j2534Manager.Channel.ClearTxBuffer();
-                    j2534Manager.Channel.ClearRxBuffer();
-                }
-                _pollingThread?.Join(500);
-                _monitorThread?.Join(500);
-                _pollingThread = null;
-                _monitorThread = null;
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine("Fuel trim filter cleanup failed: " + ex);
+                return;
             }
+            _cts?.Dispose();
+            _cts = null;
+            _ownsReceiveChannel = false;
+            j2534Manager.ReceiveGate.Release(ReceiveOwner);
         }
     }
 }

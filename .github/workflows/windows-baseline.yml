@@ -5,6 +5,7 @@ on:
     branches:
       - dev/independent-baseline
       - feature/can-capture-v2
+      - feature/can-capture-reliability
   pull_request:
     branches:
       - master

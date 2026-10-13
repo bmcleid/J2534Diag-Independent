@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -7,7 +6,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using SAE.J2534;
 
@@ -25,17 +23,12 @@ namespace J2534Diag
         private readonly BindingList<CanMessage> _messages = new BindingList<CanMessage>();
         private readonly List<CanMessage> _allMessages = new List<CanMessage>();
         private readonly object _allMessagesLock = new object();
-        private sealed class CapturedCanFrame
-        {
-            public byte[] Data;
-            public string ReceivedAtUtc;
-        }
-
-        private readonly ConcurrentQueue<CapturedCanFrame> _pendingRawData = new ConcurrentQueue<CapturedCanFrame>();
-        private long _lastFilteredIndex = 0;
-        private readonly HashSet<(string ArbId, string Data)> _distinctSet = new HashSet<(string, string)>();
-        private Thread _processingThread;
-        private volatile bool _processingActive = false;
+        private const string ReceiveOwner = "CAN_CAPTURE";
+        private int? _listenerFilterId;
+        private string _listenerFailure;
+        private bool _limitReached;
+        private int _uiRefreshPending;
+        private long _invalidFrames;
 
         public CanListenerForm(J2534Manager j2534Manager)
         {
@@ -89,37 +82,79 @@ namespace J2534Diag
         {
         }
 
+        private void ScheduleUiRefresh()
+        {
+            if (IsDisposed || Disposing || !IsHandleCreated) return;
+            if (Interlocked.Exchange(ref _uiRefreshPending, 1) != 0) return;
+            try
+            {
+                BeginInvoke(new Action(() =>
+                {
+                    Interlocked.Exchange(ref _uiRefreshPending, 0);
+                    if (!IsDisposed && !Disposing)
+                        ApplyFilterAndDistinct();
+                }));
+            }
+            catch (InvalidOperationException)
+            {
+                Interlocked.Exchange(ref _uiRefreshPending, 0);
+            }
+        }
+
+        // A single receive-and-store thread avoids discarding an asynchronous
+        // processing backlog when the user stops the listener.
         private void ListenLoop()
         {
-            int count = 0;
             var channel = j2534Manager.Channel;
-            while (!_cts.IsCancellationRequested && j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
+            int count = 0;
+            try
             {
-                try
+                while (!_cts.IsCancellationRequested && count < MAX_RECORDS)
                 {
-                    var resp = channel.GetMessages(200, 5);
-                    foreach (var msg in resp.Messages)
+                    var response = channel.GetMessages(200, 5);
+                    foreach (var msg in response.Messages)
                     {
-                        if(count >= MAX_RECORDS)
+                        if (_cts.IsCancellationRequested) break;
+                        if (count >= MAX_RECORDS) break;
+                        var received = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+                        var data = msg.Data;
+                        if (data == null || data.Length < 4)
                         {
-                            StopListening();
-                            return;
+                            Interlocked.Increment(ref _invalidFrames);
+                            continue;
                         }
-                        // This is the host receive/queue time, not an ECU or bus timestamp.
-                        _pendingRawData.Enqueue(new CapturedCanFrame
+
+                        uint arbIdValue = (uint)(data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3]);
+                        var record = new CanMessage
                         {
-                            Data = msg.Data == null ? null : (byte[])msg.Data.Clone(),
-                            ReceivedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)
-                        });
+                            Index = Interlocked.Increment(ref _messageIndex),
+                            ReceivedAtUtc = received,
+                            ArbId = $"0x{arbIdValue:X3}",
+                            ArbIdDescription = GmCanId11Bit.KnownCanIds.TryGetValue(arbIdValue, out var description) ? description : "",
+                            Data = BitConverter.ToString(data, 4, data.Length - 4)
+                        };
+                        lock (_allMessagesLock)
+                            _allMessages.Add(record);
                         count++;
+                        if (count % 200 == 0) ScheduleUiRefresh();
                     }
                 }
-                catch(J2534Exception ex)
+                if (count >= MAX_RECORDS) _limitReached = true;
+            }
+            catch (Exception ex)
+            {
+                _listenerFailure = ex.Message;
+                Debug.WriteLine("CAN listener stopped with error: " + ex);
+            }
+            finally
+            {
+                ScheduleUiRefresh();
+                // Finalize only from UI; never self-join the receiving thread.
+                if (!_cts.IsCancellationRequested && IsHandleCreated && !IsDisposed && !Disposing)
                 {
-                    StopListening();
-                    break;
+                    try { BeginInvoke(new Action(() => StopListening())); }
+                    catch (InvalidOperationException) { }
                 }
-                Thread.Sleep(1);
             }
         }
 
@@ -163,143 +198,6 @@ namespace J2534Diag
         {
             ApplyFilterAndDistinct();
         }
-        private int _uiTimerBusy = 0;
-
-        private void ProcessingLoop()
-        {
-            while (_processingActive && !_cts.IsCancellationRequested)
-            {
-                try
-                {
-                    var newMessages = new List<CanMessage>();
-                    int batchSize = 200;
-                    int count = 0;
-                    int allMessagesCount = _allMessages.Count; //aprox count is fine no need to lock
-                    var mylist = new List<CapturedCanFrame>();
-                    while (count < batchSize && allMessagesCount + count < MAX_RECORDS
-                        && _processingActive && !_cts.IsCancellationRequested
-                        && _pendingRawData.TryDequeue(out var frame))
-                    {
-                        mylist.Add(frame);
-                        count++;
-                    }
-
-                    foreach (var frame in mylist)
-                    {
-                        if (!_processingActive || _cts.IsCancellationRequested)
-                        {
-                            return;
-                        }
-                        var data = frame.Data;
-                        if (data == null || data.Length < 4) continue;
-                        long index = Interlocked.Increment(ref _messageIndex);
-                        uint arbIdValue = (uint)(data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3]);
-                        string arbId = $"0x{arbIdValue:X3}";
-                        string arbIdDescription = GmCanId11Bit.KnownCanIds.TryGetValue(arbIdValue, out var desc) ? desc : "";
-                        string payload = BitConverter.ToString(data, 4, data.Length - 4);
-                        var msg = new CanMessage
-                        {
-                            Index = index,
-                            ReceivedAtUtc = frame.ReceivedAtUtc,
-                            ArbId = arbId,
-                            ArbIdDescription = arbIdDescription,
-                            Data = payload
-                        };
-                        newMessages.Add(msg);
-                    }
-
-                    if (newMessages.Count > 0)
-                    {
-                        lock (_allMessagesLock)
-                        {
-                            _allMessages.AddRange(newMessages);
-
-                        }
-                    }
-
-                    // Only process/apply new messages since last filter
-                    List<CanMessage> snapshot;
-                    lock (_allMessagesLock)
-                    {
-                        snapshot = _allMessages.Where(m => m.Index > _lastFilteredIndex).OrderBy(m => m.Index).ToList();
-                    }
-
-                    if (snapshot.Count == 0)
-                        continue;
-
-                    string input = txtFilter.InvokeRequired
-                        ? (string)txtFilter.Invoke(new Func<string>(() => txtFilter.Text.Trim()))
-                        : txtFilter.Text.Trim();
-                    bool hasFilter = !string.IsNullOrEmpty(input);
-                    if (hasFilter && !input.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-                        input = "0x" + input;
-
-                    bool distinct = chkDistinctOnly.InvokeRequired
-                        ? (bool)chkDistinctOnly.Invoke(new Func<bool>(() => chkDistinctOnly.Checked))
-                        : chkDistinctOnly.Checked;
-
-                    if (!_processingActive || _cts.IsCancellationRequested)
-                    {
-                        return;
-                    }
-
-                    var toAppend = new List<CanMessage>();
-
-                    if (distinct)
-                    {
-                        // Build set of existing (ArbId, Data) in the grid
-                        HashSet<(string, string)> localDistinctSet;
-                        lock (_distinctSet)
-                        {
-                            if (_messages.Count == 0)
-                                _distinctSet.Clear();
-                            localDistinctSet = new HashSet<(string, string)>(_distinctSet);
-                        }
-
-                        foreach (var msg in snapshot)
-                        {
-                            if (hasFilter && !string.Equals(msg.ArbId, input, StringComparison.OrdinalIgnoreCase))
-                                continue;
-
-                            var key = (msg.ArbId, msg.Data);
-                            if (localDistinctSet.Add(key))
-                            {
-                                toAppend.Add(msg);
-                                lock (_distinctSet)
-                                {
-                                    _distinctSet.Add(key);
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        foreach (var msg in snapshot)
-                        {
-                            if (hasFilter && !string.Equals(msg.ArbId, input, StringComparison.OrdinalIgnoreCase))
-                                continue;
-                            toAppend.Add(msg);
-                        }
-                    }
-
-                    _lastFilteredIndex = snapshot.Last().Index;
-                    if (toAppend.Count > 0)
-                    {
-                        BeginInvoke(new Action(() =>
-                        {
-                            foreach (var msg in toAppend)
-                                _messages.Add(msg);
-                        }));
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine("Processing error: " + ex.Message);
-                    return;
-                }
-                Thread.Sleep(5); // Reduce CPU usage
-            }
-        }
 
         private void CanListenerForm_FormClosing(object sender, FormClosingEventArgs e)
         {
@@ -319,85 +217,106 @@ namespace J2534Diag
         public void StartListening()
         {
             if (_isListening) return;
-
-            lock (_allMessagesLock)
+            if (j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed)
             {
-                _allMessages.Clear();
+                MessageBox.Show("Connect a J2534 interface first.", "CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
             }
-            _messages.Clear();
-            _lastFilteredIndex = Interlocked.Read(ref _messageIndex);
-            lock (_distinctSet) _distinctSet.Clear();
-            while (_pendingRawData.TryDequeue(out _)) { }
-
-            _cts = new CancellationTokenSource();
-
-            _processingActive = true;
-            _processingThread = new Thread(ProcessingLoop) { IsBackground = true };
-            _processingThread.Start();
-
-            // Set up open mask filter
-            if (j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
+            if (!j2534Manager.ReceiveGate.TryAcquire(ReceiveOwner))
             {
-                j2534Manager.Channel.ClearMsgFilters();
-                var openFilter = new MessageFilter
+                MessageBox.Show("J2534 channel is already in use by " + j2534Manager.ReceiveGate.CurrentOwner + ". Stop that diagnostic session before capturing.", "Channel in use", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                lock (_allMessagesLock) _allMessages.Clear();
+                _messages.Clear();
+                _messageIndex = 0;
+                _listenerFailure = null;
+                _limitReached = false;
+                _invalidFrames = 0;
+                Interlocked.Exchange(ref _uiRefreshPending, 0);
+                _cts = new CancellationTokenSource();
+
+                var filter = new MessageFilter
                 {
                     FilterType = Filter.PASS_FILTER,
-                    Mask = new byte[] { 0x00, 0x00, 0x00, 0x00 },
-                    Pattern = new byte[] { 0x00, 0x00, 0x00, 0x00 },
-                    FlowControl = new byte[] { 0x00, 0x00, 0x00, 0x00 },
+                    Mask = new byte[] { 0, 0, 0, 0 },
+                    Pattern = new byte[] { 0, 0, 0, 0 },
+                    FlowControl = new byte[] { 0, 0, 0, 0 },
                     TxFlags = j2534Manager.BitMode == BitType.BITS_11 ? TxFlag.NONE : TxFlag.CAN_29BIT_ID
                 };
-                j2534Manager.Channel.StartMsgFilter(openFilter);
-            }
-
-            _listenThread = new Thread(ListenLoop) { IsBackground = true };
-            _listenThread.Start();
-            _isListening = true;
-
-            btnStart.Enabled = false;
-            btnStop.Enabled = true;
-        }
-
-        public void StopListening()
-        {
-            try
-            {
-                if (!_isListening) return;
-                if (j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
-                {
-                    j2534Manager.Channel.ClearMsgFilters();
-                    j2534Manager.Channel.ClearTxBuffer();
-                    j2534Manager.Channel.ClearRxBuffer();
-                }
-            }
-            catch { }
-            try
-            {
-                _cts?.Cancel();
-                _isListening = false;
-                _processingActive = false;
-                _listenThread?.Join(500);
-                _processingThread?.Join(500);
+                // Do not clear other owners' filters/buffers. Remove only ours on stop.
+                _listenerFilterId = j2534Manager.Channel.StartMsgFilter(filter);
+                _isListening = true;
+                _listenThread = new Thread(ListenLoop) { IsBackground = true, Name = "J2534 CAN capture" };
+                _listenThread.Start();
+                btnStart.Enabled = false;
+                btnStop.Enabled = true;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine(ex.ToString());
+                _listenerFailure = ex.Message;
+                if (_listenerFilterId.HasValue)
+                {
+                    try { j2534Manager.Channel.StopMsgFilter(_listenerFilterId.Value); }
+                    catch (Exception cleanupError) { Debug.WriteLine(cleanupError); }
+                    _listenerFilterId = null;
+                }
+                _isListening = false;
+                j2534Manager.ReceiveGate.Release(ReceiveOwner);
+                MessageBox.Show("Cannot start CAN capture: " + ex.Message, "CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // Called from UI. Wait for the only receive thread to exit before
+        // releasing channel ownership or permitting export/switching consumers.
+        public bool StopListening()
+        {
+            if (!_isListening) return true;
+            _cts.Cancel();
+            if (Thread.CurrentThread == _listenThread)
+                throw new InvalidOperationException("CAN capture worker cannot stop itself.");
+            if (_listenThread != null && !_listenThread.Join(5000))
+            {
+                MessageBox.Show("The J2534 receive call did not stop within five seconds. The channel remains reserved; do not start another scanner session.", "Capture shutdown pending", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
             }
 
-            // Ensure UI updates are on the UI thread
-            if (InvokeRequired)
+            try
             {
-                BeginInvoke(new Action(() =>
+                if (_listenerFilterId.HasValue)
                 {
-                    btnStart.Enabled = true;
-                    btnStop.Enabled = false;
-                }));
+                    if (j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
+                        j2534Manager.Channel.StopMsgFilter(_listenerFilterId.Value);
+                    _listenerFilterId = null;
+                }
+                j2534Manager.ReceiveGate.Release(ReceiveOwner);
             }
-            else
+            catch (Exception ex)
             {
-                btnStart.Enabled = true;
-                btnStop.Enabled = false;
+                _listenerFailure = ex.Message;
+                MessageBox.Show("CAN filter cleanup failed. Receive ownership remains reserved until the connection is reset: " + ex.Message, "CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
+
+            _isListening = false;
+            _listenThread = null;
+            _cts.Dispose();
+            _cts = null;
+            btnStart.Enabled = true;
+            btnStop.Enabled = false;
+            ApplyFilterAndDistinct();
+
+            if (_limitReached || _invalidFrames > 0 || _listenerFailure != null)
+            {
+                string message = (_limitReached ? $"Capture reached its {MAX_RECORDS} frame limit; later frames are not recorded.\n" : "") +
+                    (_invalidFrames > 0 ? $"Malformed J2534 records ignored: {_invalidFrames}.\n" : "") +
+                    (_listenerFailure != null ? "Capture stopped with driver error: " + _listenerFailure : "");
+                MessageBox.Show(message, "Incomplete CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            return true;
         }
 
         public class CanMessage : CanCaptureRecord
@@ -435,9 +354,7 @@ namespace J2534Diag
                             Data = m.Data
                         }));
                     }
-                    _lastFilteredIndex = imported.Count == 0 ? 0 : imported.Max(m => m.Index);
-                    Interlocked.Exchange(ref _messageIndex, _lastFilteredIndex);
-                    lock (_distinctSet) _distinctSet.Clear();
+                    Interlocked.Exchange(ref _messageIndex, imported.Count == 0 ? 0 : imported.Max(m => m.Index));
                     ApplyFilterAndDistinct();
                 }
                 catch (Exception ex)

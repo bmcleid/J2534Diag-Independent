@@ -63,6 +63,24 @@ Offline fake-source tests verify unsigned boundary values, zero vs unknown,
 timeout-with-message status, high-bit receive flags, and preservation of
 native metadata. CSV tests verify round-trip and import compatibility.
 
+## Second verification layer: pinned NuGet types
+
+The production `J2534CanFrameSource` now projects
+`SAE.J2534.GetMessageResults` and `SAE.J2534.Message` through a separate
+testable adapter. The Windows test project references the same NuGet
+`J2534-Sharp 1.0.0-CI00036` assembly as the application.
+
+Three additional offline tests construct actual J2534-Sharp objects and
+verify high-bit flags, unsigned timestamps (including zero and `uint.MaxValue`),
+per-batch `TIMEOUT` and `STATUS_NOERROR` labels, cloned payload bytes,
+end-to-end forwarding into `CanCapturePump`, and null/empty read handling.
+
+The Windows CI run for `8d2709d` completed successfully:
+**0 compiler errors, 5 nonblocking warnings, and 84 assertions across
+21 regression tests passed.** This proves compilation and the tested
+object-projection behavior against the pinned managed dependency; it does
+**not** establish compatibility with the TOPDON vendor DLL/driver or vehicle.
+
 ## Remaining release gates
 
 1. Verify `J2534-Sharp 1.0.0-CI00036` builds with the exact API signatures

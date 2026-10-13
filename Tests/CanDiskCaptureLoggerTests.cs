@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -69,12 +70,64 @@ namespace J2534Diag.Tests
         public static int RunAll()
         {
             StreamRowsToFileAndReadBack();
+            MoreThanTenThousandFramesReachDiskWithoutLargeUIHistory();
             QueueFullIsReportedWithoutBlockingCapture();
             DiskWriteFailureIsNotCalledComplete();
             FlushFailureIsNotCalledComplete();
             CannotEnqueueAfterFinish();
             RetriedFinishAndNoOverwrite();
             return _checks;
+        }
+
+        private sealed class SyntheticCanSource : ICanFrameBatchSource
+        {
+            public int Remaining;
+            public IReadOnlyList<CanReceivedFrame> ReadBatch(int requestedMaximum, int timeoutMilliseconds)
+            {
+                int length = Math.Min(Remaining, requestedMaximum);
+                var frames = new CanReceivedFrame[length];
+                for (int i = 0; i < length; i++)
+                {
+                    frames[i] = new CanReceivedFrame
+                    {
+                        Data = new byte[] { 0x00, 0x00, 0x07, 0xEA, 0x03, 0x62, 0xF1, 0x90 },
+                        TimestampRaw = (uint)(Remaining - i),
+                        RxStatusRaw = 0,
+                        ReadResult = "STATUS_NOERROR"
+                    };
+                }
+                Remaining -= length;
+                return frames;
+            }
+        }
+
+        private static void MoreThanTenThousandFramesReachDiskWithoutLargeUIHistory()
+        {
+            const int frameCount = 12025;
+            var source = new SyntheticCanSource { Remaining = frameCount };
+            var output = new StringWriter();
+            // Deliberately size this bounded test queue above the input count:
+            // verifies streaming beyond the old 10k cap without an accidental
+            // scheduler-dependent queue-drop failure in a CI environment.
+            var logger = new CanDiskCaptureLogger(output, 13000);
+            var pump = new CanCapturePump(source, frameCount,
+                () => new DateTime(2026, 10, 13, 17, 0, 0, DateTimeKind.Utc),
+                id => "");
+            var capture = pump.Run(CancellationToken.None, row =>
+            {
+                if (!logger.TryEnqueue(row))
+                    throw new IOException("Unexpected queue overflow in synthetic large-capture test.");
+            });
+            Check(capture.StoredFrames == frameCount, "Pump stopped at old 10,000 record cap");
+            Check(source.Remaining == 0, "Source frames were not fully consumed");
+            Check(logger.CompleteAndWait(10000), "Large-capture disk writer timeout");
+            var status = logger.GetStatus();
+            Check(status.Accepted == frameCount && status.Written == frameCount, "Accepted records were lost in disk writer");
+            Check(status.ApplicationWriteComplete, "Clean large-capture writer reported incomplete");
+            var records = CanCaptureCsv.Read(new StringReader(output.ToString()));
+            Check(records.Count == frameCount, "Large on-disk CSV did not retain all 12,025 rows");
+            Check(records[0].Index == 1 && records[frameCount - 1].Index == frameCount,
+                "Capture sequence discontinuity over 10,000 rows");
         }
 
         private static void StreamRowsToFileAndReadBack()

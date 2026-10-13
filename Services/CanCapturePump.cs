@@ -10,9 +10,19 @@ namespace J2534Diag
     /// the same capture algorithm as the Windows J2534 reader, without hardware.
     /// Does not transmit, change filters, or manage an adapter connection.
     /// </summary>
+    public sealed class CanReceivedFrame
+    {
+        public byte[] Data { get; set; }
+        // J2534 native values: null means unknown, while zero is a real value.
+        public uint? TimestampRaw { get; set; }
+        public uint? RxStatusRaw { get; set; }
+        // Unmodified GetMessages ResultCode enum name, if supplied.
+        public string ReadResult { get; set; }
+    }
+
     public interface ICanFrameBatchSource
     {
-        IReadOnlyList<byte[]> ReadBatch(int requestedMaximum, int timeoutMilliseconds);
+        IReadOnlyList<CanReceivedFrame> ReadBatch(int requestedMaximum, int timeoutMilliseconds);
     }
 
     public sealed class CanCaptureSummary
@@ -66,7 +76,7 @@ namespace J2534Diag
 
                 // Do not abort part-way through a batch on cancellation; those
                 // frames have already been removed from the device-side queue.
-                foreach (var data in batch)
+                foreach (var frame in batch)
                 {
                     if (summary.StoredFrames >= _maximumFrames)
                     {
@@ -75,6 +85,7 @@ namespace J2534Diag
                     }
 
                     // Classic J2534 CAN records contain four CAN-ID bytes.
+                    var data = frame == null ? null : frame.Data;
                     if (data == null || data.Length < 4)
                     {
                         summary.InvalidFrames++;
@@ -94,7 +105,12 @@ namespace J2534Diag
                         ReceivedAtUtc = timestamp.ToString("O", CultureInfo.InvariantCulture),
                         ArbId = "0x" + id.ToString("X3", CultureInfo.InvariantCulture),
                         ArbIdDescription = _describe(id) ?? "",
-                        Data = BitConverter.ToString(data, 4, data.Length - 4)
+                        Data = BitConverter.ToString(data, 4, data.Length - 4),
+                        J2534TimestampRaw = frame.TimestampRaw.HasValue
+                            ? frame.TimestampRaw.Value.ToString(CultureInfo.InvariantCulture) : "",
+                        J2534RxStatusHex = frame.RxStatusRaw.HasValue
+                            ? "0x" + frame.RxStatusRaw.Value.ToString("X8", CultureInfo.InvariantCulture) : "",
+                        J2534ReadResult = frame.ReadResult ?? ""
                     };
                     store(record);
                     summary.StoredFrames++;

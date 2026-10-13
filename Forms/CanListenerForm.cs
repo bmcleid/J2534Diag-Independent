@@ -114,12 +114,21 @@ namespace J2534Diag
                 _channel = channel ?? throw new ArgumentNullException(nameof(channel));
             }
 
-            public IReadOnlyList<byte[]> ReadBatch(int requestedMaximum, int timeoutMilliseconds)
+            public IReadOnlyList<CanReceivedFrame> ReadBatch(int requestedMaximum, int timeoutMilliseconds)
             {
                 var response = _channel.GetMessages(requestedMaximum, timeoutMilliseconds);
                 if (response.Messages == null)
-                    return Array.Empty<byte[]>();
-                return response.Messages.Select(msg => msg.Data).ToArray();
+                    return Array.Empty<CanReceivedFrame>();
+                // Keep exactly the J2534-Sharp values. Never convert the native
+                // timestamp to UTC without verifying its origin and units.
+                string readResult = response.Result.ToString();
+                return response.Messages.Select(msg => new CanReceivedFrame
+                {
+                    Data = msg.Data == null ? null : (byte[])msg.Data.Clone(),
+                    TimestampRaw = msg.Timestamp,
+                    RxStatusRaw = (uint)msg.RxStatus,
+                    ReadResult = readResult
+                }).ToArray();
             }
         }
 
@@ -144,7 +153,10 @@ namespace J2534Diag
                             ReceivedAtUtc = record.ReceivedAtUtc,
                             ArbId = record.ArbId,
                             ArbIdDescription = record.ArbIdDescription,
-                            Data = record.Data
+                            Data = record.Data,
+                            J2534TimestampRaw = record.J2534TimestampRaw,
+                            J2534RxStatusHex = record.J2534RxStatusHex,
+                            J2534ReadResult = record.J2534ReadResult
                         };
                         lock (_allMessagesLock)
                             _allMessages.Add(message);
@@ -368,7 +380,10 @@ namespace J2534Diag
                             ReceivedAtUtc = m.ReceivedAtUtc,
                             ArbId = m.ArbId,
                             ArbIdDescription = m.ArbIdDescription,
-                            Data = m.Data
+                            Data = m.Data,
+                            J2534TimestampRaw = m.J2534TimestampRaw,
+                            J2534RxStatusHex = m.J2534RxStatusHex,
+                            J2534ReadResult = m.J2534ReadResult
                         }));
                     }
                     Interlocked.Exchange(ref _messageIndex, imported.Count == 0 ? 0 : imported.Max(m => m.Index));

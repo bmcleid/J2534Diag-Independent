@@ -100,7 +100,8 @@ namespace J2534Diag
                     summary.StoredFrames++;
                 }
 
-                batchStored?.Invoke(summary.StoredFrames);
+                if (batch.Count > 0)
+                    batchStored?.Invoke(summary.StoredFrames);
 
                 // A hardware driver may return zero messages for a timeout.
                 // Avoid busy spinning in that case; do not hide non-timeout faults.

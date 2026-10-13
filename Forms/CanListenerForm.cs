@@ -444,40 +444,15 @@ namespace J2534Diag
 
         private void WriteIntegrityReport(string outputPath, CanDiskLogStatus status)
         {
-            // Sidecar makes loss/error conditions visible after the capture
-            // file has been shared without the original UI session.
-            var lines = new[]
-            {
-                "Format=J2534Diag-Capture-Integrity-v1",
-                "CaptureFile=" + _diskLogPath,
-                "FinishedAtUtc=" + DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
-                "FramesProcessedByPump=" + Interlocked.Read(ref _messageIndex).ToString(CultureInfo.InvariantCulture),
-                "FramesQueuedForDisk=" + status.Accepted.ToString(CultureInfo.InvariantCulture),
-                "RowsWrittenToWriter=" + status.Written.ToString(CultureInfo.InvariantCulture),
-                "QueueFullDrops=" + status.QueueFullDrops.ToString(CultureInfo.InvariantCulture),
-                "RejectedAfterWriterFailure=" + status.RejectedAfterFailure.ToString(CultureInfo.InvariantCulture),
-                "AcceptedNotWritten=" + status.AcceptedNotWritten.ToString(CultureInfo.InvariantCulture),
-                "DiskWriterClosed=" + status.Closed,
-                "DiskWriterError=" + SingleLine(status.WriterError),
-                "InvalidReceivedFrames=" + _invalidFrames.ToString(CultureInfo.InvariantCulture),
-                "SourceOverReturnedFrames=" + _excessReturnedFrames.ToString(CultureInfo.InvariantCulture),
-                "CaptureLimitReached=" + _limitReached,
-                "ReceiveError=" + SingleLine(_listenerFailure),
-                "ApplicationWriteComplete=" + (status.ApplicationWriteComplete &&
-                    _listenerFailure == null && _invalidFrames == 0 &&
-                    _excessReturnedFrames == 0 && !_limitReached),
-                "VehicleBusLossless=UNVERIFIED",
-                "TimestampClock=J2534NativeUnverified;HostUTCSeparate"
-            };
-            // CreateNew: never replace an earlier session's integrity record.
+            // CreateNew: don't replace an earlier session's integrity record.
             using (var stream = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
             using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(false)))
-                foreach (var line in lines) writer.WriteLine(line);
-        }
-
-        private static string SingleLine(string value)
-        {
-            return (value ?? "").Replace("\r", " ").Replace("\n", " ");
+            {
+                CanCaptureIntegrityReport.Write(
+                    writer, _diskLogPath, status, Interlocked.Read(ref _messageIndex),
+                    _invalidFrames, _excessReturnedFrames, _limitReached,
+                    _listenerFailure, DateTime.UtcNow);
+            }
         }
 
         public class CanMessage : CanCaptureRecord

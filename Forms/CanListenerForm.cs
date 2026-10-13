@@ -354,9 +354,7 @@ namespace J2534Diag
                             Data = m.Data
                         }));
                     }
-                    _lastFilteredIndex = imported.Count == 0 ? 0 : imported.Max(m => m.Index);
-                    Interlocked.Exchange(ref _messageIndex, _lastFilteredIndex);
-                    lock (_distinctSet) _distinctSet.Clear();
+                    Interlocked.Exchange(ref _messageIndex, imported.Count == 0 ? 0 : imported.Max(m => m.Index));
                     ApplyFilterAndDistinct();
                 }
                 catch (Exception ex)

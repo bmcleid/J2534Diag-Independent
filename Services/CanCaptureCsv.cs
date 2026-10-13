@@ -17,11 +17,18 @@ namespace J2534Diag
         public string ArbId { get; set; }
         public string ArbIdDescription { get; set; }
         public string Data { get; set; }
+        // Verbatim per-message J2534 metadata; blank when unavailable.
+        // Raw device timestamp, not UTC or an asserted unit/epoch.
+        public string J2534TimestampRaw { get; set; }
+        // Raw RxStatus bits in hexadecimal; do not infer semantics from flags.
+        public string J2534RxStatusHex { get; set; }
+        // J2534-Sharp GetMessages result associated with the batch containing this frame.
+        public string J2534ReadResult { get; set; }
     }
 
     public static class CanCaptureCsv
     {
-        public const string Header = "Index,ReceivedAtUtc,ArbId,ArbId Description,Data";
+        public const string Header = "Index,ReceivedAtUtc,ArbId,ArbId Description,Data,J2534TimestampRaw,J2534RxStatusHex,J2534ReadResult";
 
         public static void Write(TextWriter writer, IEnumerable<CanCaptureRecord> records)
         {
@@ -36,7 +43,10 @@ namespace J2534Diag
                     Quote(record.ReceivedAtUtc) + "," +
                     Quote(record.ArbId) + "," +
                     Quote(record.ArbIdDescription) + "," +
-                    Quote(record.Data));
+                    Quote(record.Data) + "," +
+                    Quote(record.J2534TimestampRaw) + "," +
+                    Quote(record.J2534RxStatusHex) + "," +
+                    Quote(record.J2534ReadResult));
             }
         }
 
@@ -52,6 +62,9 @@ namespace J2534Diag
             int data = Find(headers, "Data");
             int receivedAtUtc = Find(headers, "ReceivedAtUtc");
             int description = Find(headers, "ArbId Description");
+            int nativeTimestamp = Find(headers, "J2534TimestampRaw");
+            int receiveStatus = Find(headers, "J2534RxStatusHex");
+            int readResult = Find(headers, "J2534ReadResult");
             if (index < 0 || arbId < 0 || data < 0)
                 throw new FormatException("Required capture columns: Index, ArbId, Data.");
 
@@ -74,7 +87,10 @@ namespace J2534Diag
                     ReceivedAtUtc = receivedAtUtc >= 0 ? parts[receivedAtUtc] : "",
                     ArbId = parts[arbId],
                     ArbIdDescription = description >= 0 ? parts[description] : "",
-                    Data = parts[data]
+                    Data = parts[data],
+                    J2534TimestampRaw = nativeTimestamp >= 0 ? parts[nativeTimestamp] : "",
+                    J2534RxStatusHex = receiveStatus >= 0 ? parts[receiveStatus] : "",
+                    J2534ReadResult = readResult >= 0 ? parts[readResult] : ""
                 });
             }
             return records;

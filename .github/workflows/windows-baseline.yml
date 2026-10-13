@@ -6,6 +6,7 @@ on:
       - dev/independent-baseline
       - feature/can-capture-v2
       - feature/can-capture-reliability
+      - feature/can-capture-fake-transport-tests
   pull_request:
     branches:
       - master

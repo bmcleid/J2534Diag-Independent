@@ -30,6 +30,15 @@ namespace J2534Diag
         private int _uiRefreshPending;
         private long _invalidFrames;
         private long _excessReturnedFrames;
+        private CanDiskCaptureLogger _diskLogger;
+        private string _diskLogPath;
+        private readonly CheckBox _diskLogOption = new CheckBox
+        {
+            Text = "Disk log",
+            AutoSize = true,
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
+            Location = new System.Drawing.Point(515, 312)
+        };
 
         public CanListenerForm(J2534Manager j2534Manager)
         {
@@ -74,6 +83,7 @@ namespace J2534Diag
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
             });
 
+            Controls.Add(_diskLogOption);
             this.Load += CanListenerForm_Load;
             this.FormClosing += CanListenerForm_FormClosing;
             this.j2534Manager = j2534Manager;
@@ -113,7 +123,7 @@ namespace J2534Diag
             {
                 var pump = new CanCapturePump(
                     new J2534CanFrameSource(channel),
-                    MAX_RECORDS,
+                    _diskLogger != null ? int.MaxValue : MAX_RECORDS,
                     () => DateTime.UtcNow,
                     id => GmCanId11Bit.KnownCanIds.TryGetValue(id, out var description) ? description : "");
 
@@ -132,8 +142,17 @@ namespace J2534Diag
                             J2534RxStatusHex = record.J2534RxStatusHex,
                             J2534ReadResult = record.J2534ReadResult
                         };
+                        // All records go to the bounded writer when Disk log is
+                        // selected. In-memory rows are only a rolling UI preview.
+                        if (_diskLogger != null && !_diskLogger.TryEnqueue(record))
+                            throw new IOException("Disk capture queue overflow or writer failure; capture halted. Consult integrity report.");
+
                         lock (_allMessagesLock)
+                        {
                             _allMessages.Add(message);
+                            if (_diskLogger != null && _allMessages.Count > MAX_RECORDS + 500)
+                                _allMessages.RemoveRange(0, 500);
+                        }
                         Interlocked.Exchange(ref _messageIndex, record.Index);
                     },
                     count => ScheduleUiRefresh());
@@ -218,6 +237,25 @@ namespace J2534Diag
         public void StartListening()
         {
             if (_isListening) return;
+            string selectedDiskPath = null;
+            if (_diskLogOption.Checked)
+            {
+                using (var dialog = new SaveFileDialog
+                {
+                    Filter = "CSV Files (*.csv)|*.csv",
+                    FileName = $"CAN-session-{DateTime.Now:yyyyMMdd-HHmmss}.csv",
+                    OverwritePrompt = false
+                })
+                {
+                    if (dialog.ShowDialog() != DialogResult.OK) return;
+                    selectedDiskPath = dialog.FileName;
+                    if (File.Exists(selectedDiskPath))
+                    {
+                        MessageBox.Show("Choose a new filename; existing recordings will never be overwritten.", "Capture already exists", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
+            }
             if (j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed)
             {
                 MessageBox.Show("Connect a J2534 interface first.", "CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -238,6 +276,8 @@ namespace J2534Diag
                 _limitReached = false;
                 _invalidFrames = 0;
                 _excessReturnedFrames = 0;
+                _diskLogPath = null;
+                _diskLogger = null;
                 Interlocked.Exchange(ref _uiRefreshPending, 0);
                 _cts = new CancellationTokenSource();
 
@@ -251,15 +291,28 @@ namespace J2534Diag
                 };
                 // Do not clear other owners' filters/buffers. Remove only ours on stop.
                 _listenerFilterId = j2534Manager.Channel.StartMsgFilter(filter);
+                if (selectedDiskPath != null)
+                {
+                    // CreateNew prevents accidental replacement of historical logs.
+                    _diskLogger = new CanDiskCaptureLogger(selectedDiskPath, 4096);
+                    _diskLogPath = _diskLogger.FilePath;
+                }
                 _isListening = true;
                 _listenThread = new Thread(ListenLoop) { IsBackground = true, Name = "J2534 CAN capture" };
                 _listenThread.Start();
                 btnStart.Enabled = false;
                 btnStop.Enabled = true;
+                _diskLogOption.Enabled = false;
             }
             catch (Exception ex)
             {
                 _listenerFailure = ex.Message;
+                if (_diskLogger != null)
+                {
+                    if (!_diskLogger.CompleteAndWait(15000))
+                        Debug.WriteLine("Disk writer still closing after CAN start error.");
+                    _diskLogger = null;
+                }
                 if (_listenerFilterId.HasValue)
                 {
                     try { j2534Manager.Channel.StopMsgFilter(_listenerFilterId.Value); }
@@ -286,6 +339,14 @@ namespace J2534Diag
                 return false;
             }
 
+            // Wait for all accepted CSV rows to flush BEFORE closing the
+            // J2534 session or allowing a new receiver to start.
+            if (_diskLogger != null && !_diskLogger.CompleteAndWait(15000))
+            {
+                MessageBox.Show("The disk writer has not finished. Channel ownership remains reserved; retry Stop when disk I/O completes.", "Disk shutdown pending", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
             try
             {
                 if (_listenerFilterId.HasValue)
@@ -303,23 +364,75 @@ namespace J2534Diag
                 return false;
             }
 
+            var diskStatus = _diskLogger?.GetStatus();
+            string integrityFailure = null;
+            if (diskStatus != null && _diskLogPath != null)
+            {
+                try { WriteIntegrityReport(_diskLogPath + ".integrity.txt", diskStatus); }
+                catch (Exception ex) { integrityFailure = ex.Message; }
+            }
+
             _isListening = false;
             _listenThread = null;
             _cts.Dispose();
             _cts = null;
+            _diskLogger = null;
             btnStart.Enabled = true;
             btnStop.Enabled = false;
+            _diskLogOption.Enabled = true;
             ApplyFilterAndDistinct();
 
-            if (_limitReached || _invalidFrames > 0 || _excessReturnedFrames > 0 || _listenerFailure != null)
+            if (_limitReached || _invalidFrames > 0 || _excessReturnedFrames > 0 ||
+                _listenerFailure != null || (diskStatus != null && !diskStatus.ApplicationWriteComplete) || integrityFailure != null)
             {
                 string message = (_limitReached ? $"Capture reached its {MAX_RECORDS} frame limit; later frames are not recorded.\n" : "") +
                     (_invalidFrames > 0 ? $"Malformed J2534 records ignored: {_invalidFrames}.\n" : "") +
                     (_excessReturnedFrames > 0 ? $"Frames returned beyond requested limit: {_excessReturnedFrames}.\n" : "") +
-                    (_listenerFailure != null ? "Capture stopped with driver error: " + _listenerFailure : "");
+                    (_listenerFailure != null ? "Capture stopped with driver error: " + _listenerFailure + "\n" : "") +
+                    (diskStatus != null && !diskStatus.ApplicationWriteComplete
+                        ? $"Disk integrity warning: enqueued={diskStatus.Accepted}, written={diskStatus.Written}, queue drops={diskStatus.QueueFullDrops}, unwritten={diskStatus.AcceptedNotWritten}, writer error={diskStatus.WriterError ?? "none"}.\n" : "") +
+                    (integrityFailure != null ? "Could not write capture integrity report: " + integrityFailure : "");
                 MessageBox.Show(message, "Incomplete CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             return true;
+        }
+
+        private void WriteIntegrityReport(string outputPath, CanDiskLogStatus status)
+        {
+            // Sidecar makes loss/error conditions visible after the capture
+            // file has been shared without the original UI session.
+            var lines = new[]
+            {
+                "Format=J2534Diag-Capture-Integrity-v1",
+                "CaptureFile=" + _diskLogPath,
+                "FinishedAtUtc=" + DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+                "FramesProcessedByPump=" + Interlocked.Read(ref _messageIndex).ToString(CultureInfo.InvariantCulture),
+                "FramesQueuedForDisk=" + status.Accepted.ToString(CultureInfo.InvariantCulture),
+                "RowsWrittenToWriter=" + status.Written.ToString(CultureInfo.InvariantCulture),
+                "QueueFullDrops=" + status.QueueFullDrops.ToString(CultureInfo.InvariantCulture),
+                "RejectedAfterWriterFailure=" + status.RejectedAfterFailure.ToString(CultureInfo.InvariantCulture),
+                "AcceptedNotWritten=" + status.AcceptedNotWritten.ToString(CultureInfo.InvariantCulture),
+                "DiskWriterClosed=" + status.Closed,
+                "DiskWriterError=" + SingleLine(status.WriterError),
+                "InvalidReceivedFrames=" + _invalidFrames.ToString(CultureInfo.InvariantCulture),
+                "SourceOverReturnedFrames=" + _excessReturnedFrames.ToString(CultureInfo.InvariantCulture),
+                "CaptureLimitReached=" + _limitReached,
+                "ReceiveError=" + SingleLine(_listenerFailure),
+                "ApplicationWriteComplete=" + (status.ApplicationWriteComplete &&
+                    _listenerFailure == null && _invalidFrames == 0 &&
+                    _excessReturnedFrames == 0 && !_limitReached),
+                "VehicleBusLossless=UNVERIFIED",
+                "TimestampClock=J2534NativeUnverified;HostUTCSeparate"
+            };
+            // CreateNew: never replace an earlier session's integrity record.
+            using (var stream = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
+            using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(false)))
+                foreach (var line in lines) writer.WriteLine(line);
+        }
+
+        private static string SingleLine(string value)
+        {
+            return (value ?? "").Replace("\r", " ").Replace("\n", " ");
         }
 
         public class CanMessage : CanCaptureRecord

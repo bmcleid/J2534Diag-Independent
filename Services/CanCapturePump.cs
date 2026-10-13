@@ -45,6 +45,8 @@ namespace J2534Diag
         private readonly int _maximumFrames;
         private readonly Func<DateTime> _clockUtc;
         private readonly Func<uint, string> _describe;
+        // Retained even when a reader, callback or disk writer throws.
+        public CanCaptureSummary LastSummary { get; private set; }
 
         public CanCapturePump(
             ICanFrameBatchSource source,
@@ -66,6 +68,7 @@ namespace J2534Diag
         {
             if (store == null) throw new ArgumentNullException(nameof(store));
             var summary = new CanCaptureSummary();
+            LastSummary = summary;
 
             while (!cancellation.IsCancellationRequested && summary.StoredFrames < _maximumFrames)
             {

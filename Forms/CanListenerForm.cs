@@ -106,32 +106,6 @@ namespace J2534Diag
         // processing backlog when the user stops the listener.
         // Adapter-specific work is confined here. The capture logic itself is
         // exercised through a fake ICanFrameBatchSource by offline tests.
-        private sealed class J2534CanFrameSource : ICanFrameBatchSource
-        {
-            private readonly Channel _channel;
-            public J2534CanFrameSource(Channel channel)
-            {
-                _channel = channel ?? throw new ArgumentNullException(nameof(channel));
-            }
-
-            public IReadOnlyList<CanReceivedFrame> ReadBatch(int requestedMaximum, int timeoutMilliseconds)
-            {
-                var response = _channel.GetMessages(requestedMaximum, timeoutMilliseconds);
-                if (response.Messages == null)
-                    return Array.Empty<CanReceivedFrame>();
-                // Keep exactly the J2534-Sharp values. Never convert the native
-                // timestamp to UTC without verifying its origin and units.
-                string readResult = response.Result.ToString();
-                return response.Messages.Select(msg => new CanReceivedFrame
-                {
-                    Data = msg.Data == null ? null : (byte[])msg.Data.Clone(),
-                    TimestampRaw = msg.Timestamp,
-                    RxStatusRaw = (uint)msg.RxStatus,
-                    ReadResult = readResult
-                }).ToArray();
-            }
-        }
-
         private void ListenLoop()
         {
             var channel = j2534Manager.Channel;

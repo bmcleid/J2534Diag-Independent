@@ -29,7 +29,8 @@ namespace J2534Diag.Tests
                 ConcurrentReceiveOwnership();
                 int pumpAssertions = CanCapturePumpTests.RunAll();
                 int j2534Assertions = J2534CanFrameSourceTests.RunAll();
-                Console.WriteLine("PASS: " + (_assertions + pumpAssertions + j2534Assertions) + " assertions across twenty-one CAN capture regression tests.");
+                int diskAssertions = CanDiskCaptureLoggerTests.RunAll();
+                Console.WriteLine("PASS: " + (_assertions + pumpAssertions + j2534Assertions + diskAssertions) + " assertions across twenty-seven CAN capture regression tests.");
                 return 0;
             }
             catch (Exception ex)

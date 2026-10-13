@@ -10,12 +10,12 @@ namespace J2534Diag.Tests
     {
         private sealed class FakeSource : ICanFrameBatchSource
         {
-            public readonly Queue<byte[][]> Batches = new Queue<byte[][]>();
+            public readonly Queue<CanReceivedFrame[]> Batches = new Queue<CanReceivedFrame[]>();
             public readonly List<int> Requested = new List<int>();
             public Action OnRead;
             public bool Fail;
 
-            public IReadOnlyList<byte[]> ReadBatch(int requestedMaximum, int timeoutMilliseconds)
+            public IReadOnlyList<CanReceivedFrame> ReadBatch(int requestedMaximum, int timeoutMilliseconds)
             {
                 Requested.Add(requestedMaximum);
                 if (timeoutMilliseconds != 5)
@@ -23,7 +23,7 @@ namespace J2534Diag.Tests
                 OnRead?.Invoke();
                 if (Fail) throw new InvalidOperationException("Simulated driver failure");
                 if (Batches.Count == 0)
-                    return Array.Empty<byte[]>();
+                    return Array.Empty<CanReceivedFrame>();
                 return Batches.Dequeue();
             }
         }
@@ -52,13 +52,18 @@ namespace J2534Diag.Tests
             EmptyBatchAndCancellation();
             DriverErrorMustPropagate();
             NonUtcTimestampIsRejected();
+            NativeMetadataIsPreserved();
+            NullMetadataIsUnknownNotZero();
             return _assertions;
         }
 
-        private static byte[] Frame(uint canId, params byte[] payload)
+        private static CanReceivedFrame Frame(uint canId, params byte[] payload)
         {
-            return new[] { (byte)(canId >> 24), (byte)(canId >> 16),
-                (byte)(canId >> 8), (byte)canId }.Concat(payload).ToArray();
+            return new CanReceivedFrame
+            {
+                Data = new[] { (byte)(canId >> 24), (byte)(canId >> 16),
+                    (byte)(canId >> 8), (byte)canId }.Concat(payload).ToArray()
+            };
         }
 
         private static void CancelMidBatchStillStoresAllReturnedFrames()
@@ -107,7 +112,7 @@ namespace J2534Diag.Tests
             var source = new FakeSource();
             source.Batches.Enqueue(new[]
             {
-                new byte[] { 0, 1 }, Frame(0x7EA, 0x7F, 0x22, 0x31)
+                new CanReceivedFrame { Data = new byte[] { 0, 1 } }, Frame(0x7EA, 0x7F, 0x22, 0x31)
             });
             var stored = new List<CanCaptureRecord>();
             var result = Pump(source, 1).Run(CancellationToken.None, stored.Add);
@@ -156,6 +161,39 @@ namespace J2534Diag.Tests
             {
                 Check(ex.Message == "Simulated driver failure", "Driver error changed or suppressed");
             }
+        }
+
+        private static void NativeMetadataIsPreserved()
+        {
+            var source = new FakeSource();
+            var first = Frame(0x7EA, 0x03, 0x41, 0x0C);
+            first.TimestampRaw = 0U; // Zero is valid data, not a missing value.
+            first.RxStatusRaw = 0x80000100U;
+            first.ReadResult = "TIMEOUT"; // Partial successful read may have a timeout result.
+            var second = Frame(0x7E8, 0x03, 0x41, 0x0D);
+            second.TimestampRaw = uint.MaxValue;
+            second.RxStatusRaw = 0U;
+            second.ReadResult = "STATUS_NOERROR";
+            source.Batches.Enqueue(new[] { first, second });
+            var saved = new List<CanCaptureRecord>();
+            Pump(source, 2).Run(CancellationToken.None, saved.Add);
+            Check(saved[0].J2534TimestampRaw == "0", "Timestamp zero was treated as missing");
+            Check(saved[0].J2534RxStatusHex == "0x80000100", "High-bit raw receive flags were changed");
+            Check(saved[0].J2534ReadResult == "TIMEOUT", "Batch timeout result was discarded");
+            Check(saved[1].J2534TimestampRaw == "4294967295", "UInt32 timestamp was truncated");
+            Check(saved[1].J2534RxStatusHex == "0x00000000", "RxStatus zero was treated as missing");
+            Check(saved[1].J2534ReadResult == "STATUS_NOERROR", "Success result was discarded");
+        }
+
+        private static void NullMetadataIsUnknownNotZero()
+        {
+            var source = new FakeSource();
+            source.Batches.Enqueue(new[] { Frame(0x7EA, 0x01) });
+            var saved = new List<CanCaptureRecord>();
+            Pump(source, 1).Run(CancellationToken.None, saved.Add);
+            Check(saved[0].J2534TimestampRaw == "", "Unavailable timestamp must remain blank");
+            Check(saved[0].J2534RxStatusHex == "", "Unavailable flags must remain blank");
+            Check(saved[0].J2534ReadResult == "", "Unavailable read result must remain blank");
         }
 
         private static void NonUtcTimestampIsRejected()

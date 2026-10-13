@@ -119,9 +119,10 @@ namespace J2534Diag
         private void ListenLoop()
         {
             var channel = j2534Manager.Channel;
+            CanCapturePump pump = null;
             try
             {
-                var pump = new CanCapturePump(
+                pump = new CanCapturePump(
                     new J2534CanFrameSource(channel),
                     _diskLogger != null ? int.MaxValue : MAX_RECORDS,
                     () => DateTime.UtcNow,
@@ -163,6 +164,11 @@ namespace J2534Diag
             }
             catch (Exception ex)
             {
+                if (pump?.LastSummary != null)
+                {
+                    _invalidFrames = pump.LastSummary.InvalidFrames;
+                    _excessReturnedFrames = pump.LastSummary.ExcessReturnedFrames;
+                }
                 _listenerFailure = ex.Message;
                 Debug.WriteLine("CAN listener stopped with error: " + ex);
             }
@@ -186,6 +192,11 @@ namespace J2534Diag
                 return;
             }
 
+            if (_diskLogPath != null)
+            {
+                if (MessageBox.Show("Disk logging is the full-session file. Export CSV contains only the latest on-screen preview (up to 10,500 frames). Continue?", "Export preview only", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes)
+                    return;
+            }
             using (var sfd = new SaveFileDialog
             {
                 Filter = "CSV Files (*.csv)|*.csv",
@@ -306,22 +317,52 @@ namespace J2534Diag
             }
             catch (Exception ex)
             {
-                _listenerFailure = ex.Message;
-                if (_diskLogger != null)
+                _listenerFailure = "Capture startup failed: " + ex.Message;
+                // A worker may have started before a later startup/UI error.
+                // Never release its J2534 receive ownership while it is alive.
+                _cts?.Cancel();
+                bool receiverStopped = _listenThread == null || !_listenThread.IsAlive || _listenThread.Join(5000);
+                bool writerStopped = _diskLogger == null || _diskLogger.CompleteAndWait(15000);
+                bool filterStopped = !_listenerFilterId.HasValue;
+                if (_listenerFilterId.HasValue && receiverStopped)
                 {
-                    if (!_diskLogger.CompleteAndWait(15000))
-                        Debug.WriteLine("Disk writer still closing after CAN start error.");
-                    _diskLogger = null;
+                    try
+                    {
+                        if (j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
+                            j2534Manager.Channel.StopMsgFilter(_listenerFilterId.Value);
+                        _listenerFilterId = null;
+                        filterStopped = true;
+                    }
+                    catch (Exception cleanupError)
+                    {
+                        Debug.WriteLine("J2534 filter cleanup failed during startup: " + cleanupError);
+                    }
                 }
-                if (_listenerFilterId.HasValue)
+
+                if (!receiverStopped || !writerStopped || !filterStopped)
                 {
-                    try { j2534Manager.Channel.StopMsgFilter(_listenerFilterId.Value); }
-                    catch (Exception cleanupError) { Debug.WriteLine(cleanupError); }
-                    _listenerFilterId = null;
+                    // StopListening can be retried after a blocking driver call
+                    // or disk operation finally returns. Lease remains held.
+                    _isListening = true;
+                    btnStart.Enabled = false;
+                    btnStop.Enabled = true;
+                    _diskLogOption.Enabled = false;
+                    MessageBox.Show(_listenerFailure + "\nCleanup remains pending; receiver/channel ownership was retained. Retry Stop before changing tabs or disconnecting.", "Start failed, cleanup pending", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
                 }
+
+                if (_diskLogger != null && _diskLogPath != null)
+                {
+                    try { WriteIntegrityReport(_diskLogPath + ".integrity.txt", _diskLogger.GetStatus()); }
+                    catch (Exception reportError) { Debug.WriteLine("Start failure integrity report error: " + reportError); }
+                }
+                _diskLogger = null;
+                _listenThread = null;
+                _cts?.Dispose();
+                _cts = null;
                 _isListening = false;
                 j2534Manager.ReceiveGate.Release(ReceiveOwner);
-                MessageBox.Show("Cannot start CAN capture: " + ex.Message, "CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(_listenerFailure, "Cannot start CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -385,14 +426,18 @@ namespace J2534Diag
             if (_limitReached || _invalidFrames > 0 || _excessReturnedFrames > 0 ||
                 _listenerFailure != null || (diskStatus != null && !diskStatus.ApplicationWriteComplete) || integrityFailure != null)
             {
-                string message = (_limitReached ? $"Capture reached its {MAX_RECORDS} frame limit; later frames are not recorded.\n" : "") +
+                string message = (_limitReached ? "Capture reached its configured frame limit; later frames are not recorded.\n" : "") +
                     (_invalidFrames > 0 ? $"Malformed J2534 records ignored: {_invalidFrames}.\n" : "") +
                     (_excessReturnedFrames > 0 ? $"Frames returned beyond requested limit: {_excessReturnedFrames}.\n" : "") +
                     (_listenerFailure != null ? "Capture stopped with driver error: " + _listenerFailure + "\n" : "") +
                     (diskStatus != null && !diskStatus.ApplicationWriteComplete
                         ? $"Disk integrity warning: enqueued={diskStatus.Accepted}, written={diskStatus.Written}, queue drops={diskStatus.QueueFullDrops}, unwritten={diskStatus.AcceptedNotWritten}, writer error={diskStatus.WriterError ?? "none"}.\n" : "") +
                     (integrityFailure != null ? "Could not write capture integrity report: " + integrityFailure : "");
-                MessageBox.Show(message, "Incomplete CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(message + (diskStatus != null ? "\nFile: " + _diskLogPath : ""), "Incomplete CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else if (diskStatus != null)
+            {
+                MessageBox.Show("Disk capture closed and application-level writes accounted for.\nCSV: " + _diskLogPath + "\nIntegrity report: " + _diskLogPath + ".integrity.txt\nDevice/bus-level completeness remains unverified.", "Disk logging complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             return true;
         }

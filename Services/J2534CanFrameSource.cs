@@ -9,9 +9,10 @@ namespace J2534Diag
     /// Narrow adapter from the pinned J2534-Sharp library to the pure capture
     /// pump. Preserves the raw per-message metadata without interpreting it.
     /// </summary>
-    public sealed class J2534CanFrameSource : ICanFrameBatchSource
+    public sealed class J2534CanFrameSource : ICanFrameBatchSource, ICanReadResultSource
     {
         private readonly Channel _channel;
+        public string LastReadResult { get; private set; }
 
         public J2534CanFrameSource(Channel channel)
         {
@@ -20,7 +21,28 @@ namespace J2534Diag
 
         public IReadOnlyList<CanReceivedFrame> ReadBatch(int requestedMaximum, int timeoutMilliseconds)
         {
-            return ProjectBatch(_channel.GetMessages(requestedMaximum, timeoutMilliseconds));
+            // Reset status before each call so a failed read cannot silently
+            // inherit the status of an earlier successful read.
+            LastReadResult = null;
+            GetMessageResults result;
+            try
+            {
+                result = _channel.GetMessages(requestedMaximum, timeoutMilliseconds);
+            }
+            catch (J2534Exception ex) when (IsReceiveBufferOverflow(ex))
+            {
+                throw new CanReceiveBufferOverflowException(
+                    "J2534 driver reported receive-buffer overflow; CAN frames may have been lost.", ex);
+            }
+            LastReadResult = result.Result.ToString();
+            return ProjectBatch(result);
+        }
+
+        // Testable against the pinned J2534-Sharp exception/result types,
+        // without actually opening a vehicle communication channel.
+        public static bool IsReceiveBufferOverflow(J2534Exception error)
+        {
+            return error != null && error.Result == ResultCode.BUFFER_OVERFLOW;
         }
 
         // Public projection permits offline tests using the *actual pinned*

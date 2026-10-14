@@ -30,6 +30,7 @@ namespace J2534Diag
         private int _uiRefreshPending;
         private long _invalidFrames;
         private long _excessReturnedFrames;
+        private CanCaptureSummary _lastCaptureSummary;
         private CanDiskCaptureLogger _diskLogger;
         private string _diskLogPath;
         private readonly CheckBox _diskLogOption = new CheckBox
@@ -161,6 +162,7 @@ namespace J2534Diag
                 _limitReached = summary.LimitReached;
                 _invalidFrames = summary.InvalidFrames;
                 _excessReturnedFrames = summary.ExcessReturnedFrames;
+                _lastCaptureSummary = summary;
             }
             catch (Exception ex)
             {
@@ -168,6 +170,7 @@ namespace J2534Diag
                 {
                     _invalidFrames = pump.LastSummary.InvalidFrames;
                     _excessReturnedFrames = pump.LastSummary.ExcessReturnedFrames;
+                    _lastCaptureSummary = pump.LastSummary;
                 }
                 _listenerFailure = ex.Message;
                 Debug.WriteLine("CAN listener stopped with error: " + ex);
@@ -287,6 +290,7 @@ namespace J2534Diag
                 _limitReached = false;
                 _invalidFrames = 0;
                 _excessReturnedFrames = 0;
+                _lastCaptureSummary = null;
                 _diskLogPath = null;
                 _diskLogger = null;
                 Interlocked.Exchange(ref _uiRefreshPending, 0);
@@ -424,11 +428,19 @@ namespace J2534Diag
             ApplyFilterAndDistinct();
 
             if (_limitReached || _invalidFrames > 0 || _excessReturnedFrames > 0 ||
-                _listenerFailure != null || (diskStatus != null && !diskStatus.ApplicationWriteComplete) || integrityFailure != null)
+                _listenerFailure != null || (diskStatus != null && !diskStatus.ApplicationWriteComplete) ||
+                (_lastCaptureSummary != null && (_lastCaptureSummary.OtherStatusReadCalls > 0 ||
+                    _lastCaptureSummary.ReadCallsWithoutStatus > 0 ||
+                    _lastCaptureSummary.DriverBufferOverflowEvents > 0)) ||
+                integrityFailure != null)
             {
                 string message = (_limitReached ? "Capture reached its configured frame limit; later frames are not recorded.\n" : "") +
                     (_invalidFrames > 0 ? $"Malformed J2534 records ignored: {_invalidFrames}.\n" : "") +
                     (_excessReturnedFrames > 0 ? $"Frames returned beyond requested limit: {_excessReturnedFrames}.\n" : "") +
+                    (_lastCaptureSummary?.DriverBufferOverflowEvents > 0
+                        ? $"J2534 reported receive-buffer overflow {_lastCaptureSummary.DriverBufferOverflowEvents} time(s). Some frames may be irrecoverably lost.\n" : "") +
+                    (_lastCaptureSummary?.OtherStatusReadCalls > 0 || _lastCaptureSummary?.ReadCallsWithoutStatus > 0
+                        ? "J2534 returned unrecognized/unavailable read status. Review the integrity report.\n" : "") +
                     (_listenerFailure != null ? "Capture stopped with driver error: " + _listenerFailure + "\n" : "") +
                     (diskStatus != null && !diskStatus.ApplicationWriteComplete
                         ? $"Disk integrity warning: enqueued={diskStatus.Accepted}, written={diskStatus.Written}, queue drops={diskStatus.QueueFullDrops}, unwritten={diskStatus.AcceptedNotWritten}, writer error={diskStatus.WriterError ?? "none"}.\n" : "") +
@@ -451,7 +463,7 @@ namespace J2534Diag
                 CanCaptureIntegrityReport.Write(
                     writer, _diskLogPath, status, Interlocked.Read(ref _messageIndex),
                     _invalidFrames, _excessReturnedFrames, _limitReached,
-                    _listenerFailure, DateTime.UtcNow);
+                    _listenerFailure, DateTime.UtcNow, _lastCaptureSummary);
             }
         }
 

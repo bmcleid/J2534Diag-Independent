@@ -25,6 +25,26 @@ namespace J2534Diag
         IReadOnlyList<CanReceivedFrame> ReadBatch(int requestedMaximum, int timeoutMilliseconds);
     }
 
+    /// <summary>
+    /// Optional status channel for J2534 read results. The status refers to
+    /// the most recently completed ReadBatch call on the same receive thread.
+    /// Unknown/unsupported sources leave this interface unimplemented.
+    /// </summary>
+    public interface ICanReadResultSource
+    {
+        string LastReadResult { get; }
+    }
+
+    /// <summary>
+    /// Raised only for an explicitly reported J2534 receive-buffer overflow.
+    /// This means loss has been reported, not an estimated frame count.
+    /// </summary>
+    public sealed class CanReceiveBufferOverflowException : InvalidOperationException
+    {
+        public CanReceiveBufferOverflowException(string message, Exception inner)
+            : base(message, inner) { }
+    }
+
     public sealed class CanCaptureSummary
     {
         public int StoredFrames { get; internal set; }
@@ -32,6 +52,13 @@ namespace J2534Diag
         public int ExcessReturnedFrames { get; internal set; }
         public bool LimitReached { get; internal set; }
         public bool Cancelled { get; internal set; }
+        public long SuccessfulReadCalls { get; internal set; }
+        public long TimedOutReadCalls { get; internal set; }
+        public long EmptyBufferReadCalls { get; internal set; }
+        public long OtherStatusReadCalls { get; internal set; }
+        public long ReadCallsWithoutStatus { get; internal set; }
+        public long DriverReadErrors { get; internal set; }
+        public long DriverBufferOverflowEvents { get; internal set; }
     }
 
     /// <summary>
@@ -73,7 +100,45 @@ namespace J2534Diag
             while (!cancellation.IsCancellationRequested && summary.StoredFrames < _maximumFrames)
             {
                 int requested = Math.Min(200, _maximumFrames - summary.StoredFrames);
-                var batch = _source.ReadBatch(requested, 5);
+                IReadOnlyList<CanReceivedFrame> batch;
+                try
+                {
+                    batch = _source.ReadBatch(requested, 5);
+                }
+                catch (CanReceiveBufferOverflowException)
+                {
+                    summary.DriverBufferOverflowEvents++;
+                    summary.DriverReadErrors++;
+                    throw;
+                }
+                catch (Exception)
+                {
+                    summary.DriverReadErrors++;
+                    throw;
+                }
+
+                // Empty reads still matter: they do not create frame rows,
+                // so preserve per-call status in the independent summary.
+                var readDiagnostics = _source as ICanReadResultSource;
+                string result = readDiagnostics?.LastReadResult;
+                switch (result)
+                {
+                    case "STATUS_NOERROR":
+                        summary.SuccessfulReadCalls++;
+                        break;
+                    case "TIMEOUT":
+                        summary.TimedOutReadCalls++;
+                        break;
+                    case "BUFFER_EMPTY":
+                        summary.EmptyBufferReadCalls++;
+                        break;
+                    default:
+                        if (string.IsNullOrEmpty(result))
+                            summary.ReadCallsWithoutStatus++;
+                        else
+                            summary.OtherStatusReadCalls++;
+                        break;
+                }
                 if (batch == null)
                     throw new InvalidOperationException("J2534 receive source returned a null frame batch.");
 

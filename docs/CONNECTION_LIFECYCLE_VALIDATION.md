@@ -51,12 +51,18 @@ silent: ACK of frames may still occur.
 | 1 | Windows, driver installed; app starts with no RLink selected | Device enumeration and UI work; no fake VIN shown |
 | 2 | Capture-only selected; 11-bit CAN at 500 kbps; Connect | No application OBD/UDS request; VIN not queried |
 | 3 | Open CAN Listener; start short supervised disk capture | CSV saved; no unreported writer failure |
-| 4 | While logging, try Vehicle Disconnect | It must refuse; active receiver retains lease |
-| 5 | Stop capture, wait for CSV and sidecar | No queue drops, writer errors or unaccounted rows |
-| 6 | Explicit Disconnect | Closes channel safely; connection banner clears |
+| 4 | Click Stop, wait for CSV and integrity sidecar | Capture finishes before changing connection; check for writer errors and missing rows |
+| 5 | Return to Vehicle and click Disconnect | Closes the idle channel safely; connection banner clears |
+| 6 | If Stop reports a blocked reader or disk writer, do not force disconnect | Receive lease must remain reserved; retry Stop only after the blocker is resolved |
 | 7 | Reconnect capture-only; short capture; Stop; Disconnect | Filters/resources can be reacquired; no stuck busy handle |
 | 8 | View fuel-trim and misfire tabs while capture-only active | No application diagnostics sent; pages refuse polling |
 | 9 | Record full native timestamp and RxStatus values | Preserve raw values; do not infer clock units/flag meaning |
+
+The application's current tab-switch handler attempts to stop capture when
+leaving CAN Listener. Therefore selecting the Vehicle tab is NOT a reliable
+way to test a simultaneous disconnect attempt: capture may already be stopped.
+The blocked-disconnect behavior is verified by isolated lease-policy tests,
+and the live test should first verify clean Stop then Disconnect.
 
 Do NOT exercise unverified enhanced TCM requests, DTC clears, routines,
 actuator commands, programming or security access during this validation.

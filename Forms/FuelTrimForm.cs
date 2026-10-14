@@ -375,7 +375,7 @@ namespace J2534Diag
                             Thread.Sleep(2);
 
                             // Always send FC to the sender of the First Frame
-                            SendFlowControl(responseCanId, channel, blockSize: 0, separationTime: 2);
+                            SendFlowControl(responseCanId, blockSize: 0, separationTime: 2);
                         }
                         break;
                     }
@@ -402,7 +402,7 @@ namespace J2534Diag
             }
         }
 
-        void SendFlowControl(byte[] canId, Channel channel, int blockSize = 0, int separationTime = 0)
+        void SendFlowControl(byte[] canId, int blockSize = 0, int separationTime = 0)
         {
             var fc = new byte[12];
 

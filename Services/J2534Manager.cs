@@ -40,6 +40,10 @@ namespace J2534Diag
         public string Vin { get; private set; }
         public BitType BitMode { get; set; } = BitType.BITS_11; // Default to 11-bit mode
         public VinRequestMode VinMode { get; set; } = VinRequestMode.ObdMode09;
+        // Application-level capture-only mode: no VIN, PID, routine, or
+        // ISO-TP flow-control transmissions from this application's code.
+        // A J2534 CAN channel may still electrically ACK frames.
+        public bool CaptureOnlyMode { get; private set; }
 
         private IsoTpParser _isoTpParser;
         private Thread _monitorThread;
@@ -60,6 +64,7 @@ namespace J2534Diag
         {
             if (ReceiveGate.CurrentOwner != null)
                 throw new InvalidOperationException("Cannot reconnect while " + ReceiveGate.CurrentOwner + " owns the J2534 receive channel.");
+            CaptureOnlyMode = false;
             Vin = null;
 
             var attempts = new (BitType BitMode, VinRequestMode VinMode)[]
@@ -95,6 +100,70 @@ namespace J2534Diag
                 {
                     return;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Open CAN only for the independent CAN capture listener. Unlike
+        /// Initialize(), this path does NOT send VIN requests, start a VIN
+        /// monitor, run ISO-TP, or create any diagnostic transmit messages.
+        /// Filters are installed later by CanListenerForm under its lease.
+        /// Not guaranteed physically silent: J2534 CAN may ACK frames.
+        /// </summary>
+        public void InitializeCaptureOnly(string dllFileName, BitType bitMode)
+        {
+            if (string.IsNullOrWhiteSpace(dllFileName))
+                throw new ArgumentException("Select an installed J2534 DLL.", nameof(dllFileName));
+            if (bitMode != BitType.BITS_11 && bitMode != BitType.BITS_29)
+                throw new ArgumentOutOfRangeException(nameof(bitMode));
+            if (ReceiveGate.CurrentOwner != null)
+                throw new InvalidOperationException("Cannot reconnect while " + ReceiveGate.CurrentOwner + " owns the J2534 receive channel.");
+            if (_monitorThread != null && _monitorThread.IsAlive)
+                throw new InvalidOperationException("An earlier VIN monitor is still running. Wait for it to stop before switching connection modes.");
+
+            // The previous connection must be closed before reopening the same
+            // J2534 device. Do not attempt this while an in-process reader owns it.
+            Channel?.Dispose();
+            Device?.Dispose();
+            Api?.Dispose();
+            Channel = null;
+            Device = null;
+            Api = null;
+            Vin = null;
+            EcmRxId = null;
+            CaptureOnlyMode = false;
+
+            API pendingApi = null;
+            Device pendingDevice = null;
+            Channel pendingChannel = null;
+            try
+            {
+                pendingApi = APIFactory.GetAPI(dllFileName);
+                pendingDevice = pendingApi.GetDevice();
+                pendingChannel = pendingDevice.GetChannel(
+                    Protocol.CAN, Baud.CAN_500000,
+                    bitMode == BitType.BITS_11 ? ConnectFlag.NONE : ConnectFlag.CAN_29BIT_ID);
+                pendingChannel.DefaultTxFlag = bitMode == BitType.BITS_11
+                    ? TxFlag.NONE : TxFlag.CAN_29BIT_ID;
+
+                Api = pendingApi;
+                Device = pendingDevice;
+                Channel = pendingChannel;
+                BitMode = bitMode;
+                CaptureOnlyMode = true;
+                // Intentionally no SendMessage, VIN request, flow control,
+                // diagnostic poller, or background receive worker here.
+            }
+            catch
+            {
+                pendingChannel?.Dispose();
+                pendingDevice?.Dispose();
+                pendingApi?.Dispose();
+                Channel = null;
+                Device = null;
+                Api = null;
+                CaptureOnlyMode = false;
+                throw;
             }
         }
 
@@ -198,6 +267,8 @@ namespace J2534Diag
 
         public void SendFlowControl(byte[] canId, int blockSize = 0, int separationTime = 0)
         {
+            if (CaptureOnlyMode)
+                throw new InvalidOperationException("Application diagnostic transmission is disabled in capture-only mode.");
             var fc = new byte[12];
             Array.Copy(canId, 0, fc, 0, 4);
             fc[4] = 0x30;
@@ -346,6 +417,7 @@ namespace J2534Diag
             Device = null;
             Api = null;
             Vin = null;
+            CaptureOnlyMode = false;
 
             _mainForm.UpdateSelectedVehicle(false, null);
 

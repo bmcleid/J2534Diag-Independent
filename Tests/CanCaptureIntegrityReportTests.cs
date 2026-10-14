@@ -103,7 +103,7 @@ namespace J2534Diag.Tests
             CanCaptureIntegrityReport.Write(unavailable, "legacy.csv", Clean(),
                 300, 0, 0, false, null, EndTime, null);
             Check(unavailable.ToString().Contains("ReadHealthObserved=False"), "Missing read telemetry was synthesized");
-            Check(unavailable.ToString().Contains("J2534ReadStatusTimeout=\n"),
+            Check(unavailable.ToString().Contains("J2534ReadStatusTimeout=" + Environment.NewLine),
                 "Unavailable result should be blank, not zero");
         }
 

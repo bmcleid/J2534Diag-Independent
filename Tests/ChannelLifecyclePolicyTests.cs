@@ -126,9 +126,15 @@ namespace J2534Diag.Tests
                 "Disconnect does not clear stale vehicle connection banner");
             // The VIN listener must be permitted its original response window,
             // then cancelled and joined before pass filters are removed.
-            Check(manager.Contains("_monitorThread.Join(3000);") &&
-                  manager.Contains("finally") &&
-                  manager.Contains("StopVinMonitorSafely();\n                Channel.StopMsgFilter(filterId);"),
+            int vinWait = manager.IndexOf("_monitorThread.Join(3000);", StringComparison.Ordinal);
+            int cleanupFinally = vinWait < 0 ? -1 :
+                manager.IndexOf("finally", vinWait, StringComparison.Ordinal);
+            int stopMonitor = cleanupFinally < 0 ? -1 :
+                manager.IndexOf("StopVinMonitorSafely();", cleanupFinally, StringComparison.Ordinal);
+            int removeFilter = stopMonitor < 0 ? -1 :
+                manager.IndexOf("Channel.StopMsgFilter(filterId);", stopMonitor, StringComparison.Ordinal);
+            Check(vinWait >= 0 && cleanupFinally > vinWait &&
+                  stopMonitor > cleanupFinally && removeFilter > stopMonitor,
                 "Active VIN discovery no longer waits for replies or securely joins its reader");
         }
     }

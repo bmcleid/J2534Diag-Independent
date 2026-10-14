@@ -29,13 +29,20 @@ namespace J2534Diag
             {
                 result = _channel.GetMessages(requestedMaximum, timeoutMilliseconds);
             }
-            catch (J2534Exception ex) when (ex.Result == ResultCode.BUFFER_OVERFLOW)
+            catch (J2534Exception ex) when (IsReceiveBufferOverflow(ex))
             {
                 throw new CanReceiveBufferOverflowException(
                     "J2534 driver reported receive-buffer overflow; CAN frames may have been lost.", ex);
             }
             LastReadResult = result.Result.ToString();
             return ProjectBatch(result);
+        }
+
+        // Testable against the pinned J2534-Sharp exception/result types,
+        // without actually opening a vehicle communication channel.
+        public static bool IsReceiveBufferOverflow(J2534Exception error)
+        {
+            return error != null && error.Result == ResultCode.BUFFER_OVERFLOW;
         }
 
         // Public projection permits offline tests using the *actual pinned*

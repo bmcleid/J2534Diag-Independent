@@ -125,7 +125,7 @@ namespace J2534Diag
             int len = Math.Min(data.Length, 12);
             Array.Copy(data, request, len);
             // The rest of request[] is already 0x00 by default
-            j2534Manager.Channel.SendMessage(request);
+            j2534Manager.SendDiagnosticMessage(request);
             Thread.Sleep(10); // Give some time for the request to be sent
         }
 
@@ -253,7 +253,7 @@ namespace J2534Diag
                                 try
                                 {
                                     Debug.WriteLine($"Sending UDS DID request: {BitConverter.ToString(request)} (Time: {DateTime.Now:HH:mm:ss.fff})");
-                                    j2534Manager.Channel.SendMessage(request);
+                                    j2534Manager.SendDiagnosticMessage(request);
                                 }
                                 catch (J2534Exception ex)
                                 {
@@ -277,7 +277,7 @@ namespace J2534Diag
                                 try
                                 {
                                     Debug.WriteLine($"Sending OBD PID request: {BitConverter.ToString(request)} (Time: {DateTime.Now:HH:mm:ss.fff})");
-                                    j2534Manager.Channel.SendMessage(request);
+                                    j2534Manager.SendDiagnosticMessage(request);
                                 }
                                 catch (J2534Exception ex)
                                 {
@@ -422,7 +422,7 @@ namespace J2534Diag
             }
 
             fc[4] = 0x30;
-            channel.SendMessage(fc);
+            j2534Manager.SendDiagnosticMessage(fc);
         }
 
         private LiveDataProtocol GetLiveDataProtocolToPoll()

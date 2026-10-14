@@ -148,7 +148,7 @@ namespace J2534Diag
                     new byte[12] { 0x00, 0x00, 0x07, 0xDF, 0x02, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } :
                     new byte[12] { 0x18, 0xDB, 0x33, 0xF1, 0x02, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
-                j2534Manager.Channel.SendMessage(mode6request);
+                j2534Manager.SendDiagnosticMessage(mode6request);
 
                 Thread.Sleep(10); // Give some time for the request to be sent
 
@@ -178,7 +178,7 @@ namespace J2534Diag
                         request[5] = 0x06; // Mode $06
                         request[6] = tid;
 
-                        j2534Manager.Channel.SendMessage(request);
+                        j2534Manager.SendDiagnosticMessage(request);
                         Thread.Sleep(100);
                     }
                     Thread.Sleep(500); // Adjust polling rate as needed

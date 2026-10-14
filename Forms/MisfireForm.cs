@@ -54,6 +54,8 @@ namespace J2534Diag
 
         private void StartApiAndThreads()
         {
+            // This screen transmits Mode $06 requests; never start in capture-only mode.
+            if (j2534Manager.CaptureOnlyMode) return;
             if (j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed) return;
             if (!j2534Manager.ReceiveGate.TryAcquire(ReceiveOwner))
             {
@@ -321,6 +323,7 @@ namespace J2534Diag
 
         public void StartListening()
         {
+            if (j2534Manager.CaptureOnlyMode) return;
             if (_monitorThread == null || !_monitorThread.IsAlive)
             {
                 StartApiAndThreads();

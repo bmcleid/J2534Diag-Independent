@@ -428,13 +428,19 @@ namespace J2534Diag
             ApplyFilterAndDistinct();
 
             if (_limitReached || _invalidFrames > 0 || _excessReturnedFrames > 0 ||
-                _listenerFailure != null || (diskStatus != null && !diskStatus.ApplicationWriteComplete) || integrityFailure != null)
+                _listenerFailure != null || (diskStatus != null && !diskStatus.ApplicationWriteComplete) ||
+                (_lastCaptureSummary != null && (_lastCaptureSummary.OtherStatusReadCalls > 0 ||
+                    _lastCaptureSummary.ReadCallsWithoutStatus > 0 ||
+                    _lastCaptureSummary.DriverBufferOverflowEvents > 0)) ||
+                integrityFailure != null)
             {
                 string message = (_limitReached ? "Capture reached its configured frame limit; later frames are not recorded.\n" : "") +
                     (_invalidFrames > 0 ? $"Malformed J2534 records ignored: {_invalidFrames}.\n" : "") +
                     (_excessReturnedFrames > 0 ? $"Frames returned beyond requested limit: {_excessReturnedFrames}.\n" : "") +
                     (_lastCaptureSummary?.DriverBufferOverflowEvents > 0
                         ? $"J2534 reported receive-buffer overflow {_lastCaptureSummary.DriverBufferOverflowEvents} time(s). Some frames may be irrecoverably lost.\n" : "") +
+                    (_lastCaptureSummary?.OtherStatusReadCalls > 0 || _lastCaptureSummary?.ReadCallsWithoutStatus > 0
+                        ? "J2534 returned unrecognized/unavailable read status. Review the integrity report.\n" : "") +
                     (_listenerFailure != null ? "Capture stopped with driver error: " + _listenerFailure + "\n" : "") +
                     (diskStatus != null && !diskStatus.ApplicationWriteComplete
                         ? $"Disk integrity warning: enqueued={diskStatus.Accepted}, written={diskStatus.Written}, queue drops={diskStatus.QueueFullDrops}, unwritten={diskStatus.AcceptedNotWritten}, writer error={diskStatus.WriterError ?? "none"}.\n" : "") +

@@ -124,6 +124,12 @@ namespace J2534Diag.Tests
                 "Vehicle UI lacks explicit guarded disconnect");
             Check(main.Contains("selectedVehicleControl.SetVehicle(false, \"\", \"\");"),
                 "Disconnect does not clear stale vehicle connection banner");
+            // The VIN listener must be permitted its original response window,
+            // then cancelled and joined before pass filters are removed.
+            Check(manager.Contains("_monitorThread.Join(3000);") &&
+                  manager.Contains("finally") &&
+                  manager.Contains("StopVinMonitorSafely();\n                Channel.StopMsgFilter(filterId);"),
+                "Active VIN discovery no longer waits for replies or securely joins its reader");
         }
     }
 }

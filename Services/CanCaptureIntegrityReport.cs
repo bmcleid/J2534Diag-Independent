@@ -32,7 +32,9 @@ namespace J2534Diag
                 sourceOverReturnedFrames == 0 && !captureLimitReached &&
                 (readSummary == null ||
                  (readSummary.DriverBufferOverflowEvents == 0 &&
-                  readSummary.DriverReadErrors == 0));
+                  readSummary.DriverReadErrors == 0 &&
+                  readSummary.OtherStatusReadCalls == 0 &&
+                  readSummary.ReadCallsWithoutStatus == 0));
 
             WriteField(writer, "Format", "J2534Diag-Capture-Integrity-v1");
             WriteField(writer, "CaptureFile", captureFile);

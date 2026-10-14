@@ -29,7 +29,7 @@ namespace J2534Diag
         private readonly CheckBox _captureOnlyCheck = new CheckBox
         {
             Checked = true,
-            Text = "Capture-only: no app diagnostic requests (CAN ACK may occur)",
+            Text = "Capture-only (no app diagnostic requests)",
             Dock = DockStyle.Fill,
             AutoSize = true
         };
@@ -142,7 +142,7 @@ namespace J2534Diag
             {
                 btnConnect.Enabled = false;
                 btnConnect.Text = "Connecting ...";
-                Application.DoEvents();
+                btnConnect.Refresh();
 
                 if(j2534Manager?.Devices?.Any() != true)
                 {
@@ -156,7 +156,7 @@ namespace J2534Diag
                     var selectedWidth = _canWidthSelect.SelectedIndex == 1
                         ? BitType.BITS_29 : BitType.BITS_11;
                     j2534Manager.InitializeCaptureOnly(selectedApi.Filename, selectedWidth);
-                    btnConnect.Text = "Capture-only connected (no VIN requests)";
+                    btnConnect.Text = "Capture-only connected";
                     MessageBox.Show(
                         "Capture-only CAN channel opened. No application VIN/PID queries will be sent by this mode.\n" +
                         "Open CAN Listener, optionally enable Disk log, and click Start to capture.\n" +

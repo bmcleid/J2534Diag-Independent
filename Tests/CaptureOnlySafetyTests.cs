@@ -28,6 +28,7 @@ namespace J2534Diag.Tests
             DiagnosticTransmitPolicyBlocksCaptureOnly();
             CaptureOnlyConnectionSourceHasNoDiagnosticTX();
             UIAndOtherDiagnosticPagesRespectCaptureOnly();
+            EntireApplicationUsesCentralTXGate();
             return _assertions;
         }
 
@@ -85,6 +86,41 @@ namespace J2534Diag.Tests
             Check(fuel.Contains("j2534Manager.SendDiagnosticMessage(") &&
                   misfire.Contains("j2534Manager.SendDiagnosticMessage("),
                 "Diagnostic screen is not using the central transmit gate");
+        }
+
+        private static void EntireApplicationUsesCentralTXGate()
+        {
+            string root = Path.GetFullPath(Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
+            string[] folders = { "Forms", "Services", "Controls", "Models", "Maps" };
+            int approvedSends = 0;
+            foreach (var folder in folders)
+            {
+                string directory = Path.Combine(root, folder);
+                foreach (var file in Directory.GetFiles(directory, "*.cs", SearchOption.AllDirectories))
+                {
+                    foreach (var line in File.ReadAllLines(file))
+                    {
+                        string trimmed = line.Trim();
+                        if (trimmed.StartsWith("//", StringComparison.Ordinal))
+                            continue;
+                        if (trimmed.Contains(".SendMessage(") ||
+                            trimmed.Contains(".SendMessages(") ||
+                            trimmed.Contains(".StartPeriodicMessage("))
+                        {
+                            if (Path.GetFileName(file) == "J2534Manager.cs" &&
+                                trimmed == "Channel.SendMessage(message);")
+                            {
+                                approvedSends++;
+                                continue;
+                            }
+                            throw new Exception("Unreviewed direct J2534 transmit path: " +
+                                Path.GetFileName(file) + ": " + trimmed);
+                        }
+                    }
+                }
+            }
+            Check(approvedSends == 1, "Application transmit paths are not centralized through J2534Manager");
         }
 
         private static bool HasDirectChannelSend(string source)

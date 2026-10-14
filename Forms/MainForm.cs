@@ -161,6 +161,20 @@ namespace J2534Diag
             canListenerForm?.StopListening();
             misfireForm?.StopListening();
 
+            // Capture-only is a distinct connection state. The fuel trim and
+            // misfire tabs issue outbound diagnostic requests, so neither may
+            // automatically start after selecting those tabs.
+            if (j2534Manager?.CaptureOnlyMode == true)
+            {
+                if (tabControl1.SelectedTab == tabControl1.TabPages["tabFuelTrim"] ||
+                    tabControl1.SelectedTab == tabControl1.TabPages["tabMisfireMonitor"])
+                    MessageBox.Show(
+                        "Capture-only connection is active. This tab requires diagnostic requests and will not poll the vehicle.\n" +
+                        "Use CAN Listener for capture, or explicitly reconnect in active diagnostics mode.",
+                        "Capture-only mode", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             if (tabControl1.SelectedTab == tabControl1.TabPages["tabFuelTrim"])
             {
                 fuelTrimForm.StartListening();

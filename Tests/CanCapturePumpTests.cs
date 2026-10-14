@@ -53,9 +53,36 @@ namespace J2534Diag.Tests
             DriverErrorMustPropagate();
             NonUtcTimestampIsRejected();
             PartialSummarySurvivesReceiveFailure();
+            TrackEmptyAndPartialJ2534ReadStatuses();
+            DistinguishReportedOverflowFromGenericReadError();
             NativeMetadataIsPreserved();
             NullMetadataIsUnknownNotZero();
             return _assertions;
+        }
+
+        private sealed class StatusScriptSource : ICanFrameBatchSource, ICanReadResultSource
+        {
+            public readonly Queue<Tuple<string, CanReceivedFrame[]>> Script =
+                new Queue<Tuple<string, CanReceivedFrame[]>>();
+            public string LastReadResult { get; private set; }
+
+            public IReadOnlyList<CanReceivedFrame> ReadBatch(int requestedMaximum, int timeoutMilliseconds)
+            {
+                if (Script.Count == 0)
+                    throw new InvalidOperationException("Status script exhausted.");
+                var row = Script.Dequeue();
+                LastReadResult = row.Item1;
+                return row.Item2;
+            }
+        }
+
+        private sealed class OverflowScriptSource : ICanFrameBatchSource
+        {
+            public IReadOnlyList<CanReceivedFrame> ReadBatch(int requestedMaximum, int timeoutMilliseconds)
+            {
+                throw new CanReceiveBufferOverflowException("Simulated J2534 receive buffer overflow",
+                    new InvalidOperationException("Simulated driver error"));
+            }
         }
 
         private static CanReceivedFrame Frame(uint canId, params byte[] payload)
@@ -221,6 +248,68 @@ namespace J2534Diag.Tests
             Check(pump.LastSummary.InvalidFrames == 1, "Earlier invalid frame count lost on exception");
             Check(pump.LastSummary.StoredFrames == 1, "Earlier stored frame count lost on exception");
             Check(records.Count == 1, "Previously returned frame lost on subsequent driver error");
+        }
+
+        private static void TrackEmptyAndPartialJ2534ReadStatuses()
+        {
+            var source = new StatusScriptSource();
+            source.Script.Enqueue(Tuple.Create("TIMEOUT", Array.Empty<CanReceivedFrame>()));
+            source.Script.Enqueue(Tuple.Create("BUFFER_EMPTY", Array.Empty<CanReceivedFrame>()));
+            source.Script.Enqueue(Tuple.Create("STATUS_NOERROR", new[] { Frame(0x7EA, 0x03) }));
+            var stored = new List<CanCaptureRecord>();
+            var result = new CanCapturePump(source, 1, () => TestClock, null)
+                .Run(CancellationToken.None, stored.Add);
+            Check(result.StoredFrames == 1 && stored.Count == 1, "Status-only polls created fake frames");
+            Check(result.TimedOutReadCalls == 1, "Empty TIMEOUT result was not counted");
+            Check(result.EmptyBufferReadCalls == 1, "Empty BUFFER_EMPTY result was not counted");
+            Check(result.SuccessfulReadCalls == 1, "Successful read was not counted");
+            Check(result.OtherStatusReadCalls == 0 && result.ReadCallsWithoutStatus == 0,
+                "Status classifier counted unknown status incorrectly");
+            Check(result.DriverReadErrors == 0 && result.DriverBufferOverflowEvents == 0,
+                "Normal TIMEOUT/BUFFER_EMPTY was incorrectly treated as hardware failure");
+
+            var partial = new StatusScriptSource();
+            var frame = Frame(0x7E8, 0x41, 0x00);
+            frame.ReadResult = "TIMEOUT";
+            partial.Script.Enqueue(Tuple.Create("TIMEOUT", new[] { frame }));
+            var row = new List<CanCaptureRecord>();
+            var summary = new CanCapturePump(partial, 1, () => TestClock, null)
+                .Run(CancellationToken.None, row.Add);
+            Check(summary.TimedOutReadCalls == 1 && row.Count == 1,
+                "Timeout with partial returned data was dropped");
+            Check(row[0].J2534ReadResult == "TIMEOUT", "Per-frame read result changed");
+        }
+
+        private static void DistinguishReportedOverflowFromGenericReadError()
+        {
+            var pump = new CanCapturePump(new OverflowScriptSource(), 10, () => TestClock, null);
+            try
+            {
+                pump.Run(CancellationToken.None, _ => { });
+                throw new Exception("Overflow did not terminate capture");
+            }
+            catch (CanReceiveBufferOverflowException ex)
+            {
+                Check(ex.Message.Contains("overflow"), "Overflow reason lost");
+            }
+            Check(pump.LastSummary.DriverBufferOverflowEvents == 1,
+                "Hardware overflow was not counted");
+            Check(pump.LastSummary.DriverReadErrors == 1,
+                "Overflow was not included in driver-error count");
+            Check(pump.LastSummary.StoredFrames == 0, "Overflow created a fake frame");
+
+            var general = new FakeSource { Fail = true };
+            var normalFailure = Pump(general, 10);
+            try
+            {
+                normalFailure.Run(CancellationToken.None, _ => { });
+                throw new Exception("General read failure was suppressed");
+            }
+            catch (InvalidOperationException) { }
+            Check(normalFailure.LastSummary.DriverBufferOverflowEvents == 0,
+                "General error incorrectly classified as receive-buffer overflow");
+            Check(normalFailure.LastSummary.DriverReadErrors == 1,
+                "General read error count missing");
         }
 
         private static void NonUtcTimestampIsRejected()

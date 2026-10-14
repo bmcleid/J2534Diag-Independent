@@ -283,8 +283,12 @@ namespace J2534Diag
             SendDiagnosticMessage(vinRequest);
             Thread.Sleep(2); // Give some time for the request to be sent
 
-            // A timed join is not proof that the monitor exited; never
-            // clear filters/reuse this channel while that reader still runs.
+            // Preserve the original VIN response window before shutdown.
+            // Joining for up to three seconds allows the monitor to collect
+            // a reply; the subsequent cancel+join PROVES it exited.
+            _monitorThread.Join(3000);
+            // A timed join alone is not proof of exit; never clear filters
+            // or reuse this channel while that reader still runs.
             StopVinMonitorSafely();
             Channel.StopMsgFilter(filterId);
             Channel.ClearMsgFilters();

@@ -19,6 +19,8 @@ namespace J2534Diag.Tests
             DroppedQueueAndWriterErrorAreVisible();
             ReceiveErrorsAndMalformedRowsMakeItIncomplete();
             NonUtcReportTimeRejected();
+            ReportNormalEmptyReadsWithoutInventingFrames();
+            ReportHardwareOverflowAsExplicitIncomplete();
             return _checks;
         }
 
@@ -74,6 +76,61 @@ namespace J2534Diag.Tests
             Check(report.Contains("CaptureLimitReached=True"), "Capacity issue not reported");
             Check(report.Contains("ReceiveError=Driver went away  Adapter reset"), "Driver error not flattened");
             Check(report.Contains("ApplicationWriteComplete=False"), "Unreliable session marked complete");
+        }
+
+        private static void ReportNormalEmptyReadsWithoutInventingFrames()
+        {
+            var reads = new CanCaptureSummary
+            {
+                SuccessfulReadCalls = 4,
+                TimedOutReadCalls = 120,
+                EmptyBufferReadCalls = 18
+            };
+            var writer = new StringWriter();
+            CanCaptureIntegrityReport.Write(writer, "test.csv", Clean(),
+                300, 0, 0, false, null, EndTime, reads);
+            string result = writer.ToString();
+            Check(result.Contains("ReadHealthObserved=True"), "Read health not marked available");
+            Check(result.Contains("J2534ReadStatusSuccess=4"), "Successful read count lost");
+            Check(result.Contains("J2534ReadStatusTimeout=120"), "Empty timeout read count lost");
+            Check(result.Contains("J2534ReadStatusBufferEmpty=18"), "Empty-buffer read count lost");
+            Check(result.Contains("J2534BufferOverflowEvents=0"), "Invented hardware overflow");
+            Check(result.Contains("J2534OverflowFramesLost=UNKNOWN"), "Loss estimate invented");
+            Check(result.Contains("ApplicationWriteComplete=True"),
+                "Normal idle timeouts incorrectly failed application-level accounting");
+
+            var unavailable = new StringWriter();
+            CanCaptureIntegrityReport.Write(unavailable, "legacy.csv", Clean(),
+                300, 0, 0, false, null, EndTime, null);
+            Check(unavailable.ToString().Contains("ReadHealthObserved=False"), "Missing read telemetry was synthesized");
+            Check(unavailable.ToString().Contains("J2534ReadStatusTimeout=\n"),
+                "Unavailable result should be blank, not zero");
+        }
+
+        private static void ReportHardwareOverflowAsExplicitIncomplete()
+        {
+            var reads = new CanCaptureSummary
+            {
+                SuccessfulReadCalls = 2,
+                DriverReadErrors = 1,
+                DriverBufferOverflowEvents = 1
+            };
+            var writer = new StringWriter();
+            CanCaptureIntegrityReport.Write(writer, "test.csv", Clean(),
+                300, 0, 0, false, "J2534 read reported BUFFER_OVERFLOW", EndTime, reads);
+            string result = writer.ToString();
+            Check(result.Contains("J2534DriverReadErrors=1"), "Receive errors not reported");
+            Check(result.Contains("J2534BufferOverflowEvents=1"), "Explicit overflow event omitted");
+            Check(result.Contains("ApplicationWriteComplete=False"), "Overflow incorrectly considered complete");
+            Check(result.Contains("VehicleBusLossless=UNVERIFIED"), "Bus completeness was overclaimed");
+            Check(result.Contains("J2534OverflowFramesLost=UNKNOWN"), "Invented number of lost CAN frames");
+
+            var unrecognized = new CanCaptureSummary { OtherStatusReadCalls = 2 };
+            var unknown = new StringWriter();
+            CanCaptureIntegrityReport.Write(unknown, "test.csv", Clean(),
+                1, 0, 0, false, null, EndTime, unrecognized);
+            Check(unknown.ToString().Contains("ApplicationWriteComplete=False"),
+                "Unrecognized read result incorrectly considered healthy");
         }
 
         private static void NonUtcReportTimeRejected()

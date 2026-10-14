@@ -60,10 +60,46 @@ namespace J2534Diag
             //Initialize(vciApi.Filename, Protocol.CAN, Baud.CAN_500000, ConnectFlag.NONE);
         }
 
+        private void StopVinMonitorSafely()
+        {
+            ChannelLifecyclePolicy.RequireUnowned(ReceiveGate);
+            if (!ChannelLifecyclePolicy.RequestStopAndWait(_monitorThread, _cts, 5000))
+                throw new InvalidOperationException(
+                    "VIN receive monitor has not stopped. J2534 connection is retained; retry after the monitor exits.");
+            _monitorThread = null;
+            _cts?.Dispose();
+            _cts = null;
+        }
+
+        /// <summary>
+        /// Close an idle J2534 connection. Refuses if any application capture
+        /// or diagnostic reader still holds its receive lease.
+        /// </summary>
+        public void Disconnect()
+        {
+            StopVinMonitorSafely();
+            CloseChannelAndDevice();
+            _mainForm?.UpdateSelectedVehicle(false, null);
+        }
+
+        private void CloseChannelAndDevice()
+        {
+            // Preserve the remaining handles if a driver rejects a close:
+            // never claim a successful disconnection prematurely.
+            Channel?.Dispose();
+            Channel = null;
+            Device?.Dispose();
+            Device = null;
+            Api?.Dispose();
+            Api = null;
+            Vin = null;
+            EcmRxId = null;
+            CaptureOnlyMode = false;
+        }
+
         public void Initialize(string dllFileName)
         {
-            if (ReceiveGate.CurrentOwner != null)
-                throw new InvalidOperationException("Cannot reconnect while " + ReceiveGate.CurrentOwner + " owns the J2534 receive channel.");
+            StopVinMonitorSafely();
             CaptureOnlyMode = false;
             Vin = null;
 
@@ -116,22 +152,10 @@ namespace J2534Diag
                 throw new ArgumentException("Select an installed J2534 DLL.", nameof(dllFileName));
             if (bitMode != BitType.BITS_11 && bitMode != BitType.BITS_29)
                 throw new ArgumentOutOfRangeException(nameof(bitMode));
-            if (ReceiveGate.CurrentOwner != null)
-                throw new InvalidOperationException("Cannot reconnect while " + ReceiveGate.CurrentOwner + " owns the J2534 receive channel.");
-            if (_monitorThread != null && _monitorThread.IsAlive)
-                throw new InvalidOperationException("An earlier VIN monitor is still running. Wait for it to stop before switching connection modes.");
-
-            // The previous connection must be closed before reopening the same
-            // J2534 device. Do not attempt this while an in-process reader owns it.
-            Channel?.Dispose();
-            Device?.Dispose();
-            Api?.Dispose();
-            Channel = null;
-            Device = null;
-            Api = null;
-            Vin = null;
-            EcmRxId = null;
-            CaptureOnlyMode = false;
+            // Reuse identical shutdown conditions when switching modes,
+            // reconnecting to the same DLL, or explicitly disconnecting.
+            StopVinMonitorSafely();
+            CloseChannelAndDevice();
 
             API pendingApi = null;
             Device pendingDevice = null;
@@ -169,9 +193,8 @@ namespace J2534Diag
 
         private void InitializeChannel(string dllFileName)
         {
-            if (Channel != null) { try { Channel.Dispose(); } catch { } }
-            if (Device != null) { try { Device.Dispose(); } catch { } }
-            if (Api != null) { try { Api.Dispose(); } catch { } }
+            StopVinMonitorSafely();
+            CloseChannelAndDevice();
             Api = APIFactory.GetAPI(dllFileName);
             Device = Api.GetDevice();
 
@@ -260,7 +283,9 @@ namespace J2534Diag
             SendDiagnosticMessage(vinRequest);
             Thread.Sleep(2); // Give some time for the request to be sent
 
-            _monitorThread.Join(3000); // Wait for thread to complete
+            // A timed join is not proof that the monitor exited; never
+            // clear filters/reuse this channel while that reader still runs.
+            StopVinMonitorSafely();
             Channel.StopMsgFilter(filterId);
             Channel.ClearMsgFilters();
         }
@@ -414,23 +439,6 @@ namespace J2534Diag
         public void Dispose()
         {
             Disconnect();
-        }
-
-        internal void Disconnect()
-        {
-            Channel?.Dispose();
-            Device?.Dispose();
-            Api?.Dispose();
-
-            Channel = null;
-            Device = null;
-            Api = null;
-            Vin = null;
-            CaptureOnlyMode = false;
-
-            _mainForm.UpdateSelectedVehicle(false, null);
-
-
         }
     }
 }

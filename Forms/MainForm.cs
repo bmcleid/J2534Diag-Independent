@@ -32,15 +32,16 @@ namespace J2534Diag
 
             if (!connected)
             {
-                //TODO CLEANUP ALERT
-                //MessageBox.Show("Vehicle not connected.");
+                selectedVehicleControl.SetVehicle(false, "", "");
                 return;
             }
 
-            if(vin == null)
+            if (string.IsNullOrEmpty(vin))
             {
-                //TODO CLEANUP ALERT
-                //MessageBox.Show("VIN Not detected via OBDII.");
+                selectedVehicleControl.SetVehicle(true, "",
+                    j2534Manager?.CaptureOnlyMode == true
+                        ? "Capture-only: VIN intentionally not requested"
+                        : "VIN unavailable");
                 return;
             }
 

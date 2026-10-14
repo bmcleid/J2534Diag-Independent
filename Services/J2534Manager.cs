@@ -257,12 +257,23 @@ namespace J2534Diag
                 vinRequest[6] = 0xF1;
                 vinRequest[7] = 0x90;
             }
-            Channel.SendMessage(vinRequest);
+            SendDiagnosticMessage(vinRequest);
             Thread.Sleep(2); // Give some time for the request to be sent
 
             _monitorThread.Join(3000); // Wait for thread to complete
             Channel.StopMsgFilter(filterId);
             Channel.ClearMsgFilters();
+        }
+
+        // Central gate for all application-originated diagnostic frames.
+        // This is independent of CAN electrical acknowledgements by the VCI.
+        public void SendDiagnosticMessage(IEnumerable<byte> message)
+        {
+            if (CaptureOnlyMode)
+                throw new InvalidOperationException("Diagnostic transmission is disabled in capture-only mode.");
+            if (Channel == null || Channel.IsDisposed)
+                throw new InvalidOperationException("A J2534 diagnostic channel must be connected before transmitting.");
+            Channel.SendMessage(message);
         }
 
         public void SendFlowControl(byte[] canId, int blockSize = 0, int separationTime = 0)
@@ -282,7 +293,7 @@ namespace J2534Diag
             //    fc[11] = 0x55;
             //}
 
-            Channel.SendMessage(fc);
+            SendDiagnosticMessage(fc);
 
             //Debug.WriteLine($"Flow Control sent: {BitConverter.ToString(fc)} (Time: {DateTime.Now:HH:mm:ss.fff})");
         }

@@ -125,7 +125,7 @@ namespace J2534Diag
             int len = Math.Min(data.Length, 12);
             Array.Copy(data, request, len);
             // The rest of request[] is already 0x00 by default
-            j2534Manager.Channel.SendMessage(request);
+            j2534Manager.SendDiagnosticMessage(request);
             Thread.Sleep(10); // Give some time for the request to be sent
         }
 
@@ -165,6 +165,8 @@ namespace J2534Diag
 
         private void StartApiAndThreads()
         {
+            // Defense in depth: this page sends OBD/UDS requests.
+            if (j2534Manager.CaptureOnlyMode) return;
             if (j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed) return;
             if (!j2534Manager.ReceiveGate.TryAcquire(ReceiveOwner))
             {
@@ -251,7 +253,7 @@ namespace J2534Diag
                                 try
                                 {
                                     Debug.WriteLine($"Sending UDS DID request: {BitConverter.ToString(request)} (Time: {DateTime.Now:HH:mm:ss.fff})");
-                                    j2534Manager.Channel.SendMessage(request);
+                                    j2534Manager.SendDiagnosticMessage(request);
                                 }
                                 catch (J2534Exception ex)
                                 {
@@ -275,7 +277,7 @@ namespace J2534Diag
                                 try
                                 {
                                     Debug.WriteLine($"Sending OBD PID request: {BitConverter.ToString(request)} (Time: {DateTime.Now:HH:mm:ss.fff})");
-                                    j2534Manager.Channel.SendMessage(request);
+                                    j2534Manager.SendDiagnosticMessage(request);
                                 }
                                 catch (J2534Exception ex)
                                 {
@@ -373,7 +375,7 @@ namespace J2534Diag
                             Thread.Sleep(2);
 
                             // Always send FC to the sender of the First Frame
-                            SendFlowControl(responseCanId, channel, blockSize: 0, separationTime: 2);
+                            SendFlowControl(responseCanId, blockSize: 0, separationTime: 2);
                         }
                         break;
                     }
@@ -400,7 +402,7 @@ namespace J2534Diag
             }
         }
 
-        void SendFlowControl(byte[] canId, Channel channel, int blockSize = 0, int separationTime = 0)
+        void SendFlowControl(byte[] canId, int blockSize = 0, int separationTime = 0)
         {
             var fc = new byte[12];
 
@@ -420,7 +422,7 @@ namespace J2534Diag
             }
 
             fc[4] = 0x30;
-            channel.SendMessage(fc);
+            j2534Manager.SendDiagnosticMessage(fc);
         }
 
         private LiveDataProtocol GetLiveDataProtocolToPoll()
@@ -705,6 +707,7 @@ namespace J2534Diag
         }
         public void StartListening()
         {
+            if (j2534Manager.CaptureOnlyMode) return;
             if (_monitorThread == null || !_monitorThread.IsAlive)
             {
                 StartApiAndThreads();

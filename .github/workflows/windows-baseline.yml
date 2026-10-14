@@ -10,6 +10,7 @@ on:
       - feature/j2534-native-rx-metadata
       - feature/disk-backed-can-logging
       - feature/j2534-read-health-integrity
+      - feature/capture-only-connection
   pull_request:
     branches:
       - master

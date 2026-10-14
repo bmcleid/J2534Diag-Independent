@@ -9,6 +9,7 @@ on:
       - feature/can-capture-fake-transport-tests
       - feature/j2534-native-rx-metadata
       - feature/disk-backed-can-logging
+      - feature/j2534-read-health-integrity
   pull_request:
     branches:
       - master

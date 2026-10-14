@@ -269,8 +269,7 @@ namespace J2534Diag
         // This is independent of CAN electrical acknowledgements by the VCI.
         public void SendDiagnosticMessage(IEnumerable<byte> message)
         {
-            if (CaptureOnlyMode)
-                throw new InvalidOperationException("Diagnostic transmission is disabled in capture-only mode.");
+            DiagnosticTransmitPolicy.RequireActiveDiagnostics(CaptureOnlyMode);
             if (Channel == null || Channel.IsDisposed)
                 throw new InvalidOperationException("A J2534 diagnostic channel must be connected before transmitting.");
             Channel.SendMessage(message);
@@ -278,8 +277,7 @@ namespace J2534Diag
 
         public void SendFlowControl(byte[] canId, int blockSize = 0, int separationTime = 0)
         {
-            if (CaptureOnlyMode)
-                throw new InvalidOperationException("Application diagnostic transmission is disabled in capture-only mode.");
+            DiagnosticTransmitPolicy.RequireActiveDiagnostics(CaptureOnlyMode);
             var fc = new byte[12];
             Array.Copy(canId, 0, fc, 0, 4);
             fc[4] = 0x30;

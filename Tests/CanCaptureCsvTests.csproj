@@ -17,6 +17,8 @@
     </Reference>
     <Compile Include="CanCaptureCsvTests.cs" />
     <Compile Include="CaptureOnlySafetyTests.cs" />
+    <Compile Include="ChannelLifecyclePolicyTests.cs" />
+    <Compile Include="..\Services\ChannelLifecyclePolicy.cs"><Link>ChannelLifecyclePolicy.cs</Link></Compile>
     <Compile Include="..\Services\DiagnosticTransmitPolicy.cs"><Link>DiagnosticTransmitPolicy.cs</Link></Compile>
     <Compile Include="CanDiskCaptureLoggerTests.cs" />
     <Compile Include="CanCaptureIntegrityReportTests.cs" />

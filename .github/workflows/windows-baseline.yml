@@ -11,6 +11,7 @@ on:
       - feature/disk-backed-can-logging
       - feature/j2534-read-health-integrity
       - feature/capture-only-connection
+      - feature/connection-lifecycle-guards
   pull_request:
     branches:
       - master

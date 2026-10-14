@@ -16,6 +16,8 @@
       <HintPath>..\packages\J2534-Sharp.1.0.0-CI00036\lib\net48\J2534-Sharp.dll</HintPath>
     </Reference>
     <Compile Include="CanCaptureCsvTests.cs" />
+    <Compile Include="CaptureOnlySafetyTests.cs" />
+    <Compile Include="..\Services\DiagnosticTransmitPolicy.cs"><Link>DiagnosticTransmitPolicy.cs</Link></Compile>
     <Compile Include="CanDiskCaptureLoggerTests.cs" />
     <Compile Include="CanCaptureIntegrityReportTests.cs" />
     <Compile Include="..\Services\CanCaptureIntegrityReport.cs"><Link>CanCaptureIntegrityReport.cs</Link></Compile>

@@ -19,7 +19,8 @@ namespace J2534Diag
             long sourceOverReturnedFrames,
             bool captureLimitReached,
             string receiveError,
-            DateTime finishedAtUtc)
+            DateTime finishedAtUtc,
+            CanCaptureSummary readSummary = null)
         {
             if (writer == null) throw new ArgumentNullException(nameof(writer));
             if (status == null) throw new ArgumentNullException(nameof(status));
@@ -28,7 +29,10 @@ namespace J2534Diag
 
             bool applicationComplete = status.ApplicationWriteComplete &&
                 string.IsNullOrEmpty(receiveError) && invalidFrames == 0 &&
-                sourceOverReturnedFrames == 0 && !captureLimitReached;
+                sourceOverReturnedFrames == 0 && !captureLimitReached &&
+                (readSummary == null ||
+                 (readSummary.DriverBufferOverflowEvents == 0 &&
+                  readSummary.DriverReadErrors == 0));
 
             WriteField(writer, "Format", "J2534Diag-Capture-Integrity-v1");
             WriteField(writer, "CaptureFile", captureFile);
@@ -48,6 +52,15 @@ namespace J2534Diag
             WriteField(writer, "ApplicationWriteComplete", applicationComplete);
             WriteField(writer, "VehicleBusLossless", "UNVERIFIED");
             WriteField(writer, "TimestampClock", "J2534NativeUnverified;HostUTCSeparate");
+            WriteField(writer, "ReadHealthObserved", readSummary != null);
+            WriteField(writer, "J2534ReadStatusSuccess", readSummary?.SuccessfulReadCalls);
+            WriteField(writer, "J2534ReadStatusTimeout", readSummary?.TimedOutReadCalls);
+            WriteField(writer, "J2534ReadStatusBufferEmpty", readSummary?.EmptyBufferReadCalls);
+            WriteField(writer, "J2534ReadStatusOther", readSummary?.OtherStatusReadCalls);
+            WriteField(writer, "J2534ReadStatusUnavailable", readSummary?.ReadCallsWithoutStatus);
+            WriteField(writer, "J2534DriverReadErrors", readSummary?.DriverReadErrors);
+            WriteField(writer, "J2534BufferOverflowEvents", readSummary?.DriverBufferOverflowEvents);
+            WriteField(writer, "J2534OverflowFramesLost", "UNKNOWN");
         }
 
         private static void WriteField(TextWriter writer, string key, object value)

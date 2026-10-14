@@ -280,18 +280,24 @@ namespace J2534Diag
                 vinRequest[6] = 0xF1;
                 vinRequest[7] = 0x90;
             }
-            SendDiagnosticMessage(vinRequest);
-            Thread.Sleep(2); // Give some time for the request to be sent
+            try
+            {
+                SendDiagnosticMessage(vinRequest);
+                Thread.Sleep(2); // Give some time for the request to be sent
 
-            // Preserve the original VIN response window before shutdown.
-            // Joining for up to three seconds allows the monitor to collect
-            // a reply; the subsequent cancel+join PROVES it exited.
-            _monitorThread.Join(3000);
-            // A timed join alone is not proof of exit; never clear filters
-            // or reuse this channel while that reader still runs.
-            StopVinMonitorSafely();
-            Channel.StopMsgFilter(filterId);
-            Channel.ClearMsgFilters();
+                // Preserve the original VIN response window before shutdown.
+                // Joining for up to three seconds allows the monitor to collect
+                // a reply; a timed join alone does not prove thread exit.
+                _monitorThread.Join(3000);
+            }
+            finally
+            {
+                // Even a failed transmit must stop the reader BEFORE removing
+                // filters or attempting another J2534 channel connection.
+                StopVinMonitorSafely();
+                Channel.StopMsgFilter(filterId);
+                Channel.ClearMsgFilters();
+            }
         }
 
         // Central gate for all application-originated diagnostic frames.

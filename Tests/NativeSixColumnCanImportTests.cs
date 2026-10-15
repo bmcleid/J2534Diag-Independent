@@ -98,6 +98,8 @@ namespace J2534Diag.Tests
                 "Out-of-range extended ID accepted", "out of range");
             Throws(Text("UNKNOWN,0x7EA,0,0x00000000,1,01"),
                 "Unrecognized time accepted", "timestamp");
+            Throws(Text("1,0x7EA,0,0x00000008,1,01"),
+                "Native J2534 control record accepted as CAN data", "indication");
         }
 
         private static void RejectUnknownSchemaAndRowLimit()

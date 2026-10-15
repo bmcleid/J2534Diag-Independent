@@ -21,6 +21,7 @@ namespace J2534Diag.Tests
             NonUtcReportTimeRejected();
             ReportNormalEmptyReadsWithoutInventingFrames();
             ReportHardwareOverflowAsExplicitIncomplete();
+            IgnoredControlMessagesAreNotInventedBusLoss();
             return _checks;
         }
 
@@ -131,6 +132,46 @@ namespace J2534Diag.Tests
                 1, 0, 0, false, null, EndTime, unrecognized);
             Check(unknown.ToString().Contains("ApplicationWriteComplete=False"),
                 "Unrecognized read result incorrectly considered healthy");
+        }
+
+        private static void IgnoredControlMessagesAreNotInventedBusLoss()
+        {
+            var readSummary = new CanCaptureSummary
+            {
+                IgnoredIndicationRecords = 9,
+                SuccessfulReadCalls = 10
+            };
+            var writer = new StringWriter();
+            CanCaptureIntegrityReport.Write(writer, "standalone.csv", Clean(),
+                300, 0, 0, false, null, EndTime, readSummary);
+            string text = writer.ToString();
+            Check(text.Contains("J2534IndicationRecordsIgnored=9"),
+                "Ignored J2534 indication count missing from report");
+            Check(text.Contains("InvalidReceivedFrames=0"),
+                "J2534 indications were mislabelled as invalid CAN payload");
+            Check(text.Contains("ApplicationWriteComplete=True"),
+                "Expected status/indication data wrongly failed disk completeness");
+            Check(text.Contains("VehicleBusLossless=UNVERIFIED"),
+                "Application bookkeeping incorrectly asserted vehicle CAN completeness");
+            Check(text.Contains("RejectedRecordContentsRetained=NO"),
+                "Raw rejection evidence limitation is not disclosed");
+
+            var malformed = new CanCaptureSummary
+            {
+                RejectedMissingOrShortRecords = 1,
+                RejectedOversizeRecords = 2,
+                RejectedArbitrationIds = 3
+            };
+            var incomplete = new StringWriter();
+            CanCaptureIntegrityReport.Write(incomplete, "invalid.csv", Clean(),
+                300, 6, 0, false, null, EndTime, malformed);
+            string bad = incomplete.ToString();
+            Check(bad.Contains("InvalidShortOrNullCanRecords=1") &&
+                bad.Contains("InvalidOversizeClassicalCanRecords=2") &&
+                bad.Contains("InvalidArbitrationIdRecords=3"),
+                "Malformed CAN reasons were merged or lost");
+            Check(bad.Contains("ApplicationWriteComplete=False"),
+                "Malformed CAN input incorrectly labelled complete");
         }
 
         private static void NonUtcReportTimeRejected()

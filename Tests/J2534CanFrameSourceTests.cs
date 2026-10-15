@@ -37,6 +37,7 @@ namespace J2534Diag.Tests
             PreserveBoundaryValuesEndToEnd();
             EmptyMessageResultsAndNullGuard();
             ClassifyActualNuGetOverflowCodes();
+            RecognizeActualJ2534SharpControlMessageTypes();
             return _assertions;
         }
 
@@ -86,6 +87,30 @@ namespace J2534Diag.Tests
                 "TX buffer-full incorrectly treated as receive overflow");
             Check(!J2534CanFrameSource.IsReceiveBufferOverflow(null),
                 "Unknown exception classified as receive overflow");
+        }
+
+        private static void RecognizeActualJ2534SharpControlMessageTypes()
+        {
+            var realMessages = new[]
+            {
+                new Message(new byte[] { 0, 0, 7, 0xEA, 0x01 },
+                    RxFlag.TX_INDICATION, 123),
+                new Message(new byte[] { 0, 0, 7, 0xEA, 0x02 },
+                    RxFlag.START_OF_MESSAGE, 124),
+                new Message(new byte[] { 0, 0, 7, 0xE8, 0x03 },
+                    RxFlag.NONE, 125)
+            };
+            var read = new GetMessageResults(realMessages, ResultCode.STATUS_NOERROR);
+            var frames = J2534CanFrameSource.ProjectBatch(read);
+            Check(frames.Count == 3, "Native J2534-Sharp projection lost a record");
+            Check(!CanFrameClassifier.TryValidate(frames[0], out _,
+                out var txKind) && txKind == CanFrameRejectionKind.J2534Indication,
+                "Pinned TX_INDICATION flag reached ordinary bus recorder");
+            Check(!CanFrameClassifier.TryValidate(frames[1], out _,
+                out var startKind) && startKind == CanFrameRejectionKind.J2534Indication,
+                "Pinned START_OF_MESSAGE flag reached ordinary bus recorder");
+            Check(CanFrameClassifier.TryValidate(frames[2], out var id,
+                out _) && id == 0x7E8, "Valid real J2534-Sharp CAN frame lost");
         }
 
         private static void EmptyMessageResultsAndNullGuard()

@@ -33,6 +33,12 @@ namespace J2534Diag
             Dock = DockStyle.Fill,
             AutoSize = true
         };
+        private readonly Button _disconnectButton = new Button
+        {
+            Text = "Disconnect",
+            Dock = DockStyle.Fill,
+            Enabled = false
+        };
         private readonly ComboBox _canWidthSelect = new ComboBox
         {
             Dock = DockStyle.Fill,
@@ -48,16 +54,19 @@ namespace J2534Diag
             // asking. Capture-only is now the explicit default and CAN bit
             // width must be chosen independently of vehicle identification.
             tableLayoutPanel1.SuspendLayout();
-            tableLayoutPanel1.RowCount = 6;
+            tableLayoutPanel1.RowCount = 7;
             tableLayoutPanel1.RowStyles.Clear();
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             tableLayoutPanel1.SetRow(btnConnect, 4);
-            tableLayoutPanel1.SetRow(pictureBox1, 5);
+            tableLayoutPanel1.SetRow(pictureBox1, 6);
+            tableLayoutPanel1.Controls.Add(_disconnectButton, 0, 5);
+            _disconnectButton.Click += DisconnectButton_Click;
             tableLayoutPanel1.Controls.Add(_captureOnlyCheck, 0, 2);
             _canWidthSelect.Items.AddRange(new object[]
             {
@@ -136,6 +145,28 @@ namespace J2534Diag
         //    return false;
         //}
 
+        private void DisconnectButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                _disconnectButton.Enabled = false;
+                j2534Manager.Disconnect();
+                btnConnect.Text = "Connect";
+                _captureOnlyCheck.Enabled = true;
+                _canWidthSelect.Enabled = _captureOnlyCheck.Checked;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Disconnect refused or failed: " + ex.Message +
+                    "\nStop the active capture and retry. The program will not force-close a channel owned by a reader.",
+                    "J2534 disconnect", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                _disconnectButton.Enabled = j2534Manager.Channel != null;
+            }
+        }
+
         private void btnConnect_Click(object sender, EventArgs e)
         {
             try
@@ -157,6 +188,8 @@ namespace J2534Diag
                         ? BitType.BITS_29 : BitType.BITS_11;
                     j2534Manager.InitializeCaptureOnly(selectedApi.Filename, selectedWidth);
                     btnConnect.Text = "Capture-only connected";
+                    mainForm.UpdateSelectedVehicle(true, null);
+                    _disconnectButton.Enabled = true;
                     MessageBox.Show(
                         "Capture-only CAN channel opened. No application VIN/PID queries will be sent by this mode.\n" +
                         "Open CAN Listener, optionally enable Disk log, and click Start to capture.\n" +
@@ -170,11 +203,13 @@ namespace J2534Diag
                     j2534Manager.Initialize(selectedApi.Filename);
                     mainForm.UpdateSelectedVehicle(j2534Manager.Channel != null, j2534Manager.Vin);
                     btnConnect.Text = "Active diagnostics connected";
+                    _disconnectButton.Enabled = true;
                 }
             }
             catch (Exception ex)
             {
                 btnConnect.Text = "Connect";
+                _disconnectButton.Enabled = j2534Manager.Channel != null;
                 MessageBox.Show($"J2534 Error: {ex.Message}", "J2534 Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }

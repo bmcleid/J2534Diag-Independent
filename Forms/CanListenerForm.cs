@@ -33,6 +33,7 @@ namespace J2534Diag
         private CanCaptureSummary _lastCaptureSummary;
         private CanDiskCaptureLogger _diskLogger;
         private string _diskLogPath;
+        private bool _nativeSixColumnLoaded;
         private readonly CheckBox _diskLogOption = new CheckBox
         {
             Text = "Disk log",
@@ -61,6 +62,20 @@ namespace J2534Diag
                 HeaderText = "Received UTC (host)",
                 DataPropertyName = "ReceivedAtUtc",
                 Width = 215
+            });
+            dataGridViewMessages.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "J2534TimestampRaw",
+                HeaderText = "J2534 time (raw)",
+                DataPropertyName = "J2534TimestampRaw",
+                Width = 150
+            });
+            dataGridViewMessages.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "J2534RxStatusHex",
+                HeaderText = "RxStatus",
+                DataPropertyName = "J2534RxStatusHex",
+                Width = 110
             });
             dataGridViewMessages.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -200,6 +215,14 @@ namespace J2534Diag
                 if (MessageBox.Show("Disk logging is the full-session file. Export CSV contains only the latest on-screen preview (up to 10,500 frames). Continue?", "Export preview only", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes)
                     return;
             }
+            if (_nativeSixColumnLoaded)
+            {
+                if (MessageBox.Show(
+                    "You loaded a six-column external native CAN recording. Export creates a DERIVED eight-column J2534Diag file. It does not retain the original file's labelled timestamp_us units or establish capture completeness. Keep the original source unchanged. Continue?",
+                    "Export derived CAN evidence",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return;
+            }
             using (var sfd = new SaveFileDialog
             {
                 Filter = "CSV Files (*.csv)|*.csv",
@@ -293,6 +316,7 @@ namespace J2534Diag
                 _lastCaptureSummary = null;
                 _diskLogPath = null;
                 _diskLogger = null;
+                _nativeSixColumnLoaded = false;
                 Interlocked.Exchange(ref _uiRefreshPending, 0);
                 _cts = new CancellationTokenSource();
 
@@ -490,10 +514,19 @@ namespace J2534Diag
                 try
                 {
                     List<CanCaptureRecord> imported;
+                    bool isNative;
+                    using (var headerReader = new StreamReader(ofd.FileName))
+                    {
+                        isNative = NativeSixColumnCanImport.HasNativeHeader(
+                            headerReader.ReadLine());
+                    }
                     using (var reader = new StreamReader(ofd.FileName))
                     {
-                        // Accept original Index/ArbId/Data CSVs and timestamped CSVs.
-                        imported = CanCaptureCsv.Read(reader);
+                        // Native six-column source imports only as an offline
+                        // viewing format. We do not redo its forensic audit.
+                        imported = isNative
+                            ? NativeSixColumnCanImport.Read(reader)
+                            : CanCaptureCsv.Read(reader);
                     }
                     lock (_allMessagesLock)
                     {
@@ -511,7 +544,17 @@ namespace J2534Diag
                         }));
                     }
                     Interlocked.Exchange(ref _messageIndex, imported.Count == 0 ? 0 : imported.Max(m => m.Index));
+                    _diskLogPath = null;
+                    _diskLogger = null;
+                    _nativeSixColumnLoaded = isNative;
                     ApplyFilterAndDistinct();
+                    if (isNative)
+                    {
+                        MessageBox.Show(
+                            "Loaded " + imported.Count + " native six-column CAN rows for OFFLINE viewing. Original timestamp_us values were preserved as raw timestamps; no host UTC was synthesized. No ECU identities or GM signal meanings were inferred. This is NOT a replacement for the original source-file hash/integrity audit.",
+                            "Native CAN recording imported",
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
                 }
                 catch (Exception ex)
                 {

@@ -152,10 +152,12 @@ namespace J2534Diag.Tests
         private static void BothCanIdWidthsAndTimestamp()
         {
             var source = new FakeSource();
+            var extended = Frame(0x18DAF111, 0x03, 0x62, 0xF1, 0x90);
+            extended.RxStatusRaw = 0x00000100; // J2534 CAN_29BIT_ID flag.
             source.Batches.Enqueue(new[]
             {
                 Frame(0x7E8, 0x03, 0x41, 0x0C),
-                Frame(0x18DAF111, 0x03, 0x62, 0xF1, 0x90)
+                extended
             });
             var captured = new List<CanCaptureRecord>();
             Pump(source, 2).Run(CancellationToken.None, captured.Add);

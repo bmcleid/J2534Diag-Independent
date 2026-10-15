@@ -449,7 +449,12 @@ namespace J2534Diag
             }
             else if (diskStatus != null)
             {
-                MessageBox.Show("Disk capture closed and application-level writes accounted for.\nCSV: " + _diskLogPath + "\nIntegrity report: " + _diskLogPath + ".integrity.txt\nDevice/bus-level completeness remains unverified.", "Disk logging complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Disk capture closed and application-level writes accounted for.\nCSV: " + _diskLogPath + "\nIntegrity report: " + _diskLogPath + ".integrity.txt" +
+                    (_lastCaptureSummary?.IgnoredIndicationRecords > 0
+                        ? "\nJ2534 control/indication records excluded from CAN data: " +
+                          _lastCaptureSummary.IgnoredIndicationRecords : "") +
+                    "\nDevice/bus-level completeness remains unverified.",
+                    "Disk logging complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             return true;
         }

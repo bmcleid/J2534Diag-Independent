@@ -60,7 +60,7 @@ namespace J2534Diag
                       ((uint)data[2] << 8) | data[3];
             bool extended = frame.RxStatusRaw.HasValue &&
                             (frame.RxStatusRaw.Value & ExtendedIdentifierFlag) != 0;
-            uint maximumId = extended ? 0x1FFFFFFF : 0x7FF;
+            uint maximumId = extended ? 0x1FFFFFFFu : 0x7FFu;
             if (id > maximumId)
             {
                 rejection = CanFrameRejectionKind.ArbitrationIdOutOfRange;

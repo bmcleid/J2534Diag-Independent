@@ -50,6 +50,8 @@ namespace J2534Diag
                 else throw Error(lineNumber, "extended flag must be 0 or 1");
 
                 uint rxStatus = ParseHex(fields[3], lineNumber, "receive status");
+                if ((rxStatus & CanFrameClassifier.ControlOrIndicationMask) != 0)
+                    throw Error(lineNumber, "J2534 indication/control record is not a CAN bus frame");
                 bool statusExtended = (rxStatus & CanFrameClassifier.ExtendedIdentifierFlag) != 0;
                 if (extended != statusExtended)
                     throw Error(lineNumber, "extended column disagrees with J2534 RxStatus");

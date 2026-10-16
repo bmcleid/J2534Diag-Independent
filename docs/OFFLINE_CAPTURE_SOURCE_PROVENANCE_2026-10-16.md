@@ -19,7 +19,7 @@ Adds an independent, read-only byte-level SHA-256 comparison on the **already wo
 
 ## Verification gates
 - Regression source test: SHA-256 known `abc` vector, single-byte/line-ending changes, case-insensitive digest comparison, correct native and legacy match/mismatch disclosure.
-- GitHub Windows Release build and offline test results must be checked at this branch head. Until completed, this is **implemented, NOT validated**.
+- **CONFIRMED software CI:** [Windows Actions run 38935340849](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/38935340849), commit `58b8a49a`: Windows Release build succeeded, 5 warnings, 0 errors; **6,287 assertions across 62 offline regression tests passed**. No operator GUI test of the new message or canonical-byte comparison yet.
 - No additional vehicle capture or operator action required to establish software-only build success. Exact source-byte comparison needs operator's original file only once when convenient; do not request another capture.
 
 ## Relationship to other lanes

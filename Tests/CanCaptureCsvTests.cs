@@ -34,7 +34,8 @@ namespace J2534Diag.Tests
                 int captureOnlyAssertions = CaptureOnlySafetyTests.RunAll();
                 int lifecycleAssertions = ChannelLifecyclePolicyTests.RunAll();
                 int classifierAssertions = CanFrameClassifierTests.RunAll();
-                Console.WriteLine("PASS: " + (_assertions + pumpAssertions + j2534Assertions + diskAssertions + integrityAssertions + captureOnlyAssertions + lifecycleAssertions + classifierAssertions) + " assertions across fifty-four CAN capture regression tests.");
+                int nativeSixColumnAssertions = NativeSixColumnCanImportTests.RunAll();
+                Console.WriteLine("PASS: " + (_assertions + pumpAssertions + j2534Assertions + diskAssertions + integrityAssertions + captureOnlyAssertions + lifecycleAssertions + classifierAssertions + nativeSixColumnAssertions) + " assertions across sixty-one CAN capture regression tests.");
                 return 0;
             }
             catch (Exception ex)

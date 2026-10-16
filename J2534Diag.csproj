@@ -89,6 +89,7 @@
       <DependentUpon>FuelTrimForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Services\CanCaptureCsv.cs" />
+    <Compile Include="Services\NativeSixColumnCanImport.cs" />
     <Compile Include="Services\CanDiskCaptureLogger.cs" />
     <Compile Include="Services\CanCaptureIntegrityReport.cs" />
     <Compile Include="Services\CanCapturePump.cs" />

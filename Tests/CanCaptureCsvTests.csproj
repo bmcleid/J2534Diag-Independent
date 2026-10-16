@@ -27,6 +27,8 @@
     <Compile Include="CanCapturePumpTests.cs" />
     <Compile Include="CanFrameClassifierTests.cs" />
     <Compile Include="NativeSixColumnCanImportTests.cs" />
+    <Compile Include="OfflineCaptureProvenanceTests.cs" />
+    <Compile Include="..\Services\OfflineCaptureProvenance.cs"><Link>OfflineCaptureProvenance.cs</Link></Compile>
     <Compile Include="..\Services\NativeSixColumnCanImport.cs"><Link>NativeSixColumnCanImport.cs</Link></Compile>
     <Compile Include="..\Services\CanFrameClassifier.cs"><Link>CanFrameClassifier.cs</Link></Compile>
     <Compile Include="J2534CanFrameSourceTests.cs" />

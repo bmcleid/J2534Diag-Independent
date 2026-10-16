@@ -513,24 +513,27 @@ namespace J2534Diag
                 if (ofd.ShowDialog() != DialogResult.OK) return;
                 try
                 {
-                    List<CanCaptureRecord> imported;
-                    bool isNative;
-                    using (var headerReader = new StreamReader(ofd.FileName))
-                    {
-                        isNative = NativeSixColumnCanImport.HasNativeHeader(
-                            headerReader.ReadLine());
-                    }
-                    using (var reader = new StreamReader(ofd.FileName))
-                    {
-                        // Native six-column source imports only as an offline
-                        // viewing format. We do not redo its forensic audit.
-                        imported = isNative
-                            ? NativeSixColumnCanImport.Read(reader)
-                            : CanCaptureCsv.Read(reader);
-                    }
-                    // Identify the exact original bytes before presenting imported data.
-                    // Do not hash a re-export or infer physical capture completeness.
-                    string sourceSha256 = OfflineCaptureProvenance.HashFile(ofd.FileName);
+                    string sourceSha256;
+                    bool isNative = false;
+                    // Lock the original source against normal concurrent writes
+                    // while hashing and parsing the SAME bytes from one handle.
+                    var imported = OfflineCaptureProvenance.ReadConsistentFile(
+                        ofd.FileName, source =>
+                        {
+                            // leaveOpen keeps the original locked handle valid.
+                            using (var headerReader = new StreamReader(source,
+                                System.Text.Encoding.UTF8, true, 1024, true))
+                            {
+                                isNative = NativeSixColumnCanImport.HasNativeHeader(
+                                    headerReader.ReadLine());
+                            }
+                            source.Seek(0, SeekOrigin.Begin);
+                            using (var reader = new StreamReader(source,
+                                System.Text.Encoding.UTF8, true, 1024, true))
+                                return isNative
+                                    ? NativeSixColumnCanImport.Read(reader)
+                                    : CanCaptureCsv.Read(reader);
+                        }, out sourceSha256);
                     lock (_allMessagesLock)
                     {
                         _allMessages.Clear();

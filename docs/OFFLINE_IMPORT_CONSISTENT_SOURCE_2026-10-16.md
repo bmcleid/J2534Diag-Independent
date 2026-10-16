@@ -15,6 +15,6 @@ Prior provenance PR #11 parsed the selected file using one handle, then reopened
 
 ## Verification
 - Added deterministic stream tests for hash/parsed-byte agreement, rewind, non-disposal of caller stream and parser exception propagation.
-- Windows Release compilation and full regression suite pending GitHub Actions run 38939461878 as of initial document creation.
+- **CONFIRMED CI:** [Windows Actions 38939520195](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/38939520195) on commit `84c93cd4` succeeded: **6,295 assertions across 62 offline tests**, 0 compile errors, 5 warnings. The operator's original file has not been opened in this new build.
 - GUI confirmation against operator's original file remains unverified, and previously confirmed 25,791-row offline import is not retested.
 - Draft stacked branch; no automatic merge into master or change to OneApp/native audit/Android Vgate/T43 ownership.

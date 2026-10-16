@@ -23,6 +23,32 @@ namespace J2534Diag
                 return HashStream(stream);
         }
 
+        // One open, read-only file handle for hashing and parsing. FileShare.Read
+        // prevents ordinary concurrent writers on Windows throughout both steps.
+        // The importer must consume the stream synchronously and leave it open.
+        public static T ReadConsistentFile<T>(string path, Func<Stream, T> importer,
+            out string sourceSha256)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("A source path is required.", nameof(path));
+            if (importer == null) throw new ArgumentNullException(nameof(importer));
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                return ReadConsistentStream(stream, importer, out sourceSha256);
+        }
+
+        public static T ReadConsistentStream<T>(Stream stream, Func<Stream, T> importer,
+            out string sourceSha256)
+        {
+            if (stream == null) throw new ArgumentNullException(nameof(stream));
+            if (importer == null) throw new ArgumentNullException(nameof(importer));
+            if (!stream.CanRead || !stream.CanSeek)
+                throw new ArgumentException("Source must be readable and seekable.", nameof(stream));
+            stream.Seek(0, SeekOrigin.Begin);
+            sourceSha256 = HashStream(stream);
+            stream.Seek(0, SeekOrigin.Begin);
+            return importer(stream);
+        }
+
         public static string HashStream(Stream source)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));

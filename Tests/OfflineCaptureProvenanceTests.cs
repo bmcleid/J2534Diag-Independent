@@ -54,6 +54,39 @@ namespace J2534Diag.Tests
             }
             finally { File.Delete(path); }
 
+            // Hash and parser must observe the same exact bytes; callback begins at byte zero.
+            using (var singleSource = new MemoryStream(Encoding.ASCII.GetBytes("abc")))
+            {
+                string observedHash;
+                string decoded = OfflineCaptureProvenance.ReadConsistentStream(
+                    singleSource, source =>
+                    {
+                        if (source.Position != 0) throw new Exception("Parser did not start at byte zero");
+                        using (var textReader = new StreamReader(source, Encoding.ASCII, false, 1024, true))
+                            return textReader.ReadToEnd();
+                    }, out observedHash);
+                if (decoded != "abc") throw new Exception("Parsed source bytes changed");
+                assertions++;
+                if (observedHash != "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD")
+                    throw new Exception("Single-handle hash mismatch");
+                assertions++;
+                if (!singleSource.CanRead) throw new Exception("Caller stream was disposed");
+                assertions++;
+            }
+            try
+            {
+                string ignored;
+                OfflineCaptureProvenance.ReadConsistentStream(
+                    new MemoryStream(Encoding.ASCII.GetBytes("abc")), (Stream _) =>
+                    { throw new FormatException("Bad input"); return ""; }, out ignored);
+                throw new Exception("Parser exception swallowed");
+            }
+            catch (FormatException ex)
+            {
+                if (ex.Message != "Bad input") throw;
+                assertions++;
+            }
+
             return assertions;
         }
     }

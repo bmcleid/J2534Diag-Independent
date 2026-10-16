@@ -15,6 +15,7 @@ on:
       - feature/native-can-rejection-accounting
       - feature/native-six-column-offline-import
       - feature/offline-capture-provenance-20261016
+      - feature/consistent-offline-import
   pull_request:
     branches:
       - master

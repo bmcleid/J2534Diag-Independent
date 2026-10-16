@@ -14,6 +14,7 @@ on:
       - feature/connection-lifecycle-guards
       - feature/native-can-rejection-accounting
       - feature/native-six-column-offline-import
+      - feature/offline-capture-provenance-20261016
   pull_request:
     branches:
       - master

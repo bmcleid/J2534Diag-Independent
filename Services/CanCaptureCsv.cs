@@ -30,24 +30,33 @@ namespace J2534Diag
     {
         public const string Header = "Index,ReceivedAtUtc,ArbId,ArbId Description,Data,J2534TimestampRaw,J2534RxStatusHex,J2534ReadResult";
 
+        public static void WriteHeader(TextWriter writer)
+        {
+            if (writer == null) throw new ArgumentNullException(nameof(writer));
+            writer.WriteLine(Header);
+        }
+
+        public static void WriteRecord(TextWriter writer, CanCaptureRecord record)
+        {
+            if (writer == null) throw new ArgumentNullException(nameof(writer));
+            if (record == null) throw new ArgumentNullException(nameof(record));
+            writer.WriteLine(
+                record.Index.ToString(CultureInfo.InvariantCulture) + "," +
+                Quote(record.ReceivedAtUtc) + "," +
+                Quote(record.ArbId) + "," +
+                Quote(record.ArbIdDescription) + "," +
+                Quote(record.Data) + "," +
+                Quote(record.J2534TimestampRaw) + "," +
+                Quote(record.J2534RxStatusHex) + "," +
+                Quote(record.J2534ReadResult));
+        }
+
         public static void Write(TextWriter writer, IEnumerable<CanCaptureRecord> records)
         {
             if (writer == null) throw new ArgumentNullException(nameof(writer));
             if (records == null) throw new ArgumentNullException(nameof(records));
-            writer.WriteLine(Header);
-            foreach (var record in records)
-            {
-                if (record == null) throw new ArgumentException("Capture contains a null record.", nameof(records));
-                writer.WriteLine(
-                    record.Index.ToString(CultureInfo.InvariantCulture) + "," +
-                    Quote(record.ReceivedAtUtc) + "," +
-                    Quote(record.ArbId) + "," +
-                    Quote(record.ArbIdDescription) + "," +
-                    Quote(record.Data) + "," +
-                    Quote(record.J2534TimestampRaw) + "," +
-                    Quote(record.J2534RxStatusHex) + "," +
-                    Quote(record.J2534ReadResult));
-            }
+            WriteHeader(writer);
+            foreach (var record in records) WriteRecord(writer, record);
         }
 
         public static List<CanCaptureRecord> Read(TextReader reader)

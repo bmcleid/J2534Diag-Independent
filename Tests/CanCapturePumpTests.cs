@@ -52,6 +52,7 @@ namespace J2534Diag.Tests
             EmptyBatchAndCancellation();
             DriverErrorMustPropagate();
             NonUtcTimestampIsRejected();
+            PartialSummarySurvivesReceiveFailure();
             NativeMetadataIsPreserved();
             NullMetadataIsUnknownNotZero();
             return _assertions;
@@ -194,6 +195,32 @@ namespace J2534Diag.Tests
             Check(saved[0].J2534TimestampRaw == "", "Unavailable timestamp must remain blank");
             Check(saved[0].J2534RxStatusHex == "", "Unavailable flags must remain blank");
             Check(saved[0].J2534ReadResult == "", "Unavailable read result must remain blank");
+        }
+
+        private static void PartialSummarySurvivesReceiveFailure()
+        {
+            var source = new FakeSource();
+            source.Batches.Enqueue(new[]
+            {
+                new CanReceivedFrame { Data = new byte[] { 0x00, 0x01 } },
+                Frame(0x7EA, 0x03, 0x62, 0xF1, 0x90)
+            });
+            source.OnRead = () => { if (source.Requested.Count == 2) source.Fail = true; };
+            var pump = Pump(source, 5);
+            var records = new List<CanCaptureRecord>();
+            try
+            {
+                pump.Run(CancellationToken.None, records.Add);
+                throw new Exception("Simulated second-read error not surfaced");
+            }
+            catch (InvalidOperationException ex)
+            {
+                Check(ex.Message == "Simulated driver failure", "Source error lost");
+            }
+            Check(pump.LastSummary != null, "LastSummary was not retained");
+            Check(pump.LastSummary.InvalidFrames == 1, "Earlier invalid frame count lost on exception");
+            Check(pump.LastSummary.StoredFrames == 1, "Earlier stored frame count lost on exception");
+            Check(records.Count == 1, "Previously returned frame lost on subsequent driver error");
         }
 
         private static void NonUtcTimestampIsRejected()

@@ -2,30 +2,20 @@ name: Windows baseline build
 
 on:
   push:
-    branches:
-      - dev/independent-baseline
-      - feature/can-capture-v2
-      - feature/can-capture-reliability
-      - feature/can-capture-fake-transport-tests
-      - feature/j2534-native-rx-metadata
-      - feature/disk-backed-can-logging
-      - feature/j2534-read-health-integrity
-      - feature/capture-only-connection
-      - feature/connection-lifecycle-guards
-      - feature/native-can-rejection-accounting
-      - feature/native-six-column-offline-import
-      - feature/offline-capture-provenance-20261016
-      - feature/consistent-offline-import
-  pull_request:
-    branches:
-      - master
-
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 
 jobs:
   build:
     runs-on: windows-2022
+    timeout-minutes: 20
     steps:
       - name: Checkout source
         uses: actions/checkout@v4

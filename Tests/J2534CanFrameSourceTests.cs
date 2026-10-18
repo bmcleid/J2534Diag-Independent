@@ -36,6 +36,7 @@ namespace J2534Diag.Tests
             ProjectAndCloneActualNuGetObjects();
             PreserveBoundaryValuesEndToEnd();
             EmptyMessageResultsAndNullGuard();
+            ClassifyActualNuGetOverflowCodes();
             return _assertions;
         }
 
@@ -70,6 +71,21 @@ namespace J2534Diag.Tests
             Check(saved[0].J2534ReadResult == "STATUS_NOERROR", "Status result omitted");
             Check(saved[0].ArbId == "0x7E8", "CAN ID changed during projection");
             Check(saved[0].Data == "03-41-0C-00", "Payload changed during projection");
+        }
+
+        private static void ClassifyActualNuGetOverflowCodes()
+        {
+            var over = new J2534Exception(ResultCode.BUFFER_OVERFLOW, "Test only");
+            var timeout = new J2534Exception(ResultCode.TIMEOUT, "Test only");
+            var full = new J2534Exception(ResultCode.BUFFER_FULL, "TX side only");
+            Check(J2534CanFrameSource.IsReceiveBufferOverflow(over),
+                "Pinned library overflow ResultCode not recognized");
+            Check(!J2534CanFrameSource.IsReceiveBufferOverflow(timeout),
+                "Normal timeout treated as J2534 receive overflow");
+            Check(!J2534CanFrameSource.IsReceiveBufferOverflow(full),
+                "TX buffer-full incorrectly treated as receive overflow");
+            Check(!J2534CanFrameSource.IsReceiveBufferOverflow(null),
+                "Unknown exception classified as receive overflow");
         }
 
         private static void EmptyMessageResultsAndNullGuard()

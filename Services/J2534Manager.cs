@@ -30,6 +30,8 @@ namespace J2534Diag
         private static readonly byte[] UdsVinResponseMask29Bit = { 0xFF, 0xFF, 0xFF, 0x00 };
         private static readonly byte[] UdsVinResponsePattern29Bit = { 0x18, 0xDA, 0xF1, 0x00 };
 
+        public ReceiveChannelGate ReceiveGate { get; } = new ReceiveChannelGate();
+
         public API Api { get; private set; }
         public Device Device { get; private set; }
         public Channel Channel { get; private set; }
@@ -56,6 +58,8 @@ namespace J2534Diag
 
         public void Initialize(string dllFileName)
         {
+            if (ReceiveGate.CurrentOwner != null)
+                throw new InvalidOperationException("Cannot reconnect while " + ReceiveGate.CurrentOwner + " owns the J2534 receive channel.");
             Vin = null;
 
             var attempts = new (BitType BitMode, VinRequestMode VinMode)[]

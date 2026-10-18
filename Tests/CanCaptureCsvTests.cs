@@ -23,7 +23,9 @@ namespace J2534Diag.Tests
                 ReadReorderedHeader();
                 RejectMalformedRows();
                 RejectUnterminatedQuotes();
-                Console.WriteLine("PASS: " + _assertions + " assertions across five CAN capture regression tests.");
+                ExclusiveReceiveOwnership();
+                ConcurrentReceiveOwnership();
+                Console.WriteLine("PASS: " + _assertions + " assertions across seven CAN capture regression tests.");
                 return 0;
             }
             catch (Exception ex)
@@ -102,5 +104,47 @@ namespace J2534Diag.Tests
             catch (FormatException) { }
             ++_assertions;
         }
+        private static void ExclusiveReceiveOwnership()
+        {
+            var gate = new ReceiveChannelGate();
+            Assert(gate.TryAcquire("CAN"), "First reader must acquire channel");
+            Assert(gate.CurrentOwner == "CAN", "Gate must retain owner");
+            Assert(!gate.TryAcquire("MISFIRE"), "Second reader must be blocked");
+            try
+            {
+                gate.Release("MISFIRE");
+                throw new Exception("Wrong owner release must throw");
+            }
+            catch (InvalidOperationException) { }
+            ++_assertions;
+            Assert(gate.CurrentOwner == "CAN", "Wrong release must not clear owner");
+            gate.Release("CAN");
+            Assert(gate.TryAcquire("MISFIRE"), "Release must allow another reader");
+            gate.Release("MISFIRE");
+            Assert(gate.CurrentOwner == null, "Gate should be empty after release");
+        }
+
+        private static void ConcurrentReceiveOwnership()
+        {
+            var gate = new ReceiveChannelGate();
+            int accepted = 0;
+            var threads = new System.Threading.Thread[24];
+            var start = new System.Threading.ManualResetEventSlim(false);
+            for (int i = 0; i < threads.Length; i++)
+            {
+                int local = i;
+                threads[i] = new System.Threading.Thread(() =>
+                {
+                    start.Wait();
+                    if (gate.TryAcquire("Reader" + local))
+                        System.Threading.Interlocked.Increment(ref accepted);
+                });
+                threads[i].Start();
+            }
+            start.Set();
+            foreach (var thread in threads) thread.Join();
+            Assert(accepted == 1, "Exactly one simultaneous reader should acquire the channel");
+        }
+
     }
 }

@@ -134,8 +134,24 @@ namespace J2534Diag
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            // Stop in-process readers before disposing the shared J2534 channel.
+            // A blocked driver read retains ownership; keep the application open
+            // rather than unloading the driver beneath an active worker.
+            canListenerForm?.StopListening();
+            fuelTrimForm?.StopListening();
+            misfireForm?.StopListening();
+            if (j2534Manager?.ReceiveGate.CurrentOwner != null)
+            {
+                e.Cancel = true;
+                MessageBox.Show(
+                    "The J2534 channel is still owned by " + j2534Manager.ReceiveGate.CurrentOwner +
+                    ". Close the active diagnostic session before exiting.",
+                    "Channel shutdown pending", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
             base.OnFormClosing(e);
-            j2534Manager?.Dispose();
+            if (!e.Cancel)
+                j2534Manager?.Dispose();
         }
 
         private void tabControl1_SelectedIndexChanged(object sender, EventArgs e)

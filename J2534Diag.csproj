@@ -94,6 +94,7 @@
     <Compile Include="Services\CanCapturePump.cs" />
     <Compile Include="Services\J2534CanFrameSource.cs" />
     <Compile Include="Services\ReceiveChannelGate.cs" />
+    <Compile Include="Services\ChannelLifecyclePolicy.cs" />
     <Compile Include="Services\DiagnosticTransmitPolicy.cs" />
     <Compile Include="Services\J2534Manager.cs" />
     <Compile Include="Forms\MainForm.cs">

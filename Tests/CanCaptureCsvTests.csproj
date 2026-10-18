@@ -12,8 +12,13 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="J2534-Sharp, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\J2534-Sharp.1.0.0-CI00036\lib\net48\J2534-Sharp.dll</HintPath>
+    </Reference>
     <Compile Include="CanCaptureCsvTests.cs" />
     <Compile Include="CanCapturePumpTests.cs" />
+    <Compile Include="J2534CanFrameSourceTests.cs" />
+    <Compile Include="..\Services\J2534CanFrameSource.cs"><Link>J2534CanFrameSource.cs</Link></Compile>
     <Compile Include="..\Services\CanCapturePump.cs"><Link>CanCapturePump.cs</Link></Compile>
     <Compile Include="..\Services\ReceiveChannelGate.cs"><Link>ReceiveChannelGate.cs</Link></Compile>
     <Compile Include="..\Services\CanCaptureCsv.cs">

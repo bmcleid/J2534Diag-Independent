@@ -106,23 +106,6 @@ namespace J2534Diag
         // processing backlog when the user stops the listener.
         // Adapter-specific work is confined here. The capture logic itself is
         // exercised through a fake ICanFrameBatchSource by offline tests.
-        private sealed class J2534CanFrameSource : ICanFrameBatchSource
-        {
-            private readonly Channel _channel;
-            public J2534CanFrameSource(Channel channel)
-            {
-                _channel = channel ?? throw new ArgumentNullException(nameof(channel));
-            }
-
-            public IReadOnlyList<byte[]> ReadBatch(int requestedMaximum, int timeoutMilliseconds)
-            {
-                var response = _channel.GetMessages(requestedMaximum, timeoutMilliseconds);
-                if (response.Messages == null)
-                    return Array.Empty<byte[]>();
-                return response.Messages.Select(msg => msg.Data).ToArray();
-            }
-        }
-
         private void ListenLoop()
         {
             var channel = j2534Manager.Channel;
@@ -144,7 +127,10 @@ namespace J2534Diag
                             ReceivedAtUtc = record.ReceivedAtUtc,
                             ArbId = record.ArbId,
                             ArbIdDescription = record.ArbIdDescription,
-                            Data = record.Data
+                            Data = record.Data,
+                            J2534TimestampRaw = record.J2534TimestampRaw,
+                            J2534RxStatusHex = record.J2534RxStatusHex,
+                            J2534ReadResult = record.J2534ReadResult
                         };
                         lock (_allMessagesLock)
                             _allMessages.Add(message);
@@ -368,7 +354,10 @@ namespace J2534Diag
                             ReceivedAtUtc = m.ReceivedAtUtc,
                             ArbId = m.ArbId,
                             ArbIdDescription = m.ArbIdDescription,
-                            Data = m.Data
+                            Data = m.Data,
+                            J2534TimestampRaw = m.J2534TimestampRaw,
+                            J2534RxStatusHex = m.J2534RxStatusHex,
+                            J2534ReadResult = m.J2534ReadResult
                         }));
                     }
                     Interlocked.Exchange(ref _messageIndex, imported.Count == 0 ? 0 : imported.Max(m => m.Index));

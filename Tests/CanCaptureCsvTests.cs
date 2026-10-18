@@ -21,12 +21,15 @@ namespace J2534Diag.Tests
                 RoundTripWithTimestampAndEscapedFields();
                 ReadLegacyCapture();
                 ReadReorderedHeader();
+                NativeMetadataCsvRoundTrip();
+                ReadPriorFiveColumnCsv();
                 RejectMalformedRows();
                 RejectUnterminatedQuotes();
                 ExclusiveReceiveOwnership();
                 ConcurrentReceiveOwnership();
                 int pumpAssertions = CanCapturePumpTests.RunAll();
-                Console.WriteLine("PASS: " + (_assertions + pumpAssertions) + " assertions across fourteen CAN capture regression tests.");
+                int j2534Assertions = J2534CanFrameSourceTests.RunAll();
+                Console.WriteLine("PASS: " + (_assertions + pumpAssertions + j2534Assertions) + " assertions across twenty-one CAN capture regression tests.");
                 return 0;
             }
             catch (Exception ex)
@@ -82,6 +85,52 @@ namespace J2534Diag.Tests
             Assert(result[0].ArbId == "0x7E8", "Reordered ID");
             Assert(result[0].ArbIdDescription == "ECM, engine", "Reordered quoted description");
             Assert(result[0].ReceivedAtUtc == "2026-10-12T14:00:01Z", "Reordered timestamp");
+        }
+
+        private static void NativeMetadataCsvRoundTrip()
+        {
+            var source = new[]
+            {
+                new CanCaptureRecord
+                {
+                    Index = 9, ReceivedAtUtc = "2026-10-13T16:00:00.0000000Z",
+                    ArbId = "0x7EA", ArbIdDescription = "TCM, raw",
+                    Data = "03-41-0C-00", J2534TimestampRaw = "4294967295",
+                    J2534RxStatusHex = "0x80000100", J2534ReadResult = "TIMEOUT"
+                },
+                new CanCaptureRecord
+                {
+                    Index = 10, ReceivedAtUtc = "2026-10-13T16:00:00.0010000Z",
+                    ArbId = "0x7E8", Data = "01-00",
+                    J2534TimestampRaw = "0", J2534RxStatusHex = "0x00000000",
+                    J2534ReadResult = "STATUS_NOERROR"
+                }
+            };
+            var writer = new StringWriter();
+            CanCaptureCsv.Write(writer, source);
+            string csv = writer.ToString();
+            Assert(csv.StartsWith(CanCaptureCsv.Header), "Native CSV header invalid");
+            var records = CanCaptureCsv.Read(new StringReader(csv));
+            Assert(records.Count == 2, "Native CSV row count changed");
+            Assert(records[0].J2534TimestampRaw == "4294967295", "Native timestamp truncated");
+            Assert(records[0].J2534RxStatusHex == "0x80000100", "High receive flag bit changed");
+            Assert(records[0].J2534ReadResult == "TIMEOUT", "Receive timeout-with-data lost");
+            Assert(records[0].ArbIdDescription == "TCM, raw", "Quoted description changed");
+            Assert(records[1].J2534TimestampRaw == "0", "Native timestamp zero lost");
+            Assert(records[1].J2534RxStatusHex == "0x00000000", "Receive flags zero lost");
+            Assert(records[1].J2534ReadResult == "STATUS_NOERROR", "Read result success changed");
+        }
+
+        private static void ReadPriorFiveColumnCsv()
+        {
+            var csv = "Index,ReceivedAtUtc,ArbId,ArbId Description,Data\n" +
+                      "1,2026-10-12T14:00:00Z,0x7EA,TCM,03-41-0C-00\n";
+            var records = CanCaptureCsv.Read(new StringReader(csv));
+            Assert(records.Count == 1, "Prior five-column CSV rejected");
+            Assert(records[0].ReceivedAtUtc == "2026-10-12T14:00:00Z", "Prior host timestamp lost");
+            Assert(records[0].J2534TimestampRaw == "", "Missing native timestamp invented");
+            Assert(records[0].J2534RxStatusHex == "", "Missing receive flags invented");
+            Assert(records[0].J2534ReadResult == "", "Missing read result invented");
         }
 
         private static void RejectMalformedRows()

@@ -31,7 +31,8 @@ namespace J2534Diag.Tests
                 int j2534Assertions = J2534CanFrameSourceTests.RunAll();
                 int diskAssertions = CanDiskCaptureLoggerTests.RunAll();
                 int integrityAssertions = CanCaptureIntegrityReportTests.RunAll();
-                Console.WriteLine("PASS: " + (_assertions + pumpAssertions + j2534Assertions + diskAssertions + integrityAssertions) + " assertions across thirty-eight CAN capture regression tests.");
+                int captureOnlyAssertions = CaptureOnlySafetyTests.RunAll();
+                Console.WriteLine("PASS: " + (_assertions + pumpAssertions + j2534Assertions + diskAssertions + integrityAssertions + captureOnlyAssertions) + " assertions across forty-two CAN capture regression tests.");
                 return 0;
             }
             catch (Exception ex)

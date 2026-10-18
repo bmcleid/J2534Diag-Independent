@@ -26,11 +26,49 @@ namespace J2534Diag
         }
         private MainForm mainForm;
         private J2534Manager j2534Manager;
+        private readonly CheckBox _captureOnlyCheck = new CheckBox
+        {
+            Checked = true,
+            Text = "Capture-only (no app diagnostic requests)",
+            Dock = DockStyle.Fill,
+            AutoSize = true
+        };
+        private readonly ComboBox _canWidthSelect = new ComboBox
+        {
+            Dock = DockStyle.Fill,
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
 
 
         public VehicleTabForm(MainForm mainForm, J2534Manager j2534Manager)
         {
             InitializeComponent();
+
+            // The old Connect button performed active VIN interrogation without
+            // asking. Capture-only is now the explicit default and CAN bit
+            // width must be chosen independently of vehicle identification.
+            tableLayoutPanel1.SuspendLayout();
+            tableLayoutPanel1.RowCount = 6;
+            tableLayoutPanel1.RowStyles.Clear();
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            tableLayoutPanel1.SetRow(btnConnect, 4);
+            tableLayoutPanel1.SetRow(pictureBox1, 5);
+            tableLayoutPanel1.Controls.Add(_captureOnlyCheck, 0, 2);
+            _canWidthSelect.Items.AddRange(new object[]
+            {
+                "11-bit CAN identifier, 500 kbps",
+                "29-bit CAN identifier, 500 kbps"
+            });
+            _canWidthSelect.SelectedIndex = 0;
+            tableLayoutPanel1.Controls.Add(_canWidthSelect, 0, 3);
+            _captureOnlyCheck.CheckedChanged += (sender, args) =>
+                _canWidthSelect.Enabled = _captureOnlyCheck.Checked;
+            tableLayoutPanel1.ResumeLayout(true);
 
             using (var ms = new System.IO.MemoryStream(Resources.J2534Diag))
             {
@@ -104,7 +142,7 @@ namespace J2534Diag
             {
                 btnConnect.Enabled = false;
                 btnConnect.Text = "Connecting ...";
-                Application.DoEvents();
+                btnConnect.Refresh();
 
                 if(j2534Manager?.Devices?.Any() != true)
                 {
@@ -113,10 +151,26 @@ namespace J2534Diag
                 }
 
                 var selectedApi = j2534Manager.Devices[cbDevices.SelectedIndex];
-                j2534Manager.Initialize(selectedApi.Filename);
-                mainForm.UpdateSelectedVehicle(j2534Manager.Channel != null, j2534Manager.Vin);
-
-                btnConnect.Text = "Connected";
+                if (_captureOnlyCheck.Checked)
+                {
+                    var selectedWidth = _canWidthSelect.SelectedIndex == 1
+                        ? BitType.BITS_29 : BitType.BITS_11;
+                    j2534Manager.InitializeCaptureOnly(selectedApi.Filename, selectedWidth);
+                    btnConnect.Text = "Capture-only connected";
+                    MessageBox.Show(
+                        "Capture-only CAN channel opened. No application VIN/PID queries will be sent by this mode.\n" +
+                        "Open CAN Listener, optionally enable Disk log, and click Start to capture.\n" +
+                        "CAN hardware may still acknowledge bus frames electrically. RLink X3 behavior remains unverified.",
+                        "Capture-only connection", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    // Explicit user selection: legacy mode actively sends VIN
+                    // identification requests and may send ISO-TP flow control.
+                    j2534Manager.Initialize(selectedApi.Filename);
+                    mainForm.UpdateSelectedVehicle(j2534Manager.Channel != null, j2534Manager.Vin);
+                    btnConnect.Text = "Active diagnostics connected";
+                }
             }
             catch (Exception ex)
             {

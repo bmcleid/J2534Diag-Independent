@@ -13,6 +13,8 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Compile Include="CanCaptureCsvTests.cs" />
+    <Compile Include="CanCapturePumpTests.cs" />
+    <Compile Include="..\Services\CanCapturePump.cs"><Link>CanCapturePump.cs</Link></Compile>
     <Compile Include="..\Services\ReceiveChannelGate.cs"><Link>ReceiveChannelGate.cs</Link></Compile>
     <Compile Include="..\Services\CanCaptureCsv.cs">
       <Link>CanCaptureCsv.cs</Link>

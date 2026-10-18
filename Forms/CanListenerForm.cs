@@ -29,6 +29,7 @@ namespace J2534Diag
         private bool _limitReached;
         private int _uiRefreshPending;
         private long _invalidFrames;
+        private long _excessReturnedFrames;
 
         public CanListenerForm(J2534Manager j2534Manager)
         {
@@ -103,43 +104,57 @@ namespace J2534Diag
 
         // A single receive-and-store thread avoids discarding an asynchronous
         // processing backlog when the user stops the listener.
+        // Adapter-specific work is confined here. The capture logic itself is
+        // exercised through a fake ICanFrameBatchSource by offline tests.
+        private sealed class J2534CanFrameSource : ICanFrameBatchSource
+        {
+            private readonly Channel _channel;
+            public J2534CanFrameSource(Channel channel)
+            {
+                _channel = channel ?? throw new ArgumentNullException(nameof(channel));
+            }
+
+            public IReadOnlyList<byte[]> ReadBatch(int requestedMaximum, int timeoutMilliseconds)
+            {
+                var response = _channel.GetMessages(requestedMaximum, timeoutMilliseconds);
+                if (response.Messages == null)
+                    return Array.Empty<byte[]>();
+                return response.Messages.Select(msg => msg.Data).ToArray();
+            }
+        }
+
         private void ListenLoop()
         {
             var channel = j2534Manager.Channel;
-            int count = 0;
             try
             {
-                while (!_cts.IsCancellationRequested && count < MAX_RECORDS)
-                {
-                    var response = channel.GetMessages(200, 5);
-                    foreach (var msg in response.Messages)
-                    {
-                        if (_cts.IsCancellationRequested) break;
-                        if (count >= MAX_RECORDS) break;
-                        var received = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
-                        var data = msg.Data;
-                        if (data == null || data.Length < 4)
-                        {
-                            Interlocked.Increment(ref _invalidFrames);
-                            continue;
-                        }
+                var pump = new CanCapturePump(
+                    new J2534CanFrameSource(channel),
+                    MAX_RECORDS,
+                    () => DateTime.UtcNow,
+                    id => GmCanId11Bit.KnownCanIds.TryGetValue(id, out var description) ? description : "");
 
-                        uint arbIdValue = (uint)(data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3]);
-                        var record = new CanMessage
+                var summary = pump.Run(
+                    _cts.Token,
+                    record =>
+                    {
+                        var message = new CanMessage
                         {
-                            Index = Interlocked.Increment(ref _messageIndex),
-                            ReceivedAtUtc = received,
-                            ArbId = $"0x{arbIdValue:X3}",
-                            ArbIdDescription = GmCanId11Bit.KnownCanIds.TryGetValue(arbIdValue, out var description) ? description : "",
-                            Data = BitConverter.ToString(data, 4, data.Length - 4)
+                            Index = record.Index,
+                            ReceivedAtUtc = record.ReceivedAtUtc,
+                            ArbId = record.ArbId,
+                            ArbIdDescription = record.ArbIdDescription,
+                            Data = record.Data
                         };
                         lock (_allMessagesLock)
-                            _allMessages.Add(record);
-                        count++;
-                        if (count % 200 == 0) ScheduleUiRefresh();
-                    }
-                }
-                if (count >= MAX_RECORDS) _limitReached = true;
+                            _allMessages.Add(message);
+                        Interlocked.Exchange(ref _messageIndex, record.Index);
+                    },
+                    count => ScheduleUiRefresh());
+
+                _limitReached = summary.LimitReached;
+                _invalidFrames = summary.InvalidFrames;
+                _excessReturnedFrames = summary.ExcessReturnedFrames;
             }
             catch (Exception ex)
             {
@@ -236,6 +251,7 @@ namespace J2534Diag
                 _listenerFailure = null;
                 _limitReached = false;
                 _invalidFrames = 0;
+                _excessReturnedFrames = 0;
                 Interlocked.Exchange(ref _uiRefreshPending, 0);
                 _cts = new CancellationTokenSource();
 
@@ -309,10 +325,11 @@ namespace J2534Diag
             btnStop.Enabled = false;
             ApplyFilterAndDistinct();
 
-            if (_limitReached || _invalidFrames > 0 || _listenerFailure != null)
+            if (_limitReached || _invalidFrames > 0 || _excessReturnedFrames > 0 || _listenerFailure != null)
             {
                 string message = (_limitReached ? $"Capture reached its {MAX_RECORDS} frame limit; later frames are not recorded.\n" : "") +
                     (_invalidFrames > 0 ? $"Malformed J2534 records ignored: {_invalidFrames}.\n" : "") +
+                    (_excessReturnedFrames > 0 ? $"Frames returned beyond requested limit: {_excessReturnedFrames}.\n" : "") +
                     (_listenerFailure != null ? "Capture stopped with driver error: " + _listenerFailure : "");
                 MessageBox.Show(message, "Incomplete CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }

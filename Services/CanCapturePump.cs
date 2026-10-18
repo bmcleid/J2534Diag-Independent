@@ -49,6 +49,11 @@ namespace J2534Diag
     {
         public int StoredFrames { get; internal set; }
         public int InvalidFrames { get; internal set; }
+        // J2534 indication/status records are not malformed bus frames.
+        public int IgnoredIndicationRecords { get; internal set; }
+        public int RejectedMissingOrShortRecords { get; internal set; }
+        public int RejectedOversizeRecords { get; internal set; }
+        public int RejectedArbitrationIds { get; internal set; }
         public int ExcessReturnedFrames { get; internal set; }
         public bool LimitReached { get; internal set; }
         public bool Cancelled { get; internal set; }
@@ -152,16 +157,36 @@ namespace J2534Diag
                         continue;
                     }
 
-                    // Classic J2534 CAN records contain four CAN-ID bytes.
-                    var data = frame == null ? null : frame.Data;
-                    if (data == null || data.Length < 4)
+                    // Distinguish J2534 indication/control messages from
+                    // malformed or invalid classical-CAN frames. Neither
+                    // category counts as an accepted CAN-bus data row.
+                    if (!CanFrameClassifier.TryValidate(frame, out uint id,
+                        out CanFrameRejectionKind rejection))
                     {
-                        summary.InvalidFrames++;
+                        switch (rejection)
+                        {
+                            case CanFrameRejectionKind.J2534Indication:
+                                summary.IgnoredIndicationRecords++;
+                                break;
+                            case CanFrameRejectionKind.MissingOrShortHeader:
+                                summary.InvalidFrames++;
+                                summary.RejectedMissingOrShortRecords++;
+                                break;
+                            case CanFrameRejectionKind.ExceedsClassicalCanLength:
+                                summary.InvalidFrames++;
+                                summary.RejectedOversizeRecords++;
+                                break;
+                            case CanFrameRejectionKind.ArbitrationIdOutOfRange:
+                                summary.InvalidFrames++;
+                                summary.RejectedArbitrationIds++;
+                                break;
+                            default:
+                                throw new InvalidOperationException("Unknown CAN rejection category.");
+                        }
                         continue;
                     }
 
-                    uint id = ((uint)data[0] << 24) | ((uint)data[1] << 16) |
-                        ((uint)data[2] << 8) | data[3];
+                    var data = frame.Data;
 
                     DateTime timestamp = _clockUtc();
                     if (timestamp.Kind != DateTimeKind.Utc)

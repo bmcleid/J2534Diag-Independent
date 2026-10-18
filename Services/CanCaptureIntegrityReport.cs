@@ -63,6 +63,14 @@ namespace J2534Diag
             WriteField(writer, "J2534DriverReadErrors", readSummary?.DriverReadErrors);
             WriteField(writer, "J2534BufferOverflowEvents", readSummary?.DriverBufferOverflowEvents);
             WriteField(writer, "J2534OverflowFramesLost", "UNKNOWN");
+            // A J2534 indication is not an accepted CAN data frame and
+            // is not, by itself, evidence of lost vehicle bus traffic.
+            WriteField(writer, "J2534IndicationRecordsIgnored", readSummary?.IgnoredIndicationRecords);
+            WriteField(writer, "InvalidShortOrNullCanRecords", readSummary?.RejectedMissingOrShortRecords);
+            WriteField(writer, "InvalidOversizeClassicalCanRecords", readSummary?.RejectedOversizeRecords);
+            WriteField(writer, "InvalidArbitrationIdRecords", readSummary?.RejectedArbitrationIds);
+            WriteField(writer, "J2534IndicationMeaning", "CONTROL_NOT_BUS_FRAME");
+            WriteField(writer, "RejectedRecordContentsRetained", "NO");
         }
 
         private static void WriteField(TextWriter writer, string key, object value)

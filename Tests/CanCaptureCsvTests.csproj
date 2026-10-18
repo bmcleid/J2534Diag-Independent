@@ -25,6 +25,8 @@
     <Compile Include="..\Services\CanCaptureIntegrityReport.cs"><Link>CanCaptureIntegrityReport.cs</Link></Compile>
     <Compile Include="..\Services\CanDiskCaptureLogger.cs"><Link>CanDiskCaptureLogger.cs</Link></Compile>
     <Compile Include="CanCapturePumpTests.cs" />
+    <Compile Include="CanFrameClassifierTests.cs" />
+    <Compile Include="..\Services\CanFrameClassifier.cs"><Link>CanFrameClassifier.cs</Link></Compile>
     <Compile Include="J2534CanFrameSourceTests.cs" />
     <Compile Include="..\Services\J2534CanFrameSource.cs"><Link>J2534CanFrameSource.cs</Link></Compile>
     <Compile Include="..\Services\CanCapturePump.cs"><Link>CanCapturePump.cs</Link></Compile>

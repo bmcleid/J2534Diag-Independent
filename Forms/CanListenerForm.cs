@@ -528,6 +528,9 @@ namespace J2534Diag
                             ? NativeSixColumnCanImport.Read(reader)
                             : CanCaptureCsv.Read(reader);
                     }
+                    // Identify the exact original bytes before presenting imported data.
+                    // Do not hash a re-export or infer physical capture completeness.
+                    string sourceSha256 = OfflineCaptureProvenance.HashFile(ofd.FileName);
                     lock (_allMessagesLock)
                     {
                         _allMessages.Clear();
@@ -551,9 +554,16 @@ namespace J2534Diag
                     if (isNative)
                     {
                         MessageBox.Show(
-                            "Loaded " + imported.Count + " native six-column CAN rows for OFFLINE viewing. Original timestamp_us values were preserved as raw timestamps; no host UTC was synthesized. No ECU identities or GM signal meanings were inferred. This is NOT a replacement for the original source-file hash/integrity audit.",
+                            "Loaded " + imported.Count + " native six-column CAN rows for OFFLINE viewing. Original timestamp_us values were preserved as raw timestamps; no host UTC was synthesized. No ECU identities or GM signal meanings were inferred.\\n\\n" +
+                            OfflineCaptureProvenance.Describe(sourceSha256, true),
                             "Native CAN recording imported",
                             MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Loaded " + imported.Count + " rows for OFFLINE viewing.\\n" +
+                            OfflineCaptureProvenance.Describe(sourceSha256, false),
+                            "CAN recording imported", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                 }
                 catch (Exception ex)

@@ -46,7 +46,15 @@ namespace J2534Diag
             stream.Seek(0, SeekOrigin.Begin);
             sourceSha256 = HashStream(stream);
             stream.Seek(0, SeekOrigin.Begin);
-            return importer(stream);
+            T records = importer(stream);
+            // An already-open writer may modify a file despite this read handle's
+            // sharing policy. Detect a changed source before publishing rows.
+            stream.Seek(0, SeekOrigin.Begin);
+            string afterParseSha256 = HashStream(stream);
+            if (!string.Equals(sourceSha256, afterParseSha256,
+                StringComparison.Ordinal))
+                throw new IOException("Offline source changed during import. Nothing was imported; close other writers and retry.");
+            return records;
         }
 
         public static string HashStream(Stream source)

@@ -16,5 +16,5 @@ Test fixtures mutate a seekable stream during import and verify failure, while u
 Two equal hashes do not exclude a reversible alteration between the reads, malicious tampering, device-level changes, or an unexpected file replacement. The comparison establishes consistent visible file bytes at the two hash points, not a forensic chain of custody. Operator testing of this new guard against the actual Windows GUI remains **UNVERIFIED**; no additional physical vehicle capture is needed.
 
 ## Verification
-Windows CI and regression suite: see feature branch GitHub Actions run once completed. Do not label software compilation as confirmed before checking its conclusion.
+**CONFIRMED software CI:** [Windows Actions run 39343193004](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/39343193004) at commit `c9b11c44` passed: Windows Release build 0 errors, 5 warnings; **6,296 assertions across 62 offline tests passed**. Final documentation-only commit requires independent status verification if needed.
 No DIDs, transmit routines, module programming, GM signal decoding, CAN source collection, or other project responsibilities are modified.

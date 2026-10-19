@@ -87,6 +87,46 @@ namespace J2534Diag.Tests
                 assertions++;
             }
 
+            // Simulate a pre-existing writer that modifies a seekable stream
+            // while the importer runs; reject rather than displaying mixed evidence.
+            using (var changing = new MemoryStream(Encoding.ASCII.GetBytes("abc")))
+            {
+                try
+                {
+                    string ignored;
+                    OfflineCaptureProvenance.ReadConsistentStream(
+                        changing, source =>
+                        {
+                            source.Seek(0, SeekOrigin.Begin);
+                            source.WriteByte((byte)'z');
+                            return "parsed";
+                        }, out ignored);
+                    throw new Exception("Source mutation incorrectly accepted");
+                }
+                catch (IOException ex)
+                {
+                    if (!ex.Message.Contains("changed during import")) throw;
+                    assertions++;
+                }
+            }
+            // Reading unmodified input should still succeed.
+            using (var stable = new MemoryStream(Encoding.ASCII.GetBytes("stable")))
+            {
+                string hash;
+                string result = OfflineCaptureProvenance.ReadConsistentStream(
+                    stable, source =>
+                    {
+                        using (var reader = new StreamReader(source, Encoding.ASCII, false, 1024, true))
+                            return reader.ReadToEnd();
+                    }, out hash);
+                if (result != "stable") throw new Exception("Stable source failed");
+                assertions++;
+                if (hash != OfflineCaptureProvenance.HashStream(
+                    new MemoryStream(Encoding.ASCII.GetBytes("stable"))))
+                    throw new Exception("Stable hash mismatch");
+                assertions++;
+            }
+
             return assertions;
         }
     }

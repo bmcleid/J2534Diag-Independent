@@ -21,6 +21,7 @@ namespace J2534Diag.Tests
             RetainsRunningMonitorAfterTimeout();
             UnstartedMonitorCanBeStopped();
             SourceUsesSameGuardForCloseAndReconnect();
+            TabNavigationRespectsPendingCaptureShutdown();
             return _checks;
         }
 
@@ -100,6 +101,29 @@ namespace J2534Diag.Tests
             }
             Check(ChannelLifecyclePolicy.RequestStopAndWait(null, null, 50),
                 "Missing monitor must not block a valid disconnect");
+        }
+
+        private static void TabNavigationRespectsPendingCaptureShutdown()
+        {
+            string root = Path.GetFullPath(Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
+            string main = File.ReadAllText(Path.Combine(root, "Forms", "MainForm.cs"));
+            int start = main.IndexOf("private void TabControl_SelectingWithCaptureGuard(",
+                StringComparison.Ordinal);
+            int end = start < 0 ? -1 : main.IndexOf("private void tabControl1_SelectedIndexChanged(",
+                start, StringComparison.Ordinal);
+            Check(main.Contains("tabControl1.Selecting += TabControl_SelectingWithCaptureGuard;"),
+                "Main form did not subscribe to cancellable tab selection event");
+            Check(start >= 0 && end > start,
+                "Missing pre-selection lifecycle handler");
+            if (start >= 0 && end > start)
+            {
+                string handler = main.Substring(start, end - start);
+                Check(handler.Contains("tabCanListener") &&
+                      handler.Contains("!canListenerForm.StopListening()") &&
+                      handler.Contains("e.Cancel = true;"),
+                    "CAN tab can be abandoned despite failed receiver shutdown");
+            }
         }
 
         private static void SourceUsesSameGuardForCloseAndReconnect()

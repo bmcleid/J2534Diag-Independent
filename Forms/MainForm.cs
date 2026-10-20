@@ -124,6 +124,9 @@ namespace J2534Diag
                 fuelTrimForm.Show();
                 canListenerForm.Show();
                 misfireForm.Show();
+                // Intercept navigation BEFORE the selected page changes.
+                // A blocked CAN receive/write shutdown must retain its visible tab.
+                tabControl1.Selecting += TabControl_SelectingWithCaptureGuard;
             }
             catch (Exception ex)
             {
@@ -153,6 +156,19 @@ namespace J2534Diag
             base.OnFormClosing(e);
             if (!e.Cancel)
                 j2534Manager?.Dispose();
+        }
+
+        private void TabControl_SelectingWithCaptureGuard(object sender, TabControlCancelEventArgs e)
+        {
+            if (canListenerForm == null || e.TabPage == null) return;
+            if (tabControl1.SelectedTab == tabControl1.TabPages["tabCanListener"] &&
+                e.TabPage != tabControl1.TabPages["tabCanListener"] &&
+                !canListenerForm.StopListening())
+            {
+                // StopListening retains the receive lease on worker/writer/filter
+                // cleanup failure. Do not leave the capture tab until retry succeeds.
+                e.Cancel = true;
+            }
         }
 
         private void tabControl1_SelectedIndexChanged(object sender, EventArgs e)

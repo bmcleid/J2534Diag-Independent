@@ -485,15 +485,12 @@ namespace J2534Diag
 
         private void WriteIntegrityReport(string outputPath, CanDiskLogStatus status)
         {
-            // CreateNew: don't replace an earlier session's integrity record.
-            using (var stream = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
-            using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(false)))
-            {
+            // A serialization/write failure must not publish a partial .integrity.txt.
+            AtomicIntegritySidecar.Write(outputPath, writer =>
                 CanCaptureIntegrityReport.Write(
                     writer, _diskLogPath, status, Interlocked.Read(ref _messageIndex),
                     _invalidFrames, _excessReturnedFrames, _limitReached,
-                    _listenerFailure, DateTime.UtcNow, _lastCaptureSummary);
-            }
+                    _listenerFailure, DateTime.UtcNow, _lastCaptureSummary));
         }
 
         public class CanMessage : CanCaptureRecord

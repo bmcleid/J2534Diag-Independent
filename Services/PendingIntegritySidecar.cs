@@ -9,6 +9,7 @@ namespace J2534Diag
     {
         private readonly long _sourceLength;
         private readonly DateTime _sourceWriteUtc;
+        private readonly string _sourceSha256;
         public string CapturePath { get; }
         public string SidecarPath { get; }
         public string Contents { get; }
@@ -25,6 +26,7 @@ namespace J2534Diag
             Contents = contents;
             _sourceLength = source.Length;
             _sourceWriteUtc = source.LastWriteTimeUtc;
+            _sourceSha256 = OfflineCaptureProvenance.HashFile(capturePath);
         }
 
         public void Publish()
@@ -32,7 +34,9 @@ namespace J2534Diag
             var source = new FileInfo(CapturePath);
             source.Refresh();
             if (!source.Exists || source.Length != _sourceLength ||
-                source.LastWriteTimeUtc != _sourceWriteUtc)
+                source.LastWriteTimeUtc != _sourceWriteUtc ||
+                !string.Equals(OfflineCaptureProvenance.HashFile(CapturePath),
+                    _sourceSha256, StringComparison.Ordinal))
                 throw new IOException("Capture CSV has been removed or changed since report finalization; report retry refused.");
             AtomicIntegritySidecar.Write(SidecarPath, writer => writer.Write(Contents));
         }

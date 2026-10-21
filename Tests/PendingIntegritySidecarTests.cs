@@ -50,6 +50,27 @@ namespace J2534Diag.Tests
                 if (File.ReadAllText(target2) != "RETRIED=TRUE")
                     throw new Exception("Retry content incorrect");
                 checks++;
+                // Same-length edit with restored timestamp must still fail SHA-256.
+                string csv3 = Path.Combine(dir, "session3.csv");
+                File.WriteAllText(csv3, "abcdefgh");
+                var guarded = new PendingIntegritySidecar(csv3,
+                    csv3 + ".integrity.txt", "GUARDED=TRUE");
+                DateTime originalWriteTime = File.GetLastWriteTimeUtc(csv3);
+                File.WriteAllText(csv3, "abcdEfgh");
+                File.SetLastWriteTimeUtc(csv3, originalWriteTime);
+                try
+                {
+                    guarded.Publish();
+                    throw new Exception("Equal-size source mutation with restored mtime accepted");
+                }
+                catch (IOException ex)
+                {
+                    if (!ex.Message.Contains("changed")) throw;
+                    checks++;
+                }
+                if (File.Exists(csv3 + ".integrity.txt"))
+                    throw new Exception("Changed source obtained a finalized report");
+                checks++;
                 File.Delete(csv2);
                 File.Delete(target2);
                 try { retry.Publish(); throw new Exception("Missing CSV accepted"); }

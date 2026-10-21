@@ -23,6 +23,8 @@
     <Compile Include="CanDiskCaptureLoggerTests.cs" />
     <Compile Include="CanCaptureIntegrityReportTests.cs" />
     <Compile Include="AtomicIntegritySidecarTests.cs" />
+    <Compile Include="PendingIntegritySidecarTests.cs" />
+    <Compile Include="..\Services\PendingIntegritySidecar.cs"><Link>PendingIntegritySidecar.cs</Link></Compile>
     <Compile Include="..\Services\AtomicIntegritySidecar.cs"><Link>AtomicIntegritySidecar.cs</Link></Compile>
     <Compile Include="..\Services\CanCaptureIntegrityReport.cs"><Link>CanCaptureIntegrityReport.cs</Link></Compile>
     <Compile Include="..\Services\CanDiskCaptureLogger.cs"><Link>CanDiskCaptureLogger.cs</Link></Compile>

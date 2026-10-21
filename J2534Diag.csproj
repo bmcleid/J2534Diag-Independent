@@ -94,6 +94,7 @@
     <Compile Include="Services\CanDiskCaptureLogger.cs" />
     <Compile Include="Services\CanCaptureIntegrityReport.cs" />
     <Compile Include="Services\AtomicIntegritySidecar.cs" />
+    <Compile Include="Services\PendingIntegritySidecar.cs" />
     <Compile Include="Services\CanCapturePump.cs" />
     <Compile Include="Services\CanFrameClassifier.cs" />
     <Compile Include="Services\J2534CanFrameSource.cs" />

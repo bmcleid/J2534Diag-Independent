@@ -535,13 +535,13 @@ namespace J2534Diag
                 _pendingIntegrityReport = null;
                 _retryReportButton.Visible = false;
                 MessageBox.Show("Recovered original finalized integrity report: " + path +
-                    "\\nVehicle-bus completeness remains UNVERIFIED.",
+                    "\nVehicle-bus completeness remains UNVERIFIED.",
                     "Integrity report recovered", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Report retry failed: " + ex.Message +
-                    "\\nThe pending report is retained. No capture CSV was overwritten.",
+                    "\nThe pending report is retained. No capture CSV was overwritten.",
                     "Integrity report pending", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }

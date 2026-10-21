@@ -14,3 +14,9 @@ In-memory integrity retry state is lost on app restart; runtime DLL binding / ho
 
 ## Verification gates
 Review final workflow run conclusion, specific commit, checksum manifest presence in resulting artifact, and test count. Do not claim the artifact includes a useful installer. Only operator PC offline UI smoke test can clear next gate.
+
+## Verified CI execution and downloadable artifact
+- **CONFIRMED CI success:** [Windows run 39694987046](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/39694987046), build-bearing commit `e3fc416ae43c350e9109dd3b9c4e689ef88f16e1` (later documentation-only commit). Release compilation 0 errors / 5 warnings; test executable reported **6,323 assertions / 64 offline tests PASS**. Counts vary among previous runs; use the actual run log, not a hardcoded baseline.
+- [Engineering preview artifact ID 12390555336](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/39694987046/artifacts/12390555336), `J2534Diag-baseline-windows`, ZIP size 1,820,262 bytes. GitHub artifact archive digest `sha256:e1a6870f16f83ebddf88a5187f77d84fa32b680552c2ff47c54df4a1d73ca10f`, as reported by GitHub API. This is the archive digest, not a checksum of individual EXE/DLL files.
+- Build log confirms `ENGINEERING_PREVIEW_MANIFEST.txt` creation step ran successfully before artifact upload; artifact upload completed. Individual file hashes are generated inside that manifest; its actual contents have not been independently opened in this review, so claim verification remains CI-level rather than extracted-payload inspection.
+- **Operator action required next:** On Windows, download the artifact ZIP and extract ALL files to one folder; verify manifest/source SHA and launch `J2534Diag.exe` with RLink disconnected. Report any Windows launch error or screenshot. No car or hardware testing until disconnected smoke test passes.

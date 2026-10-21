@@ -47,6 +47,17 @@ namespace J2534Diag.Tests
                 if (Directory.GetFiles(directory, "*.pending").Length != 0)
                     throw new Exception("Temporary sidecar leaked");
                 checks++;
+                string actualReport = Path.Combine(directory, "actual.csv.integrity.txt");
+                AtomicIntegritySidecar.Write(actualReport, writer =>
+                    CanCaptureIntegrityReport.Write(writer, "actual.csv",
+                        new CanDiskLogStatus { Accepted = 3, Written = 3, Closed = true },
+                        3, 0, 0, false, null,
+                        new DateTime(2026, 10, 21, 12, 0, 0, DateTimeKind.Utc)));
+                string reportBody = File.ReadAllText(actualReport);
+                if (!reportBody.Contains("ApplicationWriteComplete=True") ||
+                    !reportBody.Contains("VehicleBusLossless=UNVERIFIED"))
+                    throw new Exception("Actual integrity report did not survive atomic publication");
+                checks++;
                 AtomicIntegritySidecar.Write(failed, writer => writer.Write("RETRIED=TRUE"));
                 if (File.ReadAllText(failed) != "RETRIED=TRUE")
                     throw new Exception("Cannot retry after failed write");

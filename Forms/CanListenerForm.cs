@@ -34,6 +34,15 @@ namespace J2534Diag
         private CanDiskCaptureLogger _diskLogger;
         private string _diskLogPath;
         private bool _nativeSixColumnLoaded;
+        private PendingIntegritySidecar _pendingIntegrityReport;
+        private readonly Button _retryReportButton = new Button
+        {
+            Text = "Retry integrity",
+            Visible = false,
+            Size = new System.Drawing.Size(115, 24),
+            Location = new System.Drawing.Point(482, 14),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right
+        };
         private readonly CheckBox _diskLogOption = new CheckBox
         {
             Text = "Disk log",
@@ -100,6 +109,9 @@ namespace J2534Diag
             });
 
             Controls.Add(_diskLogOption);
+            Controls.Add(_retryReportButton);
+            _retryReportButton.BringToFront();
+            _retryReportButton.Click += (sender, e) => RetryPendingIntegrityReport();
             this.Load += CanListenerForm_Load;
             this.FormClosing += CanListenerForm_FormClosing;
             this.j2534Manager = j2534Manager;
@@ -274,6 +286,12 @@ namespace J2534Diag
         public void StartListening()
         {
             if (_isListening) return;
+            if (_pendingIntegrityReport != null)
+            {
+                MessageBox.Show("An earlier integrity report still needs recovery. Use Retry integrity before starting a new capture.",
+                    "Integrity recovery pending", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
             string selectedDiskPath = null;
             if (_diskLogOption.Checked)
             {
@@ -485,12 +503,47 @@ namespace J2534Diag
 
         private void WriteIntegrityReport(string outputPath, CanDiskLogStatus status)
         {
-            // A serialization/write failure must not publish a partial .integrity.txt.
-            AtomicIntegritySidecar.Write(outputPath, writer =>
-                CanCaptureIntegrityReport.Write(
-                    writer, _diskLogPath, status, Interlocked.Read(ref _messageIndex),
-                    _invalidFrames, _excessReturnedFrames, _limitReached,
-                    _listenerFailure, DateTime.UtcNow, _lastCaptureSummary));
+            // Retain exact serialized report text if publication fails.
+            // The capture writer has already been closed before this finalization.
+            var buffer = new StringWriter(CultureInfo.InvariantCulture);
+            CanCaptureIntegrityReport.Write(
+                buffer, _diskLogPath, status, Interlocked.Read(ref _messageIndex),
+                _invalidFrames, _excessReturnedFrames, _limitReached,
+                _listenerFailure, DateTime.UtcNow, _lastCaptureSummary);
+            _pendingIntegrityReport = new PendingIntegritySidecar(
+                _diskLogPath, outputPath, buffer.ToString());
+            try
+            {
+                _pendingIntegrityReport.Publish();
+                _pendingIntegrityReport = null;
+                _retryReportButton.Visible = false;
+            }
+            catch
+            {
+                _retryReportButton.Visible = true;
+                throw;
+            }
+        }
+
+        private void RetryPendingIntegrityReport()
+        {
+            if (_pendingIntegrityReport == null) return;
+            try
+            {
+                _pendingIntegrityReport.Publish();
+                string path = _pendingIntegrityReport.SidecarPath;
+                _pendingIntegrityReport = null;
+                _retryReportButton.Visible = false;
+                MessageBox.Show("Recovered original finalized integrity report: " + path +
+                    "\\nVehicle-bus completeness remains UNVERIFIED.",
+                    "Integrity report recovered", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Report retry failed: " + ex.Message +
+                    "\\nThe pending report is retained. No capture CSV was overwritten.",
+                    "Integrity report pending", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         public class CanMessage : CanCaptureRecord

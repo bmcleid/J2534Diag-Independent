@@ -14,3 +14,7 @@ Atomic rename does not guarantee persistence across power loss, storage crash, a
 
 ## Verification
 Verify the Windows Actions run for the final source-bearing commit before reporting success. The current milestone is software-only; no new vehicle capture, ECU commands, or duplicate CAN analytics.
+
+## Confirmed source-bearing CI acceptance (2026-10-21)
+Windows [Actions run 39601317923](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/39601317923) at commit `68427ddb0653d4a693ef1ff4effad79c2222b328`: Release build succeeded with 0 errors, 5 warnings; **6,307 assertions across 63 offline tests PASS**. Includes real CanCaptureIntegrityReport serialization through staging/publish code. This is software-only verification, NOT proof of Windows operator UI/hardware behavior.
+The follow-on retry gap is separately recorded in `docs/NEXT_INTEGRITY_RECOVERY_GAP_2026-10-21.md`; no new live capture required.

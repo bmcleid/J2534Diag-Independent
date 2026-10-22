@@ -1,0 +1,5 @@
+# Operator RLink X3 USB-only lifecycle confirmation — October 22, 2026
+
+User reports successful initial USB-only J2534Diag connection and then successful disconnect, reconnect and second disconnect, without restarting the application and without RLink OBD connected to Cadillac. Prior screenshot directly showed `Capture-only connected`, selected `Artdiag RLink`, `11-bit CAN identifier, 500 kbps`, and modal indicating no application VIN/PID queries. **CONFIRMED** application J2534 CAN channel open/close/reopen under USB-only conditions; not proven passive electrical isolation, live Cadillac CAN reception, frame completeness, or ECU communication.
+
+Next discriminating gate is controlled in-vehicle capture-only trial, preferably with stable vehicle battery, appropriate powered adapter connection and disk capture to fresh file, retaining CSV and integrity sidecar. Do not perform active diagnostics, programming, or speculative T43 requests. If first driver read fails, preserve exact message and integrity report before retry. No need to repeat known USB-only checks.

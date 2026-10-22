@@ -45,6 +45,29 @@ jobs:
         run: |
           & ./Tests/bin/Release/CanCaptureCsvTests.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Generate engineering preview manifest
+        shell: pwsh
+        run: |
+          $out = 'bin/Release'
+          if (-not (Test-Path (Join-Path $out 'J2534Diag.exe'))) { throw 'Main executable absent from Release build' }
+          $hashes = Get-ChildItem -LiteralPath $out -File -Recurse | Sort-Object FullName | ForEach-Object {
+            $relative = $_.FullName.Substring((Resolve-Path $out).Path.Length + 1).Replace('\\','/')
+            $digest = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+            "$digest  $relative"
+          }
+          $manifest = @(
+            'J2534Diag ENGINEERING PREVIEW - NOT VALIDATED ON RLINK HARDWARE',
+            "SourceCommit=$env:GITHUB_SHA",
+            "WorkflowRun=$env:GITHUB_RUN_ID",
+            'Framework=.NET Framework 4.8.1',
+            'BuildPlatform=Any CPU',
+            'Requires=Windows 10/11; compatible J2534 driver installed separately',
+            'Safety=Offline evaluation first; never assume listen-only electrical isolation',
+            'VehicleCapture=UNVERIFIED in this integrated GUI',
+            'ApplicationFilesSHA256:'
+          ) + $hashes
+          Set-Content -Path (Join-Path $out 'ENGINEERING_PREVIEW_MANIFEST.txt') -Value $manifest -Encoding UTF8
+          if ($hashes.Count -eq 0) { throw 'No files hashed' }
       - name: Upload build diagnostics
         if: always()
         uses: actions/upload-artifact@v4

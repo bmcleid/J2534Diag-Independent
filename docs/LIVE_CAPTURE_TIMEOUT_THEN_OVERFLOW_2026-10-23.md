@@ -14,3 +14,6 @@ Whether overflow arose in TOPDON firmware/driver buffering, host scheduling, the
 
 ## Next verification gate
 Run Windows CI on this source-bearing branch. Then investigate pinned J2534-Sharp `GetMessages` timeout/batching implementation and native code with authoritative source before changing fetch size or timeout; if no proven defect, seek one controlled A/B hardware capture that changes a single variable and preserves both CSV and integrity report. No ECU transmit/active queries or vehicle repair actions.
+
+## Windows CI result
+**CONFIRMED software CI** [run 39962275543](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/39962275543), source commit `be9310b47f273507c51a05643c2c2eb0beefba8c`: Release compiled with 0 errors and 5 warnings; **6,318 assertions across 64 offline tests PASS**. This establishes proper error accounting under synthetic replay, not that the live RLink overflow is fixed.

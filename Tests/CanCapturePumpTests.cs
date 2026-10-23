@@ -56,6 +56,7 @@ namespace J2534Diag.Tests
             TrackEmptyAndPartialJ2534ReadStatuses();
             DistinguishReportedOverflowFromGenericReadError();
             PreservePartialTimeoutBatchBeforeLaterOverflow();
+            MeasureHostReadAndProcessingDurations();
             NativeMetadataIsPreserved();
             NullMetadataIsUnknownNotZero();
             return _assertions;
@@ -345,6 +346,31 @@ namespace J2534Diag.Tests
                 "Synthetic native timestamp data was altered");
             Check(stored[0].Index == 1 && stored[94].Index == 95,
                 "Frame indices broke across timeout/overflow sequence");
+        }
+
+        private static void MeasureHostReadAndProcessingDurations()
+        {
+            var source = new FakeSource();
+            source.Batches.Enqueue(new[] { Frame(0x1F1, 0x08, 0x01) });
+            var pump = new CanCapturePump(source, 1, () => TestClock, null);
+            var summary = pump.Run(CancellationToken.None, _ => { });
+            Check(summary.TimingFrequency > 0, "Monotonic clock frequency unavailable");
+            Check(summary.ReadCallElapsedTicksTotal >= summary.ReadCallElapsedTicksMax &&
+                  summary.ReadCallElapsedTicksMax >= 0,
+                "Driver read timings inconsistent");
+            Check(summary.ProcessingElapsedTicksTotal >= summary.ProcessingElapsedTicksMax &&
+                  summary.ProcessingElapsedTicksMax >= 0,
+                "Post-read processing timings inconsistent");
+            Check(summary.StoredFrames == 1, "Timing instrumentation changed records");
+            var overflow = new CanCapturePump(new OverflowScriptSource(), 10,
+                () => TestClock, null);
+            try { overflow.Run(CancellationToken.None, _ => { }); }
+            catch (CanReceiveBufferOverflowException) { }
+            Check(overflow.LastSummary.TimingFrequency > 0 &&
+                  overflow.LastSummary.ReadCallElapsedTicksTotal >= 0,
+                "Failed driver call discarded host timing record");
+            Check(overflow.LastSummary.DriverBufferOverflowEvents == 1,
+                "Timing instrumentation suppressed overflow");
         }
 
         private static void DistinguishReportedOverflowFromGenericReadError()

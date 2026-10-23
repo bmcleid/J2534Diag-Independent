@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Diagnostics;
 using System.Threading;
 
 namespace J2534Diag
@@ -64,6 +65,11 @@ namespace J2534Diag
         public long ReadCallsWithoutStatus { get; internal set; }
         public long DriverReadErrors { get; internal set; }
         public long DriverBufferOverflowEvents { get; internal set; }
+        public long ReadCallElapsedTicksTotal { get; internal set; }
+        public long ReadCallElapsedTicksMax { get; internal set; }
+        public long ProcessingElapsedTicksTotal { get; internal set; }
+        public long ProcessingElapsedTicksMax { get; internal set; }
+        public long TimingFrequency { get; internal set; }
     }
 
     /// <summary>
@@ -93,6 +99,13 @@ namespace J2534Diag
             _describe = describe ?? (id => "");
         }
 
+        private static void AccumulateReadElapsed(CanCaptureSummary summary, long elapsedTicks)
+        {
+            summary.ReadCallElapsedTicksTotal += elapsedTicks;
+            if (elapsedTicks > summary.ReadCallElapsedTicksMax)
+                summary.ReadCallElapsedTicksMax = elapsedTicks;
+        }
+
         public CanCaptureSummary Run(
             CancellationToken cancellation,
             Action<CanCaptureRecord> store,
@@ -101,27 +114,33 @@ namespace J2534Diag
             if (store == null) throw new ArgumentNullException(nameof(store));
             var summary = new CanCaptureSummary();
             LastSummary = summary;
+            summary.TimingFrequency = Stopwatch.Frequency;
 
             while (!cancellation.IsCancellationRequested && summary.StoredFrames < _maximumFrames)
             {
                 int requested = Math.Min(200, _maximumFrames - summary.StoredFrames);
                 IReadOnlyList<CanReceivedFrame> batch;
+                long readBegin = Stopwatch.GetTimestamp();
                 try
                 {
                     batch = _source.ReadBatch(requested, 5);
                 }
                 catch (CanReceiveBufferOverflowException)
                 {
+                    AccumulateReadElapsed(summary, Stopwatch.GetTimestamp() - readBegin);
                     summary.DriverBufferOverflowEvents++;
                     summary.DriverReadErrors++;
                     throw;
                 }
                 catch (Exception)
                 {
+                    AccumulateReadElapsed(summary, Stopwatch.GetTimestamp() - readBegin);
                     summary.DriverReadErrors++;
                     throw;
                 }
 
+                AccumulateReadElapsed(summary, Stopwatch.GetTimestamp() - readBegin);
+                long processingBegin = Stopwatch.GetTimestamp();
                 // Empty reads still matter: they do not create frame rows,
                 // so preserve per-call status in the independent summary.
                 var readDiagnostics = _source as ICanReadResultSource;
@@ -211,6 +230,10 @@ namespace J2534Diag
 
                 if (batch.Count > 0)
                     batchStored?.Invoke(summary.StoredFrames);
+                long processingTicks = Stopwatch.GetTimestamp() - processingBegin;
+                summary.ProcessingElapsedTicksTotal += processingTicks;
+                if (processingTicks > summary.ProcessingElapsedTicksMax)
+                    summary.ProcessingElapsedTicksMax = processingTicks;
 
                 // A hardware driver may return zero messages for a timeout.
                 // Avoid busy spinning in that case; do not hide non-timeout faults.

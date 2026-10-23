@@ -55,6 +55,7 @@ namespace J2534Diag.Tests
             PartialSummarySurvivesReceiveFailure();
             TrackEmptyAndPartialJ2534ReadStatuses();
             DistinguishReportedOverflowFromGenericReadError();
+            PreservePartialTimeoutBatchBeforeLaterOverflow();
             NativeMetadataIsPreserved();
             NullMetadataIsUnknownNotZero();
             return _assertions;
@@ -280,6 +281,70 @@ namespace J2534Diag.Tests
             Check(summary.TimedOutReadCalls == 1 && row.Count == 1,
                 "Timeout with partial returned data was dropped");
             Check(row[0].J2534ReadResult == "TIMEOUT", "Per-frame read result changed");
+        }
+
+        // Reproduces the October 23 capture sequence: a TIMEOUT read returned
+        // valid frames, then a later J2534 read explicitly reported overflow.
+        // Data returned before the fault must remain accounted for, with no
+        // invented dropped-frame count or mislabelled disk loss.
+        private sealed class TimeoutThenOverflowSource : ICanFrameBatchSource, ICanReadResultSource
+        {
+            private int _reads;
+            public string LastReadResult { get; private set; }
+
+            public IReadOnlyList<CanReceivedFrame> ReadBatch(int maximum, int timeout)
+            {
+                if (maximum != 200 || timeout != 5)
+                    throw new Exception("Unexpected baseline read parameters");
+                _reads++;
+                LastReadResult = null;
+                if (_reads > 1)
+                    throw new CanReceiveBufferOverflowException(
+                        "Simulated J2534 receive buffer overflow",
+                        new InvalidOperationException("Driver buffer overflow"));
+                LastReadResult = "TIMEOUT";
+                var frames = new CanReceivedFrame[95];
+                for (int index = 0; index < frames.Length; index++)
+                {
+                    frames[index] = Frame((uint)(0x100 + index % 10), (byte)index);
+                    frames[index].TimestampRaw = (uint)(3334090215 + index);
+                    frames[index].RxStatusRaw = 0;
+                    frames[index].ReadResult = "TIMEOUT";
+                }
+                return frames;
+            }
+        }
+
+        private static void PreservePartialTimeoutBatchBeforeLaterOverflow()
+        {
+            var source = new TimeoutThenOverflowSource();
+            var pump = new CanCapturePump(source, int.MaxValue, () => TestClock, null);
+            var stored = new List<CanCaptureRecord>();
+            try
+            {
+                pump.Run(CancellationToken.None, stored.Add);
+                throw new Exception("Overflow was suppressed");
+            }
+            catch (CanReceiveBufferOverflowException) { }
+            var summary = pump.LastSummary;
+            Check(summary.StoredFrames == 95 && stored.Count == 95,
+                "Previously returned timeout batch was dropped on overflow");
+            Check(summary.TimedOutReadCalls == 1 && summary.SuccessfulReadCalls == 0,
+                "Timeout-with-data read was misclassified");
+            Check(summary.DriverBufferOverflowEvents == 1 &&
+                  summary.DriverReadErrors == 1,
+                "Driver overflow/error counts did not survive exception");
+            Check(summary.InvalidFrames == 0 &&
+                  summary.ExcessReturnedFrames == 0,
+                "False malformed/over-returned records");
+            Check(stored[0].J2534ReadResult == "TIMEOUT" &&
+                  stored[94].J2534ReadResult == "TIMEOUT",
+                "Accepted frames lost native TIMEOUT read-result metadata");
+            Check(stored[0].J2534TimestampRaw == "3334090215" &&
+                  stored[94].J2534TimestampRaw == "3334090309",
+                "Synthetic native timestamp data was altered");
+            Check(stored[0].Index == 1 && stored[94].Index == 95,
+                "Frame indices broke across timeout/overflow sequence");
         }
 
         private static void DistinguishReportedOverflowFromGenericReadError()

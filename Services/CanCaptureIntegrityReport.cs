@@ -63,6 +63,14 @@ namespace J2534Diag
             WriteField(writer, "J2534DriverReadErrors", readSummary?.DriverReadErrors);
             WriteField(writer, "J2534BufferOverflowEvents", readSummary?.DriverBufferOverflowEvents);
             WriteField(writer, "J2534OverflowFramesLost", "UNKNOWN");
+            // Stopwatch ticks are host monotonic durations, never native J2534
+            // timestamps or a substitute for bus frame timing.
+            WriteField(writer, "HostTimingFrequencyTicksPerSecond", readSummary?.TimingFrequency);
+            WriteField(writer, "HostReadElapsedTicksTotal", readSummary?.ReadCallElapsedTicksTotal);
+            WriteField(writer, "HostReadElapsedTicksMax", readSummary?.ReadCallElapsedTicksMax);
+            WriteField(writer, "HostProcessingElapsedTicksTotal", readSummary?.ProcessingElapsedTicksTotal);
+            WriteField(writer, "HostProcessingElapsedTicksMax", readSummary?.ProcessingElapsedTicksMax);
+            WriteField(writer, "HostTimingMeaning", "MONOTONIC_HOST_DURATION_NOT_VEHICLE_TIMESTAMP");
             // A J2534 indication is not an accepted CAN data frame and
             // is not, by itself, evidence of lost vehicle bus traffic.
             WriteField(writer, "J2534IndicationRecordsIgnored", readSummary?.IgnoredIndicationRecords);

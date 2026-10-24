@@ -63,6 +63,9 @@ namespace J2534Diag
             WriteField(writer, "J2534DriverReadErrors", readSummary?.DriverReadErrors);
             WriteField(writer, "J2534BufferOverflowEvents", readSummary?.DriverBufferOverflowEvents);
             WriteField(writer, "J2534OverflowFramesLost", "UNKNOWN");
+            WriteField(writer, "J2534OverflowFramesProvidedBySource", readSummary?.OverflowFramesProvidedBySource);
+            WriteField(writer, "J2534OverflowFramesAcceptedByPump", readSummary?.OverflowFramesAcceptedByPump);
+            WriteField(writer, "J2534OverflowReturnCountMeaning", "SOURCE_PROVIDED_NOT_INDEPENDENTLY_VERIFIED_NATIVE_COUNT");
             // Stopwatch ticks are host monotonic durations, never native J2534
             // timestamps or a substitute for bus frame timing.
             WriteField(writer, "HostTimingFrequencyTicksPerSecond", readSummary?.TimingFrequency);

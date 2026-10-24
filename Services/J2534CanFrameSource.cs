@@ -38,6 +38,23 @@ namespace J2534Diag
             return ProjectBatch(result);
         }
 
+        // The pinned Channel.GetMessages throws before returning a response
+        // with native pNumMsgs on BUFFER_OVERFLOW. This constructor enables a
+        // future, separately validated native transport to supply a complete
+        // GetMessageResults overflow result without claiming lost bus traffic
+        // was recovered. No production native path calls this yet.
+        public static CanReceiveBufferOverflowException FromNativeOverflowResult(
+            GetMessageResults response, Exception inner)
+        {
+            if (response == null)
+                throw new ArgumentNullException(nameof(response));
+            if (response.Result != ResultCode.BUFFER_OVERFLOW)
+                throw new ArgumentException("Expected native BUFFER_OVERFLOW result.", nameof(response));
+            return new CanReceiveBufferOverflowException(
+                "J2534 driver reported receive-buffer overflow; CAN frames may have been lost.",
+                inner, ProjectBatch(response));
+        }
+
         // Testable against the pinned J2534-Sharp exception/result types,
         // without actually opening a vehicle communication channel.
         public static bool IsReceiveBufferOverflow(J2534Exception error)

@@ -21,6 +21,7 @@ namespace J2534Diag.Tests
             NonUtcReportTimeRejected();
             ReportNormalEmptyReadsWithoutInventingFrames();
             ReportHardwareOverflowAsExplicitIncomplete();
+            ReportPartialOverflowAsStillIncomplete();
             ReportHostCaptureStartupIntervals();
             IgnoredControlMessagesAreNotInventedBusLoss();
             return _checks;
@@ -163,6 +164,29 @@ namespace J2534Diag.Tests
                 1, 0, 0, false, null, EndTime, unrecognized);
             Check(unknown.ToString().Contains("ApplicationWriteComplete=False"),
                 "Unrecognized read result incorrectly considered healthy");
+        }
+
+        private static void ReportPartialOverflowAsStillIncomplete()
+        {
+            var summary = new CanCaptureSummary
+            {
+                DriverBufferOverflowEvents = 1,
+                DriverReadErrors = 1,
+                OverflowFramesProvidedBySource = 3,
+                OverflowFramesAcceptedByPump = 2
+            };
+            var writer = new StringWriter();
+            var state = new CanDiskLogStatus { Accepted = 2, Written = 2, Closed = true };
+            CanCaptureIntegrityReport.Write(writer, "partial.csv", state,
+                2, 1, 0, false, "native overflow", EndTime, summary);
+            string text = writer.ToString();
+            Check(text.Contains("J2534OverflowFramesProvidedBySource=3") &&
+                  text.Contains("J2534OverflowFramesAcceptedByPump=2"),
+                "Overflow-specific source/accepted counts missing");
+            Check(text.Contains("J2534OverflowFramesLost=UNKNOWN") &&
+                  text.Contains("VehicleBusLossless=UNVERIFIED") &&
+                  text.Contains("ApplicationWriteComplete=False"),
+                "Partial native data incorrectly treated as complete vehicle capture");
         }
 
         private static void IgnoredControlMessagesAreNotInventedBusLoss()

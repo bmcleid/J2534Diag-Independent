@@ -70,6 +70,10 @@ namespace J2534Diag
         public long ProcessingElapsedTicksTotal { get; internal set; }
         public long ProcessingElapsedTicksMax { get; internal set; }
         public long TimingFrequency { get; internal set; }
+        public long FirstReadStartedHostTicks { get; internal set; }
+        public long ChannelToFilterElapsedTicks { get; internal set; }
+        public long FilterInstallElapsedTicks { get; internal set; }
+        public long FilterToFirstReadElapsedTicks { get; internal set; }
     }
 
     /// <summary>
@@ -121,6 +125,8 @@ namespace J2534Diag
                 int requested = Math.Min(200, _maximumFrames - summary.StoredFrames);
                 IReadOnlyList<CanReceivedFrame> batch;
                 long readBegin = Stopwatch.GetTimestamp();
+                if (summary.FirstReadStartedHostTicks == 0)
+                    summary.FirstReadStartedHostTicks = readBegin;
                 try
                 {
                     batch = _source.ReadBatch(requested, 5);

@@ -22,3 +22,7 @@ Oct23 J2534Diag captured 95 frames before an explicit buffer overflow. Oct24 mul
 
 ## Next engineering gate
 Run Windows CI once, review the actual binary-specific J2534-Sharp receive method, and only then investigate a separately testable native read transport. Avoid mixing independent OneApp handles with J2534-Sharp channel handles; do not guess DLL export names, driver internals or header structs.
+## Verified Windows CI
+Initial Windows run 40140542282 failed compilation due to a C# 7.3 conditional-expression type mismatch when choosing an empty array versus ReadOnlyCollection. Corrected with explicit IReadOnlyList interface cast; no behavioral change. **CONFIRMED** follow-up [run 40140666744](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/40140666744), source commit `549d61916a71ea4e3707adcfba1b01a66bc18b58`: Build succeeded, 0 errors, 5 warnings; **6,375 assertions / 64 offline CAN capture regression tests PASS**. These are software/hardware-free tests. Existing RLink/TOPDON 0x12 overflow cause and whether the driver returns any native partial frames remain UNVERIFIED.
+
+Bundled `J2534-Sharp.xml` read from the older independently verified Windows preview documents `Channel.GetMessages(int,int)` requested message count at most default 200 and nonzero timeout behavior. This supports interface constraints, but does not by itself verify actual compiled control flow for native overflow responses.

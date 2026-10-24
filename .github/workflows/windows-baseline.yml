@@ -68,6 +68,16 @@ jobs:
           ) + $hashes
           Set-Content -Path (Join-Path $out 'ENGINEERING_PREVIEW_MANIFEST.txt') -Value $manifest -Encoding UTF8
           if ($hashes.Count -eq 0) { throw 'No files hashed' }
+      - name: Verify timing telemetry and preview manifest
+        shell: pwsh
+        run: |
+          $captureSource = Get-Content 'Services/CanCaptureIntegrityReport.cs' -Raw
+          foreach ($field in @('HostTimingFrequencyTicksPerSecond','HostReadElapsedTicksTotal','HostReadElapsedTicksMax','HostProcessingElapsedTicksTotal','HostProcessingElapsedTicksMax')) {
+            if (-not $captureSource.Contains($field)) { throw "Timing field missing: $field" }
+          }
+          $manifest = Get-Content 'bin/Release/ENGINEERING_PREVIEW_MANIFEST.txt' -Raw
+          if (-not $manifest.Contains("SourceCommit=$env:GITHUB_SHA")) { throw 'Manifest commit mismatch' }
+          if (-not $manifest.Contains('J2534Diag.exe')) { throw 'Manifest executable absent' }
       - name: Upload build diagnostics
         if: always()
         uses: actions/upload-artifact@v4

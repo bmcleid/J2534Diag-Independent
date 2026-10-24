@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 
 namespace J2534Diag
@@ -42,8 +43,23 @@ namespace J2534Diag
     /// </summary>
     public sealed class CanReceiveBufferOverflowException : InvalidOperationException
     {
+        // Frames are supplied only by a source that actually obtained and
+        // validated a native overflow response with a returned count. The
+        // pinned J2534-Sharp Channel.GetMessages exception currently supplies
+        // no such frames; its default remains an empty collection.
+        public IReadOnlyList<CanReceivedFrame> ReturnedFrames { get; }
+
         public CanReceiveBufferOverflowException(string message, Exception inner)
-            : base(message, inner) { }
+            : this(message, inner, null) { }
+
+        public CanReceiveBufferOverflowException(string message, Exception inner,
+            IReadOnlyList<CanReceivedFrame> returnedFrames)
+            : base(message, inner)
+        {
+            ReturnedFrames = returnedFrames == null
+                ? (IReadOnlyList<CanReceivedFrame>)Array.Empty<CanReceivedFrame>()
+                : new List<CanReceivedFrame>(returnedFrames).AsReadOnly();
+        }
     }
 
     public sealed class CanCaptureSummary
@@ -65,6 +81,8 @@ namespace J2534Diag
         public long ReadCallsWithoutStatus { get; internal set; }
         public long DriverReadErrors { get; internal set; }
         public long DriverBufferOverflowEvents { get; internal set; }
+        public long OverflowFramesProvidedBySource { get; internal set; }
+        public long OverflowFramesAcceptedByPump { get; internal set; }
         public long ReadCallElapsedTicksTotal { get; internal set; }
         public long ReadCallElapsedTicksMax { get; internal set; }
         public long ProcessingElapsedTicksTotal { get; internal set; }
@@ -124,6 +142,7 @@ namespace J2534Diag
             {
                 int requested = Math.Min(200, _maximumFrames - summary.StoredFrames);
                 IReadOnlyList<CanReceivedFrame> batch;
+                CanReceiveBufferOverflowException reportedOverflow = null;
                 long readBegin = Stopwatch.GetTimestamp();
                 if (summary.FirstReadStartedHostTicks == 0)
                     summary.FirstReadStartedHostTicks = readBegin;
@@ -131,12 +150,22 @@ namespace J2534Diag
                 {
                     batch = _source.ReadBatch(requested, 5);
                 }
-                catch (CanReceiveBufferOverflowException)
+                catch (CanReceiveBufferOverflowException ex)
                 {
                     AccumulateReadElapsed(summary, Stopwatch.GetTimestamp() - readBegin);
                     summary.DriverBufferOverflowEvents++;
                     summary.DriverReadErrors++;
-                    throw;
+                    reportedOverflow = ex;
+                    batch = ex.ReturnedFrames;
+                    summary.OverflowFramesProvidedBySource += batch.Count;
+                    // A native source reporting more rows than requested has
+                    // not established valid return-count semantics. Refuse all
+                    // such rows, preserve the original overflow exception.
+                    if (batch.Count > requested)
+                    {
+                        summary.ExcessReturnedFrames += batch.Count;
+                        ExceptionDispatchInfo.Capture(ex).Throw();
+                    }
                 }
                 catch (Exception)
                 {
@@ -151,6 +180,9 @@ namespace J2534Diag
                 // so preserve per-call status in the independent summary.
                 var readDiagnostics = _source as ICanReadResultSource;
                 string result = readDiagnostics?.LastReadResult;
+                // The overflow has its own independent counter. Do not
+                // misclassify a thrown read as an ordinary completed poll.
+                if (reportedOverflow == null)
                 switch (result)
                 {
                     case "STATUS_NOERROR":
@@ -232,6 +264,8 @@ namespace J2534Diag
                     };
                     store(record);
                     summary.StoredFrames++;
+                    if (reportedOverflow != null)
+                        summary.OverflowFramesAcceptedByPump++;
                 }
 
                 if (batch.Count > 0)
@@ -240,6 +274,11 @@ namespace J2534Diag
                 summary.ProcessingElapsedTicksTotal += processingTicks;
                 if (processingTicks > summary.ProcessingElapsedTicksMax)
                     summary.ProcessingElapsedTicksMax = processingTicks;
+
+                // Preserve any supplied partial frames, but always terminate
+                // and report the original native overflow as incomplete.
+                if (reportedOverflow != null)
+                    ExceptionDispatchInfo.Capture(reportedOverflow).Throw();
 
                 // A hardware driver may return zero messages for a timeout.
                 // Avoid busy spinning in that case; do not hide non-timeout faults.

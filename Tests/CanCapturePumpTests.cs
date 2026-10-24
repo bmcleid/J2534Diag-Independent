@@ -55,6 +55,9 @@ namespace J2534Diag.Tests
             PartialSummarySurvivesReceiveFailure();
             TrackEmptyAndPartialJ2534ReadStatuses();
             DistinguishReportedOverflowFromGenericReadError();
+            KeepPartialOverflowFramesButNeverMarkComplete();
+            RejectOverlargePartialOverflowBatch();
+            RejectInvalidPartialOverflowRecords();
             PreservePartialTimeoutBatchBeforeLaterOverflow();
             MeasureHostReadAndProcessingDurations();
             NativeMetadataIsPreserved();
@@ -371,6 +374,98 @@ namespace J2534Diag.Tests
                 "Failed driver call discarded host timing record");
             Check(overflow.LastSummary.DriverBufferOverflowEvents == 1,
                 "Timing instrumentation suppressed overflow");
+        }
+
+
+        private sealed class OverflowWithPartialFrames : ICanFrameBatchSource
+        {
+            private readonly IReadOnlyList<CanReceivedFrame> _frames;
+            public OverflowWithPartialFrames(IReadOnlyList<CanReceivedFrame> frames)
+            {
+                _frames = frames;
+            }
+            public IReadOnlyList<CanReceivedFrame> ReadBatch(int maximum, int timeout)
+            {
+                throw new CanReceiveBufferOverflowException("Synthetic first-read overflow",
+                    new InvalidOperationException("No hardware"), _frames);
+            }
+        }
+
+        private static void KeepPartialOverflowFramesButNeverMarkComplete()
+        {
+            var a = Frame(0x1F1, 0x01, 0x02);
+            a.ReadResult = "BUFFER_OVERFLOW";
+            a.TimestampRaw = 42U;
+            a.RxStatusRaw = 0U;
+            var b = Frame(0x1F1, 0x02, 0x03);
+            b.ReadResult = "BUFFER_OVERFLOW";
+            b.TimestampRaw = 43U;
+            b.RxStatusRaw = 0U;
+            var pump = new CanCapturePump(new OverflowWithPartialFrames(new[] { a, b }),
+                10000, () => TestClock, null);
+            var received = new List<CanCaptureRecord>();
+            bool overflowThrown = false;
+            try { pump.Run(CancellationToken.None, received.Add); }
+            catch (CanReceiveBufferOverflowException) { overflowThrown = true; }
+            Check(overflowThrown, "Overflow suppressed after partial rows");
+            Check(received.Count == 2 && pump.LastSummary.StoredFrames == 2,
+                "Returned overflow rows were lost before callback");
+            Check(received[0].Index == 1 && received[1].Index == 2 &&
+                  received[0].J2534TimestampRaw == "42" &&
+                  received[1].J2534TimestampRaw == "43" &&
+                  received[0].J2534ReadResult == "BUFFER_OVERFLOW",
+                "Partial native metadata and indexing changed");
+            Check(pump.LastSummary.DriverBufferOverflowEvents == 1 &&
+                  pump.LastSummary.DriverReadErrors == 1,
+                "Overflow flags lost after preserving rows");
+            Check(pump.LastSummary.OverflowFramesProvidedBySource == 2 &&
+                  pump.LastSummary.OverflowFramesAcceptedByPump == 2,
+                "Partial source versus accepted counters wrong");
+            Check(pump.LastSummary.TimedOutReadCalls == 0 &&
+                  pump.LastSummary.ReadCallsWithoutStatus == 0,
+                "Thrown overflow incorrectly counted as routine read");
+        }
+
+        private static void RejectOverlargePartialOverflowBatch()
+        {
+            var frames = new List<CanReceivedFrame>();
+            for (int i = 0; i < 201; ++i)
+                frames.Add(Frame(0x1F1, (byte)i));
+            var pump = new CanCapturePump(new OverflowWithPartialFrames(frames),
+                int.MaxValue, () => TestClock, null);
+            var stored = new List<CanCaptureRecord>();
+            bool overflowThrown = false;
+            try { pump.Run(CancellationToken.None, stored.Add); }
+            catch (CanReceiveBufferOverflowException) { overflowThrown = true; }
+            Check(overflowThrown && stored.Count == 0,
+                "Over-requested native overflow batch was incorrectly accepted");
+            Check(pump.LastSummary.ExcessReturnedFrames == 201 &&
+                  pump.LastSummary.OverflowFramesProvidedBySource == 201 &&
+                  pump.LastSummary.OverflowFramesAcceptedByPump == 0,
+                "Overlarge source count incorrectly trusted");
+            Check(pump.LastSummary.DriverBufferOverflowEvents == 1,
+                "Original overflow not preserved with overlarge count");
+        }
+
+        private static void RejectInvalidPartialOverflowRecords()
+        {
+            var valid = Frame(0x1F1, 0x01);
+            valid.ReadResult = "BUFFER_OVERFLOW";
+            var invalid = new CanReceivedFrame { Data = new byte[] { 0, 1 },
+                ReadResult = "BUFFER_OVERFLOW" };
+            var pump = new CanCapturePump(new OverflowWithPartialFrames(
+                new[] { invalid, valid }), 10, () => TestClock, null);
+            var rows = new List<CanCaptureRecord>();
+            bool overflowThrown = false;
+            try { pump.Run(CancellationToken.None, rows.Add); }
+            catch (CanReceiveBufferOverflowException) { overflowThrown = true; }
+            Check(overflowThrown && rows.Count == 1 && rows[0].ArbId == "0x1F1",
+                "Malformed overflow partial records were accepted or valid row lost");
+            Check(pump.LastSummary.InvalidFrames == 1 &&
+                  pump.LastSummary.RejectedMissingOrShortRecords == 1 &&
+                  pump.LastSummary.OverflowFramesProvidedBySource == 2 &&
+                  pump.LastSummary.OverflowFramesAcceptedByPump == 1,
+                "Overflow record validation statistics wrong");
         }
 
         private static void DistinguishReportedOverflowFromGenericReadError()

@@ -37,6 +37,7 @@ namespace J2534Diag.Tests
             PreserveBoundaryValuesEndToEnd();
             EmptyMessageResultsAndNullGuard();
             ClassifyActualNuGetOverflowCodes();
+            ProjectSyntheticNativeOverflowResponse();
             RecognizeActualJ2534SharpControlMessageTypes();
             return _assertions;
         }
@@ -72,6 +73,30 @@ namespace J2534Diag.Tests
             Check(saved[0].J2534ReadResult == "STATUS_NOERROR", "Status result omitted");
             Check(saved[0].ArbId == "0x7E8", "CAN ID changed during projection");
             Check(saved[0].Data == "03-41-0C-00", "Payload changed during projection");
+        }
+
+        private static void ProjectSyntheticNativeOverflowResponse()
+        {
+            var raw = new Message(new byte[] { 0, 0, 1, 0xF1, 0x01, 0xAB },
+                RxFlag.NONE, 999U);
+            var overflowResponse = new GetMessageResults(
+                new[] { raw }, ResultCode.BUFFER_OVERFLOW);
+            var error = J2534CanFrameSource.FromNativeOverflowResult(
+                overflowResponse, new InvalidOperationException("Synthetic native error"));
+            Check(error.ReturnedFrames.Count == 1 &&
+                  error.ReturnedFrames[0].TimestampRaw == 999U &&
+                  error.ReturnedFrames[0].ReadResult == "BUFFER_OVERFLOW",
+                "Synthetic partial overflow projection lost message or result code");
+            try
+            {
+                J2534CanFrameSource.FromNativeOverflowResult(
+                    new GetMessageResults(new[] { raw }, ResultCode.TIMEOUT), null);
+                throw new Exception("Non-overflow result accepted as overflow");
+            }
+            catch (ArgumentException) { ++_assertions; }
+            var historical = new CanReceiveBufferOverflowException("Legacy error", null);
+            Check(historical.ReturnedFrames.Count == 0,
+                "Legacy pinned-wrapper overflow invented return frames");
         }
 
         private static void ClassifyActualNuGetOverflowCodes()

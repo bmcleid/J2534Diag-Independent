@@ -76,6 +76,8 @@ namespace J2534Diag.Tests
             FlushFailureIsNotCalledComplete();
             CannotEnqueueAfterFinish();
             RetriedFinishAndNoOverwrite();
+            CompareFirstReadAcrossModes();
+            ProveAsyncWriterHeaderDoesNotBlockFakeReceive();
             return _checks;
         }
 
@@ -128,6 +130,124 @@ namespace J2534Diag.Tests
             Check(records.Count == frameCount, "Large on-disk CSV did not retain all 12,025 rows");
             Check(records[0].Index == 1 && records[frameCount - 1].Index == frameCount,
                 "Capture sequence discontinuity over 10,000 rows");
+        }
+
+
+        private sealed class FirstReadProbe : ICanFrameBatchSource, ICanReadResultSource
+        {
+            private readonly bool _overflow;
+            public int Calls, Requested, Timeout;
+            public string LastReadResult { get; private set; }
+            public FirstReadProbe(bool overflow) { _overflow = overflow; }
+            public IReadOnlyList<CanReceivedFrame> ReadBatch(int count, int timeout)
+            {
+                Calls++;
+                if (Calls != 1) throw new Exception("Synthetic source read twice");
+                Requested = count;
+                Timeout = timeout;
+                LastReadResult = null;
+                if (_overflow)
+                    throw new CanReceiveBufferOverflowException("Synthetic first-read overflow",
+                        new InvalidOperationException("Fake driver: no car involved"));
+                LastReadResult = "TIMEOUT";
+                return new[] {
+                    new CanReceivedFrame { Data = new byte[] { 0, 0, 1, 0xF1, 0x01 },
+                        TimestampRaw = 101, RxStatusRaw = 0, ReadResult = "TIMEOUT" },
+                    new CanReceivedFrame { Data = new byte[] { 0, 0, 1, 0xF1, 0x02 },
+                        TimestampRaw = 102, RxStatusRaw = 0, ReadResult = "TIMEOUT" }
+                };
+            }
+        }
+
+        private static void CompareFirstReadAcrossModes()
+        {
+            // Three fake paths: 10k memory, uncapped memory, uncapped disk.
+            // Neither limit nor disk callback runs before the first driver read.
+            foreach (bool overflow in new[] { false, true })
+            for (int mode = 0; mode < 3; mode++)
+            {
+                bool disk = mode == 2;
+                var reader = new FirstReadProbe(overflow);
+                var logger = disk ? new CanDiskCaptureLogger(new StringWriter(), 16) : null;
+                var records = new List<CanCaptureRecord>();
+                var pump = new CanCapturePump(reader,
+                    mode == 0 ? 10000 : int.MaxValue,
+                    () => new DateTime(2026, 10, 24, 18, 0, 0, DateTimeKind.Utc), null);
+                bool thrown = false;
+                using (var cancel = new CancellationTokenSource())
+                {
+                    try
+                    {
+                        pump.Run(cancel.Token, record =>
+                        {
+                            records.Add(record);
+                            if (logger != null && !logger.TryEnqueue(record))
+                                throw new IOException("Unexpected synthetic queue rejection");
+                            cancel.Cancel();
+                        });
+                    }
+                    catch (CanReceiveBufferOverflowException)
+                    {
+                        thrown = true;
+                    }
+                }
+                if (logger != null)
+                    Check(logger.CompleteAndWait(5000), "Synthetic writer did not close");
+                Check(reader.Calls == 1 && reader.Requested == 200 && reader.Timeout == 5,
+                    "Disk option or frame cap changed the first J2534 read");
+                Check(thrown == overflow, "Mode changed fake overflow exception");
+                Check(pump.LastSummary.DriverBufferOverflowEvents == (overflow ? 1 : 0) &&
+                      pump.LastSummary.DriverReadErrors == (overflow ? 1 : 0),
+                    "Overflow attributed incorrectly to disk or frame cap");
+                Check(records.Count == (overflow ? 0 : 2) &&
+                      pump.LastSummary.StoredFrames == (overflow ? 0 : 2),
+                    "Mode changed accepted source frames or fabricated records");
+                if (logger != null)
+                {
+                    var status = logger.GetStatus();
+                    Check(status.Accepted == (overflow ? 0 : 2) &&
+                          status.Written == (overflow ? 0 : 2) &&
+                          status.QueueFullDrops == 0 && status.AcceptedNotWritten == 0 &&
+                          status.WriterError == null,
+                        "Synthetic writer lost records or was blamed for driver overflow");
+                }
+            }
+        }
+
+        private static void ProveAsyncWriterHeaderDoesNotBlockFakeReceive()
+        {
+            // Models application-side writer synchronization only, NOT a
+            // TOPDON driver's native state or operating system scheduling.
+            var writer = new BlockHeaderWriter();
+            var logger = new CanDiskCaptureLogger(writer, 16);
+            try
+            {
+                Check(writer.EnteredHeader.Wait(3000), "Writer did not block at header");
+                var reader = new FirstReadProbe(false);
+                var pump = new CanCapturePump(reader, int.MaxValue,
+                    () => new DateTime(2026, 10, 24, 18, 0, 0, DateTimeKind.Utc), null);
+                using (var cancel = new CancellationTokenSource())
+                {
+                    var summary = pump.Run(cancel.Token, record =>
+                    {
+                        if (!logger.TryEnqueue(record))
+                            throw new IOException("Blocked header stalled nonblocking disk enqueue");
+                        cancel.Cancel();
+                    });
+                    Check(summary.StoredFrames == 2 && reader.Calls == 1 &&
+                          reader.Requested == 200 && reader.Timeout == 5,
+                        "Blocked header changed first receive batch");
+                }
+            }
+            finally
+            {
+                writer.ReleaseHeader.Set();
+                Check(logger.CompleteAndWait(5000), "Writer failed to finish");
+            }
+            var status = logger.GetStatus();
+            Check(status.Accepted == 2 && status.Written == 2 &&
+                  status.QueueFullDrops == 0 && status.WriterError == null,
+                "Blocked header caused synthetic accepted frames to disappear");
         }
 
         private static void StreamRowsToFileAndReadBack()

@@ -71,6 +71,10 @@ namespace J2534Diag
             WriteField(writer, "HostProcessingElapsedTicksTotal", readSummary?.ProcessingElapsedTicksTotal);
             WriteField(writer, "HostProcessingElapsedTicksMax", readSummary?.ProcessingElapsedTicksMax);
             WriteField(writer, "HostTimingMeaning", "MONOTONIC_HOST_DURATION_NOT_VEHICLE_TIMESTAMP");
+            WriteField(writer, "HostChannelOpenToFilterStartTicks", readSummary?.ChannelToFilterElapsedTicks);
+            WriteField(writer, "HostFilterInstallElapsedTicks", readSummary?.FilterInstallElapsedTicks);
+            WriteField(writer, "HostFilterReadyToFirstReadTicks", readSummary?.FilterToFirstReadElapsedTicks);
+            WriteField(writer, "HostStartupTimingLimit", "HOST_INTERVALS_NOT_DRIVER_QUEUE_FILL_OR_CAN_TIME");
             // A J2534 indication is not an accepted CAN data frame and
             // is not, by itself, evidence of lost vehicle bus traffic.
             WriteField(writer, "J2534IndicationRecordsIgnored", readSummary?.IgnoredIndicationRecords);

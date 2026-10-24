@@ -21,6 +21,7 @@ namespace J2534Diag.Tests
             NonUtcReportTimeRejected();
             ReportNormalEmptyReadsWithoutInventingFrames();
             ReportHardwareOverflowAsExplicitIncomplete();
+            ReportHostCaptureStartupIntervals();
             IgnoredControlMessagesAreNotInventedBusLoss();
             return _checks;
         }
@@ -106,6 +107,36 @@ namespace J2534Diag.Tests
             Check(unavailable.ToString().Contains("ReadHealthObserved=False"), "Missing read telemetry was synthesized");
             Check(unavailable.ToString().Contains("J2534ReadStatusTimeout=" + Environment.NewLine),
                 "Unavailable result should be blank, not zero");
+        }
+
+        private static void ReportHostCaptureStartupIntervals()
+        {
+            var summary = new CanCaptureSummary
+            {
+                TimingFrequency = 10000000,
+                ChannelToFilterElapsedTicks = 5000000,
+                FilterInstallElapsedTicks = 2000,
+                FilterToFirstReadElapsedTicks = 12500,
+                ReadCallElapsedTicksTotal = 468294,
+                ReadCallElapsedTicksMax = 468294,
+                DriverReadErrors = 1,
+                DriverBufferOverflowEvents = 1
+            };
+            var writer = new StringWriter();
+            CanCaptureIntegrityReport.Write(writer, "capture.csv", Clean(),
+                0, 0, 0, false, "buffer overflow", EndTime, summary);
+            string report = writer.ToString();
+            Check(report.Contains("HostChannelOpenToFilterStartTicks=5000000"),
+                "Channel-to-filter interval missing");
+            Check(report.Contains("HostFilterInstallElapsedTicks=2000"),
+                "Filter installation duration missing");
+            Check(report.Contains("HostFilterReadyToFirstReadTicks=12500"),
+                "Filter-to-first-read interval missing");
+            Check(report.Contains("HostTimingFrequencyTicksPerSecond=10000000"),
+                "Host tick frequency lost");
+            Check(report.Contains("J2534BufferOverflowEvents=1") &&
+                  report.Contains("VehicleBusLossless=UNVERIFIED"),
+                "Startup metrics hid the driver overflow or bus uncertainty");
         }
 
         private static void ReportHardwareOverflowAsExplicitIncomplete()

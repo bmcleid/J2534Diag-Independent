@@ -57,7 +57,7 @@ namespace J2534Diag
             : base(message, inner)
         {
             ReturnedFrames = returnedFrames == null
-                ? Array.Empty<CanReceivedFrame>()
+                ? (IReadOnlyList<CanReceivedFrame>)Array.Empty<CanReceivedFrame>()
                 : new List<CanReceivedFrame>(returnedFrames).AsReadOnly();
         }
     }

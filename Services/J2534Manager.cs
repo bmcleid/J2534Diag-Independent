@@ -146,6 +146,8 @@ namespace J2534Diag
         /// Filters are installed later by CanListenerForm under its lease.
         /// Not guaranteed physically silent: J2534 CAN may ACK frames.
         /// </summary>
+        public long CaptureOnlyChannelOpenedHostTicks { get; private set; }
+
         public void InitializeCaptureOnly(string dllFileName, BitType bitMode)
         {
             if (string.IsNullOrWhiteSpace(dllFileName))
@@ -175,6 +177,7 @@ namespace J2534Diag
                 Channel = pendingChannel;
                 BitMode = bitMode;
                 CaptureOnlyMode = true;
+                CaptureOnlyChannelOpenedHostTicks = System.Diagnostics.Stopwatch.GetTimestamp();
                 // Intentionally no SendMessage, VIN request, flow control,
                 // diagnostic poller, or background receive worker here.
             }

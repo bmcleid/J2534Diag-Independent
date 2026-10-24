@@ -26,6 +26,8 @@ namespace J2534Diag
         private const string ReceiveOwner = "CAN_CAPTURE";
         private int? _listenerFilterId;
         private string _listenerFailure;
+        private long _captureFilterBeginHostTicks;
+        private long _captureFilterDoneHostTicks;
         private bool _limitReached;
         private int _uiRefreshPending;
         private long _invalidFrames;
@@ -144,6 +146,23 @@ namespace J2534Diag
         // processing backlog when the user stops the listener.
         // Adapter-specific work is confined here. The capture logic itself is
         // exercised through a fake ICanFrameBatchSource by offline tests.
+        // All timestamps use the same host monotonic Stopwatch clock.
+        // Do not infer TOPDON firmware queue depth or native CAN time from them.
+        private void ApplyCaptureStartupTiming(CanCaptureSummary summary)
+        {
+            if (summary == null) return;
+            long opened = j2534Manager.CaptureOnlyChannelOpenedHostTicks;
+            long beforeFilter = _captureFilterBeginHostTicks;
+            long afterFilter = _captureFilterDoneHostTicks;
+            long firstRead = summary.FirstReadStartedHostTicks;
+            if (opened > 0 && beforeFilter >= opened)
+                summary.ChannelToFilterElapsedTicks = beforeFilter - opened;
+            if (afterFilter >= beforeFilter && beforeFilter > 0)
+                summary.FilterInstallElapsedTicks = afterFilter - beforeFilter;
+            if (firstRead >= afterFilter && afterFilter > 0)
+                summary.FilterToFirstReadElapsedTicks = firstRead - afterFilter;
+        }
+
         private void ListenLoop()
         {
             var channel = j2534Manager.Channel;
@@ -189,6 +208,7 @@ namespace J2534Diag
                 _limitReached = summary.LimitReached;
                 _invalidFrames = summary.InvalidFrames;
                 _excessReturnedFrames = summary.ExcessReturnedFrames;
+                ApplyCaptureStartupTiming(summary);
                 _lastCaptureSummary = summary;
             }
             catch (Exception ex)
@@ -197,6 +217,7 @@ namespace J2534Diag
                 {
                     _invalidFrames = pump.LastSummary.InvalidFrames;
                     _excessReturnedFrames = pump.LastSummary.ExcessReturnedFrames;
+                    ApplyCaptureStartupTiming(pump.LastSummary);
                     _lastCaptureSummary = pump.LastSummary;
                 }
                 _listenerFailure = ex.Message;
@@ -347,7 +368,9 @@ namespace J2534Diag
                     TxFlags = j2534Manager.BitMode == BitType.BITS_11 ? TxFlag.NONE : TxFlag.CAN_29BIT_ID
                 };
                 // Do not clear other owners' filters/buffers. Remove only ours on stop.
+                _captureFilterBeginHostTicks = Stopwatch.GetTimestamp();
                 _listenerFilterId = j2534Manager.Channel.StartMsgFilter(filter);
+                _captureFilterDoneHostTicks = Stopwatch.GetTimestamp();
                 if (selectedDiskPath != null)
                 {
                     // CreateNew prevents accidental replacement of historical logs.

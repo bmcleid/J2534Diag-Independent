@@ -150,7 +150,9 @@ namespace J2534Diag
         // Do not infer TOPDON firmware queue depth or native CAN time from them.
         private void ApplyCaptureStartupTiming(CanCaptureSummary summary)
         {
-            if (summary == null) return;
+            if (summary == null || _lastCaptureNative) return;
+            // Native filter is installed inside NativeOwnedCanSession. Do not
+            // fabricate equivalent managed-channel timing from old state.
             long opened = j2534Manager.CaptureOnlyChannelOpenedHostTicks;
             long beforeFilter = _captureFilterBeginHostTicks;
             long afterFilter = _captureFilterDoneHostTicks;

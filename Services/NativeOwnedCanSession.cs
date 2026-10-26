@@ -27,11 +27,12 @@ namespace J2534Diag
     /// </summary>
     public sealed class NativeOwnedCanSession : INativeCanReadProvider, IDisposable
     {
-        private static int _sessionHeld;
+        // Shared atomic owner lives in J2534ConnectionOwnership.
         private readonly INativeJ2534CanApi _api;
         private readonly Func<bool> _managedConnectionInactive;
         private readonly object _sync = new object();
         private bool _lease, _deviceOpened, _connected, _filtered, _disposed;
+        private bool _sharedLeaseHeld;
         private uint _device, _channel, _filter;
 
         public NativeOwnedCanSession(INativeJ2534CanApi api,
@@ -55,8 +56,11 @@ namespace J2534Diag
                     throw new InvalidOperationException("Native channel already started or awaiting cleanup.");
                 if (!_managedConnectionInactive())
                     throw new InvalidOperationException("Managed J2534-Sharp connection is active; native start refused.");
-                if (Interlocked.CompareExchange(ref _sessionHeld, 1, 0) != 0)
-                    throw new InvalidOperationException("Another native receive session owns the process gate.");
+                if (!J2534ConnectionOwnership.TryAcquire(this, "Native J2534 receiver"))
+                    throw new InvalidOperationException(
+                        "Another J2534 connection owns the device: " +
+                        J2534ConnectionOwnership.CurrentOwner + ".");
+                _sharedLeaseHeld = true;
                 _lease = true;
                 try
                 {
@@ -148,7 +152,11 @@ namespace J2534Diag
             if (!_deviceOpened && !_connected && !_filtered && _lease)
             {
                 _lease = false;
-                Interlocked.Exchange(ref _sessionHeld, 0);
+                if (_sharedLeaseHeld)
+                {
+                    J2534ConnectionOwnership.Release(this);
+                    _sharedLeaseHeld = false;
+                }
             }
             if (failures.Count != 0)
                 throw new InvalidOperationException(

@@ -36,6 +36,8 @@
     <Compile Include="..\Services\NativeSixColumnCanImport.cs"><Link>NativeSixColumnCanImport.cs</Link></Compile>
     <Compile Include="..\Services\CanFrameClassifier.cs"><Link>CanFrameClassifier.cs</Link></Compile>
     <Compile Include="J2534CanFrameSourceTests.cs" />
+    <Compile Include="NativeCanReadBoundaryTests.cs" />
+    <Compile Include="..\Services\NativeCanReadBoundary.cs"><Link>NativeCanReadBoundary.cs</Link></Compile>
     <Compile Include="..\Services\J2534CanFrameSource.cs"><Link>J2534CanFrameSource.cs</Link></Compile>
     <Compile Include="..\Services\CanCapturePump.cs"><Link>CanCapturePump.cs</Link></Compile>
     <Compile Include="..\Services\ReceiveChannelGate.cs"><Link>ReceiveChannelGate.cs</Link></Compile>

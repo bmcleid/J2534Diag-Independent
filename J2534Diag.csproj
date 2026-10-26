@@ -99,6 +99,8 @@
     <Compile Include="Services\CanFrameClassifier.cs" />
     <Compile Include="Services\J2534CanFrameSource.cs" />
     <Compile Include="Services\NativeCanReadBoundary.cs" />
+    <Compile Include="Services\NativeOwnedCanSession.cs" />
+    <Compile Include="Services\NativeJ2534StdCallApi.cs" />
     <Compile Include="Services\ReceiveChannelGate.cs" />
     <Compile Include="Services\ChannelLifecyclePolicy.cs" />
     <Compile Include="Services\DiagnosticTransmitPolicy.cs" />

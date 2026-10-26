@@ -15,8 +15,13 @@ static_assert(sizeof(PASSTHRU_MSG) == 4152, "J2534 message ABI mismatch");
 static bool deviceOpen=false, channelOpen=false, filterOpen=false;
 static DWORD reads=0;
 static bool scenario(const char* name) {
-    const char* s=std::getenv("SRX_NATIVE_SIM_CASE");
-    return s && std::strcmp(s,name)==0;
+    // .NET changes the Win32 process environment during a loaded-DLL
+    // cleanup test. CRT getenv() may retain an earlier environment snapshot.
+    // Query Windows directly so fail-after-Open scenarios are deterministic.
+    char value[96] = {};
+    DWORD n = GetEnvironmentVariableA("SRX_NATIVE_SIM_CASE", value,
+        static_cast<DWORD>(sizeof(value)));
+    return n > 0 && n < sizeof(value) && std::strcmp(value,name)==0;
 }
 static void frame(PASSTHRU_MSG& out, DWORD stamp, BYTE value) {
     std::memset(&out,0,sizeof(out));

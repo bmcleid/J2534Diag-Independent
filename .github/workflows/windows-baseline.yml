@@ -45,6 +45,19 @@ jobs:
         run: |
           & ./Tests/bin/Release/CanCaptureCsvTests.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Initialize MSVC x64 for isolated synthetic DLL
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Compile synthetic native J2534 DLL (no TOPDON driver)
+        shell: cmd
+        run: cl /nologo /LD /W4 /EHsc /Fe:mock-j2534.dll Tests\native-j2534-mock\mock.cpp
+      - name: Run isolated real-StdCall J2534 simulator
+        shell: pwsh
+        run: |
+          $nativeDll = (Resolve-Path './mock-j2534.dll').Path
+          & ./Tests/bin/Release/CanCaptureCsvTests.exe --ci-native-sim $nativeDll
+          if ($LASTEXITCODE -ne 0) { throw "Synthetic native J2534 interop failed" }
       - name: Generate engineering preview manifest
         shell: pwsh
         run: |

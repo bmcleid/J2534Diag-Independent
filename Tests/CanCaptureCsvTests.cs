@@ -14,10 +14,11 @@ namespace J2534Diag.Tests
             if (!ok) throw new Exception(reason);
         }
 
-        public static int Main()
+        public static int Main(string[] args)
         {
             try
             {
+                if (args.Length > 0) return NativeJ2534InteropSmoke.Run(args);
                 RoundTripWithTimestampAndEscapedFields();
                 ReadLegacyCapture();
                 ReadReorderedHeader();

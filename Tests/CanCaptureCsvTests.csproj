@@ -4,6 +4,7 @@
     <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <OutputType>Exe</OutputType>
+    <Prefer32Bit>false</Prefer32Bit>
     <RootNamespace>J2534Diag.Tests</RootNamespace>
     <AssemblyName>CanCaptureCsvTests</AssemblyName>
     <TargetFrameworkVersion>v4.8.1</TargetFrameworkVersion>
@@ -39,6 +40,7 @@
     <Compile Include="NativeCanReadBoundaryTests.cs" />
     <Compile Include="NativeOwnedCanSessionTests.cs" />
     <Compile Include="NativeJ2534AbiTests.cs" />
+    <Compile Include="NativeJ2534InteropSmoke.cs" />
     <Compile Include="..\Services\NativeOwnedCanSession.cs"><Link>NativeOwnedCanSession.cs</Link></Compile>
     <Compile Include="..\Services\NativeJ2534StdCallApi.cs"><Link>NativeJ2534StdCallApi.cs</Link></Compile>
     <Compile Include="..\Services\NativeCanReadBoundary.cs"><Link>NativeCanReadBoundary.cs</Link></Compile>

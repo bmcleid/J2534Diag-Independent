@@ -1,3 +1,7 @@
+## CURRENT CONTINUATION POINTER — October 26, 2026 (supersedes October 16 resume instructions)
+
+The historical October 16 import and evidence below remain valid, but **Section 0 and Section 8 are no longer the current next step**. Before acting read [the current J2534Diag handoff](J2534DIAG_CURRENT_HANDOFF_2026-10-26.md), the [living SRX Active Work Registry](https://github.com/bmcleid/SRX-PC-Scanner/blob/main/docs/SRX_ACTIVE_WORK_REGISTRY.md), and [cross-track coordination](https://github.com/bmcleid/SRX-PC-Scanner/blob/main/docs/SRX-SCANNER-CROSS-TRACK-COORDINATION.md). Latest J2534 branch is `feature/native-stdcall-simulator-gate`, draft PR #27, not the old Oct 16 import branch; its native simulator passed, but the physical TOPDON overflow is NOT fixed or verified. **Do not repeat** Oct 16 offline import, Oct 23–24 failed disk captures, 10k memory test, successful OneApp CAN, confirmed native 7E2→7EA TCM handshake, or Innova user-confirmed Park HIGH/HIGH. The old handoff is retained verbatim below for provenance.
+
 # Part 2 - Analyze J2534Diag
 ## Part 1 recovery, cross-project reconciliation, and exact continuation point — 2026-10-16
 

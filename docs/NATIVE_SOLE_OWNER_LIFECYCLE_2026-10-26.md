@@ -28,3 +28,8 @@ Target vehicle: 2012 Cadillac SRX Performance AWD 3.6L; TOPDON RLink X3. J2534Di
 
 ## PR / CI
 Draft pull request feature/native-single-owner-receive-lifecycle; Windows CI must pass before labeling synthetic checks confirmed.
+
+## Verified offline Windows CI
+**CONFIRMED** [Windows Actions run 40363692928](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/40363692928), code-bearing commit `326443c3788a38111c4f21e659f994aa8a2741a6`: Windows Release build PASS (0 errors, 5 warnings); **6,441 assertions / 64 offline regression tests PASS**. GitHub-reported build-artifact ID `12668229732`, ZIP digest `sha256:8f54369d63370cf059ee8c9ea59cb367edcef1d07146744d7b1be88ae5153684`. Artifact contents were not independently downloaded/rehashed in this step. CI did not open an actual TOPDON DLL, device, channel or vehicle; only fake API and local ABI/reflection checks ran. Draft PR #26 remains unmerged. The native adapter is compiled into the engineering build but not instantiated by application UI.
+
+**Next discriminating gate:** external synthetic native DLL exercising actual exported functions and marshaled PASSTHRU_MSG arrays, especially nonzero pNumMsgs on 0x12 and cleanup faults; then bridge app-wide managed/native mutual exclusion, with tested startup/teardown behavior. Do NOT claim root-cause repair or ask operator to retest current build.

@@ -30,6 +30,8 @@ namespace J2534Diag.Tests
                 int pumpAssertions = CanCapturePumpTests.RunAll();
                 int j2534Assertions = J2534CanFrameSourceTests.RunAll();
                 int nativeAssertions = NativeCanReadBoundaryTests.RunAll();
+                int nativeLifecycleAssertions = NativeOwnedCanSessionTests.RunAll();
+                int nativeAbiAssertions = NativeJ2534AbiTests.RunAll();
                 int diskAssertions = CanDiskCaptureLoggerTests.RunAll();
                 int integrityAssertions = CanCaptureIntegrityReportTests.RunAll();
                 int atomicSidecarAssertions = AtomicIntegritySidecarTests.RunAll();
@@ -39,7 +41,7 @@ namespace J2534Diag.Tests
                 int classifierAssertions = CanFrameClassifierTests.RunAll();
                 int nativeSixColumnAssertions = NativeSixColumnCanImportTests.RunAll();
                 int provenanceAssertions = OfflineCaptureProvenanceTests.RunAll();
-                Console.WriteLine("PASS: " + (_assertions + pumpAssertions + j2534Assertions + nativeAssertions + diskAssertions + integrityAssertions + atomicSidecarAssertions + pendingReportAssertions + captureOnlyAssertions + lifecycleAssertions + classifierAssertions + nativeSixColumnAssertions + provenanceAssertions) + " assertions across sixty-four CAN capture regression tests.");
+                Console.WriteLine("PASS: " + (_assertions + pumpAssertions + j2534Assertions + nativeAssertions + nativeLifecycleAssertions + nativeAbiAssertions + diskAssertions + integrityAssertions + atomicSidecarAssertions + pendingReportAssertions + captureOnlyAssertions + lifecycleAssertions + classifierAssertions + nativeSixColumnAssertions + provenanceAssertions) + " assertions across sixty-four CAN capture regression tests.");
                 return 0;
             }
             catch (Exception ex)

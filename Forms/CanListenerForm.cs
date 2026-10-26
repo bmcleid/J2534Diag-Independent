@@ -36,6 +36,9 @@ namespace J2534Diag
         private CanDiskCaptureLogger _diskLogger;
         private string _diskLogPath;
         private bool _nativeSixColumnLoaded;
+        private bool _activeNativeCapture;
+        private bool _lastCaptureNative;
+        private string _captureDriverSha256;
         private PendingIntegritySidecar _pendingIntegrityReport;
         private readonly Button _retryReportButton = new Button
         {
@@ -151,8 +154,8 @@ namespace J2534Diag
         private void ApplyCaptureStartupTiming(CanCaptureSummary summary)
         {
             if (summary == null || _lastCaptureNative) return;
-            // Native filter is installed inside NativeOwnedCanSession. Do not
-            // fabricate equivalent managed-channel timing from old state.
+            // Native filter is installed in the native session, not by the
+            // managed channel. Do not reuse stale managed startup timestamps.
             long opened = j2534Manager.CaptureOnlyChannelOpenedHostTicks;
             long beforeFilter = _captureFilterBeginHostTicks;
             long afterFilter = _captureFilterDoneHostTicks;
@@ -171,11 +174,20 @@ namespace J2534Diag
             CanCapturePump pump = null;
             try
             {
+                // Both receivers feed the SAME pump, disk writer, preview,
+                // and integrity code. Native is opened only immediately before
+                // the receive thread starts and uses the independently tested
+                // 100-frame/250ms native read strategy.
+                ICanFrameBatchSource frameSource = _activeNativeCapture
+                    ? (ICanFrameBatchSource)new NativeCanReadBoundary(j2534Manager.NativeSession)
+                    : new J2534CanFrameSource(channel);
                 pump = new CanCapturePump(
-                    new J2534CanFrameSource(channel),
+                    frameSource,
                     _diskLogger != null ? int.MaxValue : MAX_RECORDS,
                     () => DateTime.UtcNow,
-                    id => GmCanId11Bit.KnownCanIds.TryGetValue(id, out var description) ? description : "");
+                    id => GmCanId11Bit.KnownCanIds.TryGetValue(id, out var description) ? description : "",
+                    _activeNativeCapture ? 100 : 200,
+                    _activeNativeCapture ? 250 : 5);
 
                 var summary = pump.Run(
                     _cts.Token,
@@ -293,7 +305,7 @@ namespace J2534Diag
 
         private void CanListenerForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            StopListening();
+            if (!StopListening()) e.Cancel = true;
         }
 
         private void btnStart_Click(object sender, EventArgs e)
@@ -334,7 +346,8 @@ namespace J2534Diag
                     }
                 }
             }
-            if (j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed)
+            if (!j2534Manager.NativeModeSelected &&
+                (j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed))
             {
                 MessageBox.Show("Connect a J2534 interface first.", "CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
@@ -358,27 +371,39 @@ namespace J2534Diag
                 _diskLogPath = null;
                 _diskLogger = null;
                 _nativeSixColumnLoaded = false;
+                _activeNativeCapture = j2534Manager.NativeModeSelected;
+                _lastCaptureNative = _activeNativeCapture;
+                _captureDriverSha256 = _activeNativeCapture
+                    ? j2534Manager.SelectedNativeDriver.Sha256 : "";
                 Interlocked.Exchange(ref _uiRefreshPending, 0);
                 _cts = new CancellationTokenSource();
 
-                var filter = new MessageFilter
+                _captureFilterBeginHostTicks = 0;
+                _captureFilterDoneHostTicks = 0;
+                _listenerFilterId = null;
+                if (!_activeNativeCapture)
                 {
-                    FilterType = Filter.PASS_FILTER,
-                    Mask = new byte[] { 0, 0, 0, 0 },
-                    Pattern = new byte[] { 0, 0, 0, 0 },
-                    FlowControl = new byte[] { 0, 0, 0, 0 },
-                    TxFlags = j2534Manager.BitMode == BitType.BITS_11 ? TxFlag.NONE : TxFlag.CAN_29BIT_ID
-                };
-                // Do not clear other owners' filters/buffers. Remove only ours on stop.
-                _captureFilterBeginHostTicks = Stopwatch.GetTimestamp();
-                _listenerFilterId = j2534Manager.Channel.StartMsgFilter(filter);
-                _captureFilterDoneHostTicks = Stopwatch.GetTimestamp();
+                    var filter = new MessageFilter
+                    {
+                        FilterType = Filter.PASS_FILTER,
+                        Mask = new byte[] { 0, 0, 0, 0 },
+                        Pattern = new byte[] { 0, 0, 0, 0 },
+                        FlowControl = new byte[] { 0, 0, 0, 0 },
+                        TxFlags = j2534Manager.BitMode == BitType.BITS_11
+                            ? TxFlag.NONE : TxFlag.CAN_29BIT_ID
+                    };
+                    _captureFilterBeginHostTicks = Stopwatch.GetTimestamp();
+                    _listenerFilterId = j2534Manager.Channel.StartMsgFilter(filter);
+                    _captureFilterDoneHostTicks = Stopwatch.GetTimestamp();
+                }
                 if (selectedDiskPath != null)
                 {
                     // CreateNew prevents accidental replacement of historical logs.
                     _diskLogger = new CanDiskCaptureLogger(selectedDiskPath, 4096);
                     _diskLogPath = _diskLogger.FilePath;
                 }
+                if (_activeNativeCapture)
+                    j2534Manager.StartNativeCapture();
                 _isListening = true;
                 _listenThread = new Thread(ListenLoop) { IsBackground = true, Name = "J2534 CAN capture" };
                 _listenThread.Start();
@@ -410,7 +435,17 @@ namespace J2534Diag
                     }
                 }
 
-                if (!receiverStopped || !writerStopped || !filterStopped)
+                bool nativeStopped = true;
+                if (_activeNativeCapture && receiverStopped && writerStopped && filterStopped)
+                {
+                    try { j2534Manager.StopNativeCapture(); }
+                    catch (Exception cleanupError)
+                    {
+                        nativeStopped = false;
+                        Debug.WriteLine("Native connection cleanup failed during startup: " + cleanupError);
+                    }
+                }
+                if (!receiverStopped || !writerStopped || !filterStopped || !nativeStopped)
                 {
                     // StopListening can be retried after a blocking driver call
                     // or disk operation finally returns. Lease remains held.
@@ -467,6 +502,11 @@ namespace J2534Diag
                         j2534Manager.Channel.StopMsgFilter(_listenerFilterId.Value);
                     _listenerFilterId = null;
                 }
+                // Native filter is owned by NativeOwnedCanSession, not by
+                // this form. Close device/channel only after worker and
+                // writer have stopped; errors preserve ReceiveGate ownership.
+                if (_activeNativeCapture)
+                    j2534Manager.StopNativeCapture();
                 j2534Manager.ReceiveGate.Release(ReceiveOwner);
             }
             catch (Exception ex)
@@ -485,6 +525,7 @@ namespace J2534Diag
             }
 
             _isListening = false;
+            _activeNativeCapture = false;
             _listenThread = null;
             _cts.Dispose();
             _cts = null;
@@ -535,6 +576,11 @@ namespace J2534Diag
                 buffer, _diskLogPath, status, Interlocked.Read(ref _messageIndex),
                 _invalidFrames, _excessReturnedFrames, _limitReached,
                 _listenerFailure, DateTime.UtcNow, _lastCaptureSummary);
+            buffer.WriteLine("CaptureReceiver=" +
+                (_lastCaptureNative ? "DirectNativeJ2534" : "ManagedJ2534Sharp"));
+            buffer.WriteLine("NativeDriverSHA256=" + (_captureDriverSha256 ?? ""));
+            buffer.WriteLine("NativeReadMaximum=" + (_lastCaptureNative ? "100" : "200"));
+            buffer.WriteLine("NativeReadTimeoutMs=" + (_lastCaptureNative ? "250" : "5"));
             _pendingIntegrityReport = new PendingIntegritySidecar(
                 _diskLogPath, outputPath, buffer.ToString());
             try

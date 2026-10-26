@@ -15,3 +15,10 @@ Test the previously unverified ABI seam of J2534Diag's draft native receive foun
 
 ## Verification
 Windows CI is pending; do not claim simulation success until workflow reports PASS.
+
+## Verified Windows CI
+First native simulator run [40364645189](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/40364645189) FAILED the cleanup_close_error scenario: the C++ mock used CRT getenv(), which did not observe a scenario change applied after DLL load via .NET Environment.SetEnvironmentVariable. The regular build passed and 6,437 offline regression assertions passed before that mock issue. **Correction:** the mock now uses GetEnvironmentVariableA (Win32 process environment), maintaining dynamic fault injection while the DLL remains loaded. This modified **only the synthetic test DLL**, not J2534Diag physical read settings or native production transport.
+
+**CONFIRMED** [Windows Actions run 40364945314](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/40364945314) on code commit `b6a1f9c74669fb5614ead079a235237c4948b15b`: Windows Release build succeeded with 0 errors, 5 warnings; **6,445 assertions across 64 offline tests PASS**, plus **29 additional isolated real-DLL StdCall synthetic assertions PASS**. The native mock verifies actual x64 marshaling of messages/counts and the fault paths listed above. GitHub-reported ZIP artifact ID `12670186299`, digest `sha256:d95ecdf28acbfd74cd5e529adf00cc1fd62883ccd6ea9b7dabae3250ad22dbfa`; not independently downloaded or unpacked in this turn. Neither GitHub Actions run opened or communicated with a physical TOPDON adapter.
+
+**Remaining mandatory gate:** integrate one mutually exclusive native-versus-J2534-Sharp connection owner into the GUI with tested acquire/release/cancel/failure paths; verify exact TOPDON DLL path and bitness from operator's PC before an operator-authorized physical capture. Do not call native adapter a production fix or identify GM modules from synthetic frames.

@@ -60,6 +60,30 @@ namespace J2534Diag
             //Initialize(vciApi.Filename, Protocol.CAN, Baud.CAN_500000, ConnectFlag.NONE);
         }
 
+        // Distinct from ReceiveGate: this lease must cover the entire
+        // managed device lifecycle, including reconnect and VIN monitoring.
+        private bool _managedLeaseHeld;
+
+        private void RequireManagedConnectionLease()
+        {
+            if (_managedLeaseHeld) return;
+            if (!J2534ConnectionOwnership.TryAcquire(this, "J2534-Sharp managed connection"))
+                throw new InvalidOperationException(
+                    "J2534 connection already owned by " +
+                    J2534ConnectionOwnership.CurrentOwner + ".");
+            _managedLeaseHeld = true;
+        }
+
+        private void ReleaseManagedLeaseIfClosed()
+        {
+            if (!_managedLeaseHeld || Channel != null || Device != null ||
+                Api != null || _monitorThread != null ||
+                ReceiveGate.CurrentOwner != null)
+                return;
+            J2534ConnectionOwnership.Release(this);
+            _managedLeaseHeld = false;
+        }
+
         private void StopVinMonitorSafely()
         {
             ChannelLifecyclePolicy.RequireUnowned(ReceiveGate);
@@ -79,6 +103,7 @@ namespace J2534Diag
         {
             StopVinMonitorSafely();
             CloseChannelAndDevice();
+            ReleaseManagedLeaseIfClosed();
             _mainForm?.UpdateSelectedVehicle(false, null);
         }
 
@@ -99,6 +124,9 @@ namespace J2534Diag
 
         public void Initialize(string dllFileName)
         {
+            RequireManagedConnectionLease();  // Acquire BEFORE touching the driver.
+            try
+            {
             StopVinMonitorSafely();
             CaptureOnlyMode = false;
             Vin = null;
@@ -137,6 +165,14 @@ namespace J2534Diag
                     return;
                 }
             }
+            }
+            catch
+            {
+                // Only release after a failed startup when every resource
+                // has been disposed and any VIN worker has stopped.
+                ReleaseManagedLeaseIfClosed();
+                throw;
+            }
         }
 
         /// <summary>
@@ -154,42 +190,41 @@ namespace J2534Diag
                 throw new ArgumentException("Select an installed J2534 DLL.", nameof(dllFileName));
             if (bitMode != BitType.BITS_11 && bitMode != BitType.BITS_29)
                 throw new ArgumentOutOfRangeException(nameof(bitMode));
-            // Reuse identical shutdown conditions when switching modes,
-            // reconnecting to the same DLL, or explicitly disconnecting.
-            StopVinMonitorSafely();
-            CloseChannelAndDevice();
-
-            API pendingApi = null;
-            Device pendingDevice = null;
-            Channel pendingChannel = null;
+            RequireManagedConnectionLease(); // No native overlap during reconnect.
             try
             {
-                pendingApi = APIFactory.GetAPI(dllFileName);
-                pendingDevice = pendingApi.GetDevice();
-                pendingChannel = pendingDevice.GetChannel(
+                // Keep the same owner across a managed reconnect.
+                StopVinMonitorSafely();
+                CloseChannelAndDevice();
+                // Register each acquired handle immediately so that any
+                // failed next step can be safely retried on cleanup.
+                Api = APIFactory.GetAPI(dllFileName);
+                Device = Api.GetDevice();
+                Channel = Device.GetChannel(
                     Protocol.CAN, Baud.CAN_500000,
                     bitMode == BitType.BITS_11 ? ConnectFlag.NONE : ConnectFlag.CAN_29BIT_ID);
-                pendingChannel.DefaultTxFlag = bitMode == BitType.BITS_11
+                Channel.DefaultTxFlag = bitMode == BitType.BITS_11
                     ? TxFlag.NONE : TxFlag.CAN_29BIT_ID;
-
-                Api = pendingApi;
-                Device = pendingDevice;
-                Channel = pendingChannel;
                 BitMode = bitMode;
                 CaptureOnlyMode = true;
                 CaptureOnlyChannelOpenedHostTicks = System.Diagnostics.Stopwatch.GetTimestamp();
-                // Intentionally no SendMessage, VIN request, flow control,
-                // diagnostic poller, or background receive worker here.
+                // No diagnostic transmit, VIN monitor or background RX here.
             }
-            catch
+            catch (Exception startup)
             {
-                pendingChannel?.Dispose();
-                pendingDevice?.Dispose();
-                pendingApi?.Dispose();
-                Channel = null;
-                Device = null;
-                Api = null;
-                CaptureOnlyMode = false;
+                // Never clear handle fields blindly if Dispose fails.
+                try
+                {
+                    if (_monitorThread == null && ReceiveGate.CurrentOwner == null)
+                        CloseChannelAndDevice();
+                }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException(
+                        "Capture-only initialization and cleanup both failed; ownership retained.",
+                        startup, cleanup);
+                }
+                finally { ReleaseManagedLeaseIfClosed(); }
                 throw;
             }
         }

@@ -39,6 +39,8 @@
     <Compile Include="J2534CanFrameSourceTests.cs" />
     <Compile Include="NativeCanReadBoundaryTests.cs" />
     <Compile Include="NativeOwnedCanSessionTests.cs" />
+    <Compile Include="J2534ConnectionOwnershipTests.cs" />
+    <Compile Include="..\Services\J2534ConnectionOwnership.cs"><Link>J2534ConnectionOwnership.cs</Link></Compile>
     <Compile Include="NativeJ2534AbiTests.cs" />
     <Compile Include="NativeJ2534InteropSmoke.cs" />
     <Compile Include="..\Services\NativeOwnedCanSession.cs"><Link>NativeOwnedCanSession.cs</Link></Compile>

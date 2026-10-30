@@ -9,6 +9,7 @@
     <RootNamespace>J2534Diag</RootNamespace>
     <AssemblyName>J2534Diag</AssemblyName>
     <TargetFrameworkVersion>v4.8.1</TargetFrameworkVersion>
+    <Prefer32Bit>false</Prefer32Bit>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
@@ -102,6 +103,7 @@
     <Compile Include="Services\NativeOwnedCanSession.cs" />
     <Compile Include="Services\J2534ConnectionOwnership.cs" />
     <Compile Include="Services\NativeJ2534StdCallApi.cs" />
+    <Compile Include="Services\NativeJ2534DriverCheck.cs" />
     <Compile Include="Services\ReceiveChannelGate.cs" />
     <Compile Include="Services\ChannelLifecyclePolicy.cs" />
     <Compile Include="Services\DiagnosticTransmitPolicy.cs" />

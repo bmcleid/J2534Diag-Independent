@@ -84,6 +84,76 @@ namespace J2534Diag
             _managedLeaseHeld = false;
         }
 
+        private NativeJ2534StdCallApi _nativeApi;
+        private NativeDriverIdentity _nativeDriver;
+        public NativeOwnedCanSession NativeSession { get; private set; }
+        public bool NativeModeSelected => _nativeDriver != null;
+        public bool NativeCaptureActive => NativeSession != null && NativeSession.IsReceiving;
+        public bool HasConnectionOrSelection =>
+            NativeModeSelected || NativeSession != null ||
+            Channel != null || Device != null || Api != null || _managedLeaseHeld;
+        public NativeDriverIdentity SelectedNativeDriver => _nativeDriver;
+
+        // PREPARE ONLY. The actual native channel is opened immediately
+        // before CAN Listener starts reading, not minutes earlier on Connect.
+        // Prevents pre-capture driver receive-queue accumulation.
+        public NativeDriverIdentity PrepareNativeCaptureOnly(string registeredDriverPath)
+        {
+            if (HasConnectionOrSelection || ReceiveGate.CurrentOwner != null)
+                throw new InvalidOperationException(
+                    "Disconnect and fully stop the current J2534 connection before selecting a new receiver.");
+            var identity = NativeJ2534DriverCheck.Inspect(registeredDriverPath);
+            _nativeDriver = identity;
+            CaptureOnlyMode = true;
+            BitMode = BitType.BITS_11;
+            return identity;
+        }
+
+        public void StartNativeCapture()
+        {
+            if (_nativeDriver == null)
+                throw new InvalidOperationException("Choose native receiver and a verified DLL first.");
+            if (ReceiveGate.CurrentOwner != "CAN_CAPTURE")
+                throw new InvalidOperationException("Native start requires the CAN Listener receive lease.");
+            if (NativeSession != null || _nativeApi != null)
+                throw new InvalidOperationException("Prior native channel needs cleanup before restart.");
+            // Verify that same *bytes* selected earlier still exist immediately
+            // before opening a device. Not an OS/driver signature guarantee.
+            var identity = NativeJ2534DriverCheck.Inspect(_nativeDriver.FullPath);
+            if (!string.Equals(identity.Sha256, _nativeDriver.Sha256, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "J2534 driver file changed since selection. Disconnect and reselect.");
+            _nativeApi = new NativeJ2534StdCallApi(identity.FullPath);
+            NativeSession = new NativeOwnedCanSession(_nativeApi,
+                () => Channel == null && Device == null && Api == null && _monitorThread == null);
+            try
+            {
+                NativeSession.Start(true);
+            }
+            catch
+            {
+                // Start() handles partial channel cleanup; never hide a failed
+                // close by discarding a still-owned session.
+                StopNativeCapture();
+                throw;
+            }
+        }
+
+        public void StopNativeCapture()
+        {
+            if (NativeSession != null)
+            {
+                NativeSession.Stop();    // Throws and retains ownership on unsafe cleanup.
+                NativeSession.Dispose();
+                NativeSession = null;
+            }
+            if (_nativeApi != null)
+            {
+                _nativeApi.Dispose();   // Does not unload while handles may remain.
+                _nativeApi = null;
+            }
+        }
+
         private void StopVinMonitorSafely()
         {
             ChannelLifecyclePolicy.RequireUnowned(ReceiveGate);
@@ -102,6 +172,12 @@ namespace J2534Diag
         public void Disconnect()
         {
             StopVinMonitorSafely();
+            if (NativeModeSelected || NativeSession != null || _nativeApi != null)
+            {
+                StopNativeCapture();    // Refuses to discard handles on failure.
+                _nativeDriver = null;
+                CaptureOnlyMode = false;
+            }
             CloseChannelAndDevice();
             ReleaseManagedLeaseIfClosed();
             _mainForm?.UpdateSelectedVehicle(false, null);

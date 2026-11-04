@@ -60,6 +60,10 @@ namespace J2534Diag
                 else records.Add(new CanReceivedFrame {
                     Data = f.Data == null ? null : (byte[])f.Data.Clone(),
                     TimestampRaw = f.TimestampRaw, RxStatusRaw = f.RxStatusRaw,
+                    NativeProtocolId = f.NativeProtocolId,
+                    NativeTxFlags = f.NativeTxFlags,
+                    NativeDataSize = f.NativeDataSize,
+                    NativeExtraDataIndex = f.NativeExtraDataIndex,
                     ReadResult = label });
             }
             if (r.Status == 0x12)

@@ -20,6 +20,10 @@ namespace J2534Diag
         public uint? RxStatusRaw { get; set; }
         // Unmodified GetMessages ResultCode enum name, if supplied.
         public string ReadResult { get; set; }
+        public uint? NativeProtocolId { get; set; }
+        public uint? NativeTxFlags { get; set; }
+        public uint? NativeDataSize { get; set; }
+        public uint? NativeExtraDataIndex { get; set; }
     }
 
     public interface ICanFrameBatchSource
@@ -62,8 +66,19 @@ namespace J2534Diag
         }
     }
 
+    public sealed class CanRejectedRecord
+    {
+        public long BatchOrdinal { get; internal set; }
+        public int SlotIndex { get; internal set; }
+        public CanFrameRejectionKind Reason { get; internal set; }
+        public CanReceivedFrame Frame { get; internal set; }
+    }
+
     public sealed class CanCaptureSummary
     {
+        public const int RejectionEvidenceLimit = 64;
+        internal readonly List<CanRejectedRecord> RejectionEvidence = new List<CanRejectedRecord>();
+        public long RejectionEvidenceOmitted { get; internal set; }
         public int StoredFrames { get; internal set; }
         public int InvalidFrames { get; internal set; }
         // J2534 indication/status records are not malformed bus frames.
@@ -148,6 +163,7 @@ namespace J2534Diag
             LastSummary = summary;
             summary.TimingFrequency = Stopwatch.Frequency;
 
+            long batchOrdinal = 0;
             while (!cancellation.IsCancellationRequested && summary.StoredFrames < _maximumFrames)
             {
                 int requested = Math.Min(_readMaximum, _maximumFrames - summary.StoredFrames);
@@ -216,8 +232,10 @@ namespace J2534Diag
 
                 // Do not abort part-way through a batch on cancellation; those
                 // frames have already been removed from the device-side queue.
-                foreach (var frame in batch)
+                batchOrdinal++;
+                for (int slotIndex = 0; slotIndex < batch.Count; slotIndex++)
                 {
+                    var frame = batch[slotIndex];
                     if (summary.StoredFrames >= _maximumFrames)
                     {
                         summary.ExcessReturnedFrames++;
@@ -230,6 +248,17 @@ namespace J2534Diag
                     if (!CanFrameClassifier.TryValidate(frame, out uint id,
                         out CanFrameRejectionKind rejection))
                     {
+                        if (summary.RejectionEvidence.Count < CanCaptureSummary.RejectionEvidenceLimit)
+                            summary.RejectionEvidence.Add(new CanRejectedRecord
+                            {
+                                BatchOrdinal = batchOrdinal,
+                                SlotIndex = slotIndex,
+                                Reason = rejection,
+                                Frame = frame
+                            });
+                        else
+                            summary.RejectionEvidenceOmitted++;
+
                         switch (rejection)
                         {
                             case CanFrameRejectionKind.J2534Indication:

@@ -542,22 +542,22 @@ namespace J2534Diag
                     _lastCaptureSummary.DriverBufferOverflowEvents > 0)) ||
                 integrityFailure != null)
             {
-                string message = (_limitReached ? "Capture reached its configured frame limit; later frames are not recorded.\n" : "") +
-                    (_invalidFrames > 0 ? $"Malformed J2534 records ignored: {_invalidFrames}.\n" : "") +
+                string message = CanCaptureIntegrityReport.DescribeDiskOutcome(diskStatus, _invalidFrames) +
+                    (_limitReached ? "Capture reached its configured frame limit; later frames are not recorded.\n" : "") +
                     (_excessReturnedFrames > 0 ? $"Frames returned beyond requested limit: {_excessReturnedFrames}.\n" : "") +
                     (_lastCaptureSummary?.DriverBufferOverflowEvents > 0
                         ? $"J2534 reported receive-buffer overflow {_lastCaptureSummary.DriverBufferOverflowEvents} time(s). Some frames may be irrecoverably lost.\n" : "") +
                     (_lastCaptureSummary?.OtherStatusReadCalls > 0 || _lastCaptureSummary?.ReadCallsWithoutStatus > 0
                         ? "J2534 returned unrecognized/unavailable read status. Review the integrity report.\n" : "") +
                     (_listenerFailure != null ? "Capture stopped with driver error: " + _listenerFailure + "\n" : "") +
-                    (diskStatus != null && !diskStatus.ApplicationWriteComplete
-                        ? $"Disk integrity warning: enqueued={diskStatus.Accepted}, written={diskStatus.Written}, queue drops={diskStatus.QueueFullDrops}, unwritten={diskStatus.AcceptedNotWritten}, writer error={diskStatus.WriterError ?? "none"}.\n" : "") +
                     (integrityFailure != null ? "Could not write capture integrity report: " + integrityFailure : "");
-                MessageBox.Show(message + (diskStatus != null ? "\nFile: " + _diskLogPath : ""), "Incomplete CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(message + (diskStatus != null ? "\nCSV: " + _diskLogPath : "") +
+                    (diskStatus != null && integrityFailure == null ? "\nIntegrity report: " + _diskLogPath + ".integrity.txt" : ""),
+                    "CAN capture warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             else if (diskStatus != null)
             {
-                MessageBox.Show("Disk capture closed and application-level writes accounted for.\nCSV: " + _diskLogPath + "\nIntegrity report: " + _diskLogPath + ".integrity.txt" +
+                MessageBox.Show(CanCaptureIntegrityReport.DescribeDiskOutcome(diskStatus, 0) + "CSV: " + _diskLogPath + "\nIntegrity report: " + _diskLogPath + ".integrity.txt" +
                     (_lastCaptureSummary?.IgnoredIndicationRecords > 0
                         ? "\nJ2534 control/indication records excluded from CAN data: " +
                           _lastCaptureSummary.IgnoredIndicationRecords : "") +

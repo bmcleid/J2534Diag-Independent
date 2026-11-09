@@ -124,6 +124,16 @@ namespace J2534Diag
             }
         }
 
+        public static string DescribeDiskOutcome(CanDiskLogStatus status, long excludedRecords)
+        {
+            string disk = status == null ? "" : status.ApplicationWriteComplete
+                ? $"All {status.Written:N0} accepted CAN frames were saved.\n"
+                : $"Disk integrity warning: enqueued={status.Accepted}, written={status.Written}, queue drops={status.QueueFullDrops}, unwritten={status.AcceptedNotWritten}, writer error={status.WriterError ?? "none"}.\n";
+            return disk + (excludedRecords > 0
+                ? $"J2534 records excluded from CAN data: {excludedRecords:N0}.\n"
+                : "");
+        }
+
         private static void WriteField(TextWriter writer, string key, object value)
         {
             string result = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";

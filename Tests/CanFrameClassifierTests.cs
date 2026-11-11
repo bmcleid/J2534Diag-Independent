@@ -21,6 +21,7 @@ namespace J2534Diag.Tests
             RejectBadHeadersAndOversizePayloads();
             MaintainDistinctPumpRejectionCounters();
             ReturnAcceptedBusDataOnly();
+            BoundRejectedEvidenceAndPreserveAcceptedRows();
             return _checks;
         }
 
@@ -127,6 +128,38 @@ namespace J2534Diag.Tests
             Check(result.ExcessReturnedFrames == 0, "Rejected data incorrectly consumed the frame cap");
             Check(stored[0].ArbId == "0x7EA" && stored[1].ArbId == "0x7E8",
                 "Rejected records changed accepted CAN order");
+        }
+
+        private static void BoundRejectedEvidenceAndPreserveAcceptedRows()
+        {
+            var batch = new CanReceivedFrame[66];
+            for (int i = 0; i < 65; i++)
+                batch[i] = new CanReceivedFrame { Data = new byte[] { (byte)i } };
+            batch[65] = Raw(0x7EA, 0, 0x11);
+            var stored = new List<CanCaptureRecord>();
+            var result = new CanCapturePump(new OneBatch(batch), 1,
+                () => new DateTime(2026, 11, 4, 12, 0, 0, DateTimeKind.Utc), null)
+                .Run(CancellationToken.None, stored.Add);
+            Check(result.InvalidFrames == 65 && result.RejectionEvidence.Count == 64 &&
+                result.RejectionEvidenceOmitted == 1, "Evidence cap changed rejection accounting");
+            Check(result.RejectionEvidence[63].SlotIndex == 63 &&
+                result.RejectionEvidence[63].Frame.Data[0] == 63 &&
+                stored.Count == 1 && stored[0].Index == 1 && stored[0].Data == "11",
+                "Evidence cap changed retained records or accepted CSV rows");
+            using (var report = new System.IO.StringWriter())
+            {
+                CanCaptureIntegrityReport.Write(report, "capture.csv",
+                    new CanDiskLogStatus { Accepted = 1, Written = 1, Closed = true },
+                    1, result.InvalidFrames, 0, false, null,
+                    new DateTime(2026, 11, 4, 12, 0, 0, DateTimeKind.Utc), result);
+                string contents = report.ToString();
+                Check(contents.Contains("RejectedRecordContentsRetained=PARTIAL") &&
+                    contents.Contains("RejectedRecordEvidenceOmitted=1") &&
+                    contents.Contains("RejectedRecord64.DataHex=3F") &&
+                    contents.Contains("AcceptedDiskWritesComplete=True") &&
+                    contents.Contains("ApplicationWriteComplete=False"),
+                    "Integrity report lost rejection or accepted disk accounting");
+            }
         }
 
         private static void ReturnAcceptedBusDataOnly()

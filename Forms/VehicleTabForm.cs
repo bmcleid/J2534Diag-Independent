@@ -44,6 +44,11 @@ namespace J2534Diag
             Dock = DockStyle.Fill,
             DropDownStyle = ComboBoxStyle.DropDownList
         };
+        private readonly ComboBox _receiverSelect = new ComboBox
+        {
+            Dock = DockStyle.Fill,
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
 
 
         public VehicleTabForm(MainForm mainForm, J2534Manager j2534Manager)
@@ -54,18 +59,19 @@ namespace J2534Diag
             // asking. Capture-only is now the explicit default and CAN bit
             // width must be chosen independently of vehicle identification.
             tableLayoutPanel1.SuspendLayout();
-            tableLayoutPanel1.RowCount = 7;
+            tableLayoutPanel1.RowCount = 8;
             tableLayoutPanel1.RowStyles.Clear();
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tableLayoutPanel1.SetRow(btnConnect, 4);
-            tableLayoutPanel1.SetRow(pictureBox1, 6);
-            tableLayoutPanel1.Controls.Add(_disconnectButton, 0, 5);
+            tableLayoutPanel1.SetRow(btnConnect, 5);
+            tableLayoutPanel1.SetRow(pictureBox1, 7);
+            tableLayoutPanel1.Controls.Add(_disconnectButton, 0, 6);
             _disconnectButton.Click += DisconnectButton_Click;
             tableLayoutPanel1.Controls.Add(_captureOnlyCheck, 0, 2);
             _canWidthSelect.Items.AddRange(new object[]
@@ -75,8 +81,31 @@ namespace J2534Diag
             });
             _canWidthSelect.SelectedIndex = 0;
             tableLayoutPanel1.Controls.Add(_canWidthSelect, 0, 3);
+            _receiverSelect.Items.AddRange(new object[]
+            {
+                "Original J2534-Sharp receiver",
+                "Direct native CAN receiver (experimental, capture-only)"
+            });
+            _receiverSelect.SelectedIndex = 0;
+            tableLayoutPanel1.Controls.Add(_receiverSelect, 0, 4);
+            _receiverSelect.SelectedIndexChanged += (sender, args) =>
+            {
+                if (_receiverSelect.SelectedIndex == 1)
+                {
+                    _captureOnlyCheck.Checked = true;
+                    _captureOnlyCheck.Enabled = false;
+                    _canWidthSelect.SelectedIndex = 0;
+                    _canWidthSelect.Enabled = false;
+                }
+                else
+                {
+                    _captureOnlyCheck.Enabled = true;
+                    _canWidthSelect.Enabled = _captureOnlyCheck.Checked;
+                }
+            };
             _captureOnlyCheck.CheckedChanged += (sender, args) =>
-                _canWidthSelect.Enabled = _captureOnlyCheck.Checked;
+                _canWidthSelect.Enabled = _captureOnlyCheck.Checked &&
+                    _receiverSelect.SelectedIndex == 0;
             tableLayoutPanel1.ResumeLayout(true);
 
             using (var ms = new System.IO.MemoryStream(Resources.J2534Diag))
@@ -153,7 +182,11 @@ namespace J2534Diag
                 j2534Manager.Disconnect();
                 btnConnect.Text = "Connect";
                 _captureOnlyCheck.Enabled = true;
-                _canWidthSelect.Enabled = _captureOnlyCheck.Checked;
+                _canWidthSelect.Enabled = _captureOnlyCheck.Checked &&
+                    _receiverSelect.SelectedIndex == 0;
+                _receiverSelect.Enabled = true;
+                cbDevices.Enabled = true;
+                mainForm.UpdateSelectedVehicle(false, null);
             }
             catch (Exception ex)
             {
@@ -163,7 +196,7 @@ namespace J2534Diag
             }
             finally
             {
-                _disconnectButton.Enabled = j2534Manager.Channel != null;
+                _disconnectButton.Enabled = j2534Manager.HasConnectionOrSelection;
             }
         }
 
@@ -182,7 +215,42 @@ namespace J2534Diag
                 }
 
                 var selectedApi = j2534Manager.Devices[cbDevices.SelectedIndex];
-                if (_captureOnlyCheck.Checked)
+                if (j2534Manager.HasConnectionOrSelection)
+                    throw new InvalidOperationException(
+                        "Disconnect the current receiver and stop capture before switching.");
+                if (_receiverSelect.SelectedIndex == 1)
+                {
+                    // The path comes from the local installed/registered
+                    // J2534 API entry, NOT from an assumed TOPDON pathname.
+                    // This preflight reads the real PC DLL but does not load it.
+                    var identity = NativeJ2534DriverCheck.Inspect(selectedApi.Filename);
+                    if (MessageBox.Show(
+                        identity.Summary +
+                        "\n\nThe native receiver is experimental. " +
+                        "No manufacturer-specific compatibility is proved yet. " +
+                        "This mode never transmits application diagnostic messages, " +
+                        "but CAN hardware may still acknowledge frames.\n\n" +
+                        "Prepare this receiver for a capture?",
+                        "Native J2534 driver verification",
+                        MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                        return;
+                    j2534Manager.PrepareNativeCaptureOnly(selectedApi.Filename);
+                    btnConnect.Text = "Native ready — Start in CAN Listener";
+                    mainForm.UpdateSelectedVehicle(true, null);
+                    _disconnectButton.Enabled = true;
+                    _receiverSelect.Enabled = false;
+                    cbDevices.Enabled = false;
+                    MessageBox.Show(
+                        "Native mode prepared. The device is NOT OPEN yet.\n" +
+                        "Go to CAN Listener and click Start. The app will open " +
+                        "and filter the CAN channel immediately before reading.\n" +
+                        "Stop closes the native channel. Disk log and integrity " +
+                        "reports use the existing J2534Diag writer.\n" +
+                        "Vehicle-bus losslessness remains UNVERIFIED.",
+                        "Native receiver prepared", MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
+                else if (_captureOnlyCheck.Checked)
                 {
                     var selectedWidth = _canWidthSelect.SelectedIndex == 1
                         ? BitType.BITS_29 : BitType.BITS_11;
@@ -190,6 +258,8 @@ namespace J2534Diag
                     btnConnect.Text = "Capture-only connected";
                     mainForm.UpdateSelectedVehicle(true, null);
                     _disconnectButton.Enabled = true;
+                    _receiverSelect.Enabled = false;
+                    cbDevices.Enabled = false;
                     MessageBox.Show(
                         "Capture-only CAN channel opened. No application VIN/PID queries will be sent by this mode.\n" +
                         "Open CAN Listener, optionally enable Disk log, and click Start to capture.\n" +
@@ -204,12 +274,16 @@ namespace J2534Diag
                     mainForm.UpdateSelectedVehicle(j2534Manager.Channel != null, j2534Manager.Vin);
                     btnConnect.Text = "Active diagnostics connected";
                     _disconnectButton.Enabled = true;
+                    _receiverSelect.Enabled = false;
+                    cbDevices.Enabled = false;
                 }
             }
             catch (Exception ex)
             {
                 btnConnect.Text = "Connect";
-                _disconnectButton.Enabled = j2534Manager.Channel != null;
+                _disconnectButton.Enabled = j2534Manager.HasConnectionOrSelection;
+                _receiverSelect.Enabled = !j2534Manager.HasConnectionOrSelection;
+                cbDevices.Enabled = !j2534Manager.HasConnectionOrSelection;
                 MessageBox.Show($"J2534 Error: {ex.Message}", "J2534 Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }

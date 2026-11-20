@@ -178,7 +178,6 @@ namespace J2534Diag
                 }
                 catch (CanReceiveBufferOverflowException ex)
                 {
-                    AccumulateReadElapsed(summary, Stopwatch.GetTimestamp() - readBegin);
                     summary.DriverBufferOverflowEvents++;
                     summary.DriverReadErrors++;
                     reportedOverflow = ex;
@@ -195,12 +194,16 @@ namespace J2534Diag
                 }
                 catch (Exception)
                 {
-                    AccumulateReadElapsed(summary, Stopwatch.GetTimestamp() - readBegin);
                     summary.DriverReadErrors++;
                     throw;
                 }
+                finally
+                {
+                    // Every attempted native read contributes exactly once,
+                    // including overflow responses and other exceptions.
+                    AccumulateReadElapsed(summary, Stopwatch.GetTimestamp() - readBegin);
+                }
 
-                AccumulateReadElapsed(summary, Stopwatch.GetTimestamp() - readBegin);
                 long processingBegin = Stopwatch.GetTimestamp();
                 // Empty reads still matter: they do not create frame rows,
                 // so preserve per-call status in the independent summary.

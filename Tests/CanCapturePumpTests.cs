@@ -358,7 +358,7 @@ namespace J2534Diag.Tests
             var pump = new CanCapturePump(source, 1, () => TestClock, null);
             var summary = pump.Run(CancellationToken.None, _ => { });
             Check(summary.TimingFrequency > 0, "Monotonic clock frequency unavailable");
-            Check(summary.ReadCallElapsedTicksTotal >= summary.ReadCallElapsedTicksMax &&
+            Check(summary.ReadCallElapsedTicksTotal == summary.ReadCallElapsedTicksMax &&
                   summary.ReadCallElapsedTicksMax >= 0,
                 "Driver read timings inconsistent");
             Check(summary.ProcessingElapsedTicksTotal >= summary.ProcessingElapsedTicksMax &&
@@ -407,6 +407,8 @@ namespace J2534Diag.Tests
             bool overflowThrown = false;
             try { pump.Run(CancellationToken.None, received.Add); }
             catch (CanReceiveBufferOverflowException) { overflowThrown = true; }
+            Check(pump.LastSummary.ReadCallElapsedTicksTotal == pump.LastSummary.ReadCallElapsedTicksMax,
+                "A single native read duration must be accumulated exactly once");
             Check(overflowThrown, "Overflow suppressed after partial rows");
             Check(received.Count == 2 && pump.LastSummary.StoredFrames == 2,
                 "Returned overflow rows were lost before callback");
@@ -437,6 +439,8 @@ namespace J2534Diag.Tests
             bool overflowThrown = false;
             try { pump.Run(CancellationToken.None, stored.Add); }
             catch (CanReceiveBufferOverflowException) { overflowThrown = true; }
+            Check(pump.LastSummary.ReadCallElapsedTicksTotal == pump.LastSummary.ReadCallElapsedTicksMax,
+                "A single native read duration must be accumulated exactly once");
             Check(overflowThrown && stored.Count == 0,
                 "Over-requested native overflow batch was incorrectly accepted");
             Check(pump.LastSummary.ExcessReturnedFrames == 201 &&
@@ -484,6 +488,8 @@ namespace J2534Diag.Tests
                 "Hardware overflow was not counted");
             Check(pump.LastSummary.DriverReadErrors == 1,
                 "Overflow was not included in driver-error count");
+            Check(pump.LastSummary.ReadCallElapsedTicksTotal == pump.LastSummary.ReadCallElapsedTicksMax,
+                "A single native read duration must be accumulated exactly once");
             Check(pump.LastSummary.StoredFrames == 0, "Overflow created a fake frame");
 
             var general = new FakeSource { Fail = true };
@@ -494,6 +500,8 @@ namespace J2534Diag.Tests
                 throw new Exception("General read failure was suppressed");
             }
             catch (InvalidOperationException) { }
+            Check(normalFailure.LastSummary.ReadCallElapsedTicksTotal == normalFailure.LastSummary.ReadCallElapsedTicksMax,
+                "A single native read duration must be accumulated exactly once");
             Check(normalFailure.LastSummary.DriverBufferOverflowEvents == 0,
                 "General error incorrectly classified as receive-buffer overflow");
             Check(normalFailure.LastSummary.DriverReadErrors == 1,

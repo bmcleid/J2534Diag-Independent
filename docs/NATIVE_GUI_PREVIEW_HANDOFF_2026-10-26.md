@@ -128,3 +128,15 @@ Source commit 9fc8f6776a6fe093e0f9542fb04090824e021ebc on feature/native-gui-cap
 
 ### 2026-11-09 — JDIAG-P3-R8 Windows preview preserved
 J2534Diag-R8-Windows.zip saved in the SRX project Library as libfile_1d17c4f0038081918477f917b8cdc391. Upload confirmed at 1,846,971 bytes. Before upload, downloaded artifact 13703944668 from Windows run 42687759758 matched GitHub SHA-256 39a3427baea4be9123bde5e82a86e3b1e70548bd505a9b20a9691dd08a662c9b, ZIP CRC, all seven manifest file hashes, source 9fc8f6776a6fe093e0f9542fb04090824e021ebc and run identity. Windows regression and native synthetic results remain the validation for this wording change; R5 Nov9 field evidence remains valid. No additional vehicle capture required. [skip ci]
+
+
+### 2026-11-20 — JDIAG-P3-R9 overflow read timing corrected
+**Owner/source:** Part 3 Analyze J2534Diag; `feature/native-gui-capture-preview`, source commit `a5cc7f15d03f853e6ba95f5700a4f17fbfddebfa`; draft PR #29 remains unmerged. Refreshed Shared Project Index, canonical registry, cross-track coordination, CI policy, owner handoff, branch/PR chain and recent Windows job logs before development.
+
+**CONFIRMED software finding:** the Nov2 audit's outstanding timing defect was present: an overflow read accumulated duration in its catch and again after the catch. Moved accumulation into one finally block, covering normal completion, partial/empty overflow, over-requested overflow rejection and ordinary read exceptions. Existing frame preservation, overflow failure and loss counters remain covered by tests.
+
+**Verification:** new single-read total-equals-maximum checks failed against the pre-fix source with “A single native read duration must be accumulated exactly once.” Fixed capture-pump suite passed 77 local assertions using .NET SDK 8.0.408/C# 7.3. [Windows run 44756766945](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/44756766945), job 136358421055, SUCCESS: zero build errors, 6,489 assertions across 64 regression tests, 29 isolated real-DLL StdCall synthetic assertions, manifest verification and artifact upload passed. One hosted run for this source artifact, no rerun. Committed source and tests were read back equal to intended content.
+
+**Evidence/limits:** original vehicle evidence unchanged. Nov9 R5 capture reported zero overflows, so its timing findings are unaffected. Older captures reporting overflow can have inflated total host read duration; do not infer corrected values retrospectively. Software/synthetic verification does not establish TOPDON overflow behavior or bus-lossless reception. Manufacturer meaning of RxStatus 0x00400000 remains UNVERIFIED. No vehicle test, code clear, ECU command or branch merge performed. No repeat capture is justified solely for this telemetry correction.
+
+**Next checkpoint:** retain R5 field evidence and R8 warning verification; review original CSV and matching integrity report from the next naturally needed capture before recommending further hardware work. The Nov2 timing defect is resolved in source; the unknown driver flag remains open. [skip ci]

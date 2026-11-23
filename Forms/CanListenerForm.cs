@@ -305,7 +305,46 @@ namespace J2534Diag
 
         private void CanListenerForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            if (!StopListening()) e.Cancel = true;
+            if (!PrepareToClose()) e.Cancel = true;
+        }
+
+
+        // MainForm must consult this separately from receive ownership: a
+        // stopped receiver can still have unsaved finalized evidence.
+        public bool PrepareToClose()
+        {
+            if (!StopListening()) return false;
+            if (_pendingIntegrityReport == null) return true;
+            if (MessageBox.Show(
+                "The finalized integrity report has not been saved. Save a recovery copy before closing?\n" +
+                "Choose No to keep the application open and use Retry integrity.",
+                "Unsaved integrity report", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                return false;
+            using (var dialog = new SaveFileDialog
+            {
+                Filter = "Recovery reports (*.txt)|*.txt",
+                FileName = Path.GetFileName(_pendingIntegrityReport.SidecarPath) + ".recovery.txt",
+                OverwritePrompt = false
+            })
+            {
+                if (dialog.ShowDialog() != DialogResult.OK) return false;
+                try
+                {
+                    _pendingIntegrityReport.SaveRecoveryCopy(dialog.FileName);
+                    if (!_pendingIntegrityReport.IsPreserved) return false;
+                    _pendingIntegrityReport = null;
+                    _retryReportButton.Visible = false;
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Recovery copy could not be saved: " + ex.Message +
+                        "\nThe application will remain open with the report retained.",
+                        "Integrity report pending", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return false;
+                }
+            }
         }
 
         private void btnStart_Click(object sender, EventArgs e)

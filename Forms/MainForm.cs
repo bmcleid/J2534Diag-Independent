@@ -141,7 +141,11 @@ namespace J2534Diag
             // Stop in-process readers before disposing the shared J2534 channel.
             // A blocked driver read retains ownership; keep the application open
             // rather than unloading the driver beneath an active worker.
-            canListenerForm?.StopListening();
+            if (canListenerForm != null && !canListenerForm.PrepareToClose())
+            {
+                e.Cancel = true;
+                return;
+            }
             fuelTrimForm?.StopListening();
             misfireForm?.StopListening();
             if (j2534Manager?.ReceiveGate.CurrentOwner != null)

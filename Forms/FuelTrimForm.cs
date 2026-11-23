@@ -18,13 +18,6 @@ namespace J2534Diag
 {
     public partial class FuelTrimForm : Form
     {
-        private enum LiveDataProtocol
-        {
-            Auto,
-            Obd,
-            Uds
-        }
-
         public struct MSG
         {
             public string id;
@@ -61,11 +54,6 @@ namespace J2534Diag
         private readonly Dictionary<string, Tuple<FuelTrimInput, long, int>> _pendingSamples =
             new Dictionary<string, Tuple<FuelTrimInput, long, int>>();
         private bool _sampleRefreshQueued;
-        private DateTime _liveDataProtocolWindowStart = DateTime.MinValue;
-        private DateTime _lastObdResponseTime = DateTime.MinValue;
-        private DateTime _lastUdsResponseTime = DateTime.MinValue;
-        private readonly TimeSpan _liveDataProtocolProbeWindow = TimeSpan.FromMilliseconds(1500);
-
         public bool BatchMode { get; private set; } = false;
 
         public FuelTrimForm(J2534Manager j2534Manager)
@@ -82,7 +70,7 @@ namespace J2534Diag
             flpActions.Controls.Add(_responseSource);
             flpActions.Controls.Add(new Label
             {
-                Text = "2 s freshness (app policy). Grids show observed history; address is not ECU identity.",
+                Text = "Mode 01 polling only. 2 s freshness (app policy). Grids show observed history; address is not ECU identity.",
                 AutoSize = true
             });
             tlpRight.RowStyles[1].Height = 76;
@@ -200,9 +188,6 @@ namespace J2534Diag
             RefreshFuelDisplay(false);
             _ownsReceiveChannel = true;
             _cts = new CancellationTokenSource();
-            _liveDataProtocolWindowStart = DateTime.UtcNow;
-            _lastObdResponseTime = DateTime.MinValue;
-            _lastUdsResponseTime = DateTime.MinValue;
 
             try
             {
@@ -263,57 +248,27 @@ namespace J2534Diag
 
                     while (!_cts.IsCancellationRequested && j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
                     {
-                        var protocol = GetLiveDataProtocolToPoll();
-                        if (protocol == LiveDataProtocol.Uds)
+                        // Do not probe UDS-F4 as a fallback. Its applicability is
+                        // unverified for this vehicle; missing OBD replies stay unknown.
+                        foreach (var pid in ObdPids.Where(p => p.Enabled))
                         {
-                            foreach (var pid in UdsPids.Where(p => p.Enabled))
+                            if (_cts.IsCancellationRequested || j2534Manager.Channel == null ||
+                                j2534Manager.Channel.IsDisposed) break;
+                            var request = BuildObdPidRequest(pid, j2534Manager.BitMode);
+                            if (_cts.IsCancellationRequested || j2534Manager.Channel == null ||
+                                j2534Manager.Channel.IsDisposed) return;
+                            try
                             {
-                                if (_cts.IsCancellationRequested || j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed)
-                                {
-                                    break;
-                                }
-
-                                var request = BuildUdsPidRequest(pid, j2534Manager.BitMode);
-                                if (_cts.IsCancellationRequested || j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed) return;
-                                try
-                                {
-                                    Debug.WriteLine($"Sending UDS DID request: {BitConverter.ToString(request)} (Time: {DateTime.Now:HH:mm:ss.fff})");
-                                    j2534Manager.SendDiagnosticMessage(request);
-                                }
-                                catch (J2534Exception ex)
-                                {
-                                    Debug.WriteLine($"Error sending message: {ex.Message}");
-                                    return;
-                                }
-                                Thread.Sleep(2);
+                                j2534Manager.SendDiagnosticMessage(request);
                             }
-                        }
-                        else
-                        {
-                            foreach (var pid in ObdPids.Where(p => p.Enabled))
+                            catch (J2534Exception ex)
                             {
-                                if (_cts.IsCancellationRequested || j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed)
-                                {
-                                    break;
-                                }
-
-                                var request = BuildObdPidRequest(pid, j2534Manager.BitMode);
-                                if (_cts.IsCancellationRequested || j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed) return;
-                                try
-                                {
-                                    Debug.WriteLine($"Sending OBD PID request: {BitConverter.ToString(request)} (Time: {DateTime.Now:HH:mm:ss.fff})");
-                                    j2534Manager.SendDiagnosticMessage(request);
-                                }
-                                catch (J2534Exception ex)
-                                {
-                                    Debug.WriteLine($"Error sending message: {ex.Message}");
-                                    return;
-                                }
-                                Thread.Sleep(2);
+                                Debug.WriteLine($"Error sending message: {ex.Message}");
+                                return;
                             }
+                            Thread.Sleep(2);
                         }
-
-                        Thread.Sleep(protocol == LiveDataProtocol.Uds ? 10 : 5);
+                        Thread.Sleep(5);
 
                     }
                 })
@@ -325,29 +280,6 @@ namespace J2534Diag
                 Debug.WriteLine($"Error starting API and threads: {ex.Message}");
                 StopListening();
             }
-        }
-
-        private byte[] BuildUdsPidRequest(UdsPid pid, BitType bitMode)
-        {
-            var request = new byte[12];
-
-            if (bitMode == BitType.BITS_11)
-            {
-                request[0] = 0x00;
-                request[1] = 0x00;
-                request[2] = 0x07;
-                request[3] = 0xDF;
-            }
-            else
-            {
-                Array.Copy(pid.ArbId, 0, request, 0, 4);
-            }
-
-            request[4] = pid.Length;
-            request[5] = pid.Service;
-            request[6] = pid.DidHighByte;
-            request[7] = pid.DidLowByte;
-            return request;
         }
 
         private void QueueScalarSample(byte[] data, uint rxStatus, int generation)
@@ -397,14 +329,12 @@ namespace J2534Diag
                     var definition = ObdPids.FirstOrDefault(p => p.Pid == input.Pid);
                     if (definition == null) continue;
                     value = definition.Formula(input.Data);
-                    _lastObdResponseTime = DateTime.UtcNow;
                 }
                 else
                 {
                     UdsPid definition;
                     if (!_udsPidsByDidLowByte.TryGetValue(input.Pid, out definition)) continue;
                     value = definition.Formula(input.Data);
-                    _lastUdsResponseTime = DateTime.UtcNow;
                 }
                 if (!_samples.Update(input.SourceKey, input.Pid, value, queued.Item2)) continue;
                 if (!_responseSource.Items.Contains(input.SourceKey))
@@ -415,38 +345,6 @@ namespace J2534Diag
                 accepted = true;
             }
             RefreshFuelDisplay(accepted);
-        }
-
-        private LiveDataProtocol GetLiveDataProtocolToPoll()
-        {
-            if (_lastObdResponseTime != DateTime.MinValue)
-            {
-                return LiveDataProtocol.Obd;
-            }
-
-            if (_lastUdsResponseTime != DateTime.MinValue)
-            {
-                return LiveDataProtocol.Uds;
-            }
-
-            if (_liveDataProtocolWindowStart == DateTime.MinValue)
-            {
-                _liveDataProtocolWindowStart = DateTime.UtcNow;
-            }
-
-            var elapsed = DateTime.UtcNow - _liveDataProtocolWindowStart;
-            if (elapsed < _liveDataProtocolProbeWindow)
-            {
-                return LiveDataProtocol.Obd;
-            }
-
-            if (elapsed < _liveDataProtocolProbeWindow + _liveDataProtocolProbeWindow)
-            {
-                return LiveDataProtocol.Uds;
-            }
-
-            _liveDataProtocolWindowStart = DateTime.UtcNow;
-            return LiveDataProtocol.Obd;
         }
 
         byte[] BuildObdPidRequest(ObdPid pid, BitType bitMode)

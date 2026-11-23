@@ -21,6 +21,11 @@
       <HintPath>..\packages\J2534-Sharp.1.0.0-CI00036\lib\net48\J2534-Sharp.dll</HintPath>
     </Reference>
     <Compile Include="CanCaptureCsvTests.cs" />
+    <Compile Include="VinStartupTests.cs" />
+    <Compile Include="baseline\LegacyIsoTpParser.cs" />
+    <Compile Include="..\Services\IsoTpParser.cs"><Link>IsoTpParser.cs</Link></Compile>
+    <Compile Include="..\Models\IsoTpFrameEventArgs.cs"><Link>IsoTpFrameEventArgs.cs</Link></Compile>
+    <Compile Include="..\Models\IseTpFrameType.cs"><Link>IseTpFrameType.cs</Link></Compile>
     <Compile Include="FuelTrimSampleStateTests.cs" />
     <Compile Include="FuelTrimFormIntegrationTests.cs" />
     <Compile Include="..\Services\FuelTrimSampleState.cs"><Link>FuelTrimSampleState.cs</Link></Compile>
@@ -66,3 +71,4 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
+

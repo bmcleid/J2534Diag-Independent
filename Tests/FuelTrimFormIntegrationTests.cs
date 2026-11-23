@@ -60,7 +60,9 @@ namespace J2534Diag.Tests
 
         public static int RunManaged(string[] args)
         {
-            bool vinBootstrap = args.Length > 0 && args[0] == "--ci-managed-vin";
+            bool missingVin = args.Length > 0 && args[0] == "--ci-managed-vin-failure";
+            bool legacyFailure = args.Length > 0 && args[0] == "--ci-managed-vin-legacy";
+            bool vinBootstrap = missingVin || legacyFailure || (args.Length > 0 && args[0] == "--ci-managed-vin");
             if (args.Length != 2 || (!vinBootstrap && args[0] != "--ci-managed-sim") ||
                 Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
                 Environment.GetEnvironmentVariable("SRX_MANAGED_SIM_CI") != "ALLOW")
@@ -75,7 +77,8 @@ namespace J2534Diag.Tests
             if (digest != Environment.GetEnvironmentVariable("SRX_MANAGED_SIM_DLL_SHA256"))
                 throw new InvalidOperationException("Virtual DLL hash mismatch");
             string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
-            var assembly = Assembly.LoadFrom(Path.Combine(root, "bin", "Release", "J2534Diag.exe"));
+            var assembly = Assembly.LoadFrom(legacyFailure ? Environment.GetEnvironmentVariable("SRX_BASELINE_APP") :
+                Path.Combine(root, "bin", "Release", "J2534Diag.exe"));
             var managerType = assembly.GetType("J2534Diag.J2534Manager", true);
             object manager = FormatterServices.GetUninitializedObject(managerType);
             object receiveGate = Activator.CreateInstance(assembly.GetType("J2534Diag.ReceiveChannelGate", true));
@@ -93,6 +96,37 @@ namespace J2534Diag.Tests
                         BindingFlags.Instance | BindingFlags.NonPublic);
                     frameEvent.AddEventHandler(parser, Delegate.CreateDelegate(frameEvent.EventHandlerType, manager, callback));
                     Set(manager, "_isoTpParser", parser);
+                    if (missingVin || legacyFailure)
+                    {
+                        var elapsed = Stopwatch.StartNew();
+                        Exception startup = null;
+                        try { Call(manager, "Initialize", dll); }
+                        catch (TargetInvocationException ex) { startup = ex.InnerException; }
+                        if (legacyFailure)
+                        {
+                            Check((bool)managerType.GetProperty("HasConnectionOrSelection").GetValue(manager),
+                                "Historical failed/empty VIN startup ownership leak not reproduced");
+                            Console.WriteLine("PASS: historical R16 unavailable-VIN startup retained resources, defect reproduced; exception=" +
+                                (startup == null ? "none" : startup.GetType().Name));
+                            return 0;
+                        }
+                        Check(startup is InvalidOperationException && startup.Message.StartsWith("No complete VIN"),
+                            "Absent VIN did not end in the explicit identification failure: " + startup);
+                        Check(elapsed.ElapsedMilliseconds >= 8500 && elapsed.ElapsedMilliseconds < 15000,
+                            "VIN fallback attempts not bounded to three original response windows");
+                        Check(managerType.GetProperty("Vin").GetValue(manager) == null, "Absent VIN fabricated identity");
+                        Check(managerType.GetProperty("Channel").GetValue(manager) == null &&
+                            managerType.GetProperty("Device").GetValue(manager) == null &&
+                            managerType.GetProperty("Api").GetValue(manager) == null, "Failed VIN startup left native handles open");
+                        Check(Get(manager, "_monitorThread") == null && Get(manager, "_cts") == null,
+                            "Failed VIN startup retained worker/CTS");
+                        Check(!(bool)managerType.GetProperty("HasConnectionOrSelection").GetValue(manager) &&
+                            !(bool)Get(manager, "_managedLeaseHeld"), "Failed VIN startup retained global ownership");
+                        Check(receiveGate.GetType().GetProperty("CurrentOwner").GetValue(receiveGate) == null,
+                            "Failed VIN startup retained receive lease");
+                        Console.WriteLine("PASS: " + _checks + " actual managed unavailable-VIN cleanup assertions; PROFILE=" + Environment.GetEnvironmentVariable("SRX_MANAGED_PROFILE"));
+                        return 0;
+                    }
                     Call(manager, "Initialize", dll);
                     Check((string)managerType.GetProperty("Vin").GetValue(manager) == syntheticVin,
                         "Normal startup did not reassemble exact synthetic Mode09 VIN");
@@ -274,4 +308,5 @@ namespace J2534Diag.Tests
         }
     }
 }
+
 

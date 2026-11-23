@@ -371,3 +371,52 @@ Successful wire trace contains two normal open/version/raw-CAN500k/filter lifecy
 Normal manager Mode09 bootstrap and reconnect are now confirmed for this virtual profile, superseding the R19 bootstrap gap. This does not validate MainForm provider discovery/selection, absent or partial VIN fallback, source isolation/sequence correctness under malformed ISO-TP, 29-bit paths, installed TOPDON behavior, or actual SRX data/support. WaitNamedPipe is fixture synchronization, not evidence of an automatic retry in production. SendFlowControl currently emits STmin=0 even though the caller passes separationTime=2; observed bytes are recorded, not claimed as two milliseconds.
 
 Next offline gate: inspect/test failed or incomplete VIN startup and cross-source/malformed-frame acceptance before recommending broader vehicle connection testing. Existing parser uses one unscoped buffer and does not check CF sequence; that is a source-confirmed limitation, not yet a demonstrated vehicle failure. No repeat physical handshake or disconnected screenshot is justified.
+
+## R21 — 2026-11-23: all four requested VIN/reliability/readiness steps completed
+
+Owner request: execute missing/incomplete VIN tests, malformed/mixed-source tests, demonstrated fixes plus focused Windows validation, and targeted RLink readiness review. Owning branch feature/native-gui-capture-preview, draft PR #29 stays unmerged. Source **69cd5f000c814543f5b8ba1841175b9650e78228**.
+
+### CONFIRMED software defects and repairs
+
+Historical parser copied exactly from R16 source, only class renamed for isolation. An independently hash-checked actual R16 EXE was also downloaded from prior verified run45236838539 for separate-process manager callback and managed-driver tests.
+
+- Historical parser accepts reversed CF sequence and CFs from another responder as complete. Historical actual manager accepts a complete-length event even when IsComplete=false and accepts a wrong physical responder. Five identity/reproduction checks PASS (one identity plus four defect witnesses).
+- Historical actual managed missing-VIN startup reproduced retained connection ownership after J2534Exception (the known virtual pipe-rearm failure during fallback). Fixture finally disconnected it. This proves retained resources after failed startup; it does not claim that this virtual driver exception is an installed TOPDON failure or that a silent real vehicle always produces the same exception.
+- Fixed parser separates at most eight responder assemblies, validates classical CAN lengths, expected CF sequence including rollover, exact completion length/padding, and a one-second host assembly gap. Reset retires previous connection state. Wrong/truncated/duplicate/orphan CFs cannot complete a VIN; fresh requests recover.
+- Fixed manager filters expected response addresses and active service/record prefix before parsing, sends FC only for the expected 20-byte VIN FF, and selects only a complete exact 20-byte matching response with 17 uppercase alphanumeric bytes. This checks transport/ASCII shape, not VIN check-digit or manufacturer authenticity.
+- No partial VIN is published. Per-attempt parser state is reset. Exhausted attempts now throw an explicit identification failure and stop/join workers, dispose channel/device/API and release ownership; cleanup errors remain explicit with ownership retained.
+- One API/device lifetime now covers the existing three bounded VIN attempts; channels are retired between attempts. Avoids unloading/reopening the provider at each mode switch while preserving normal startup and reconnect.
+- Generic parser is shared with MisfireForm, so its framing checks also change there. Misfire physical behavior is not newly validated; no enhanced service or polling capability was added. SendFlowControl STmin serialization remains the prior observed zero; no two-millisecond pacing claim is made.
+
+### Actual Windows validation
+
+[Run45240442863](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/45240442863), job **137923302938**, **SUCCESS**, one coherent source commit and one Windows event, no rerun.
+
+- **6617** regression assertions, including **28 new VIN parser/manager rejection/recovery** and **21 existing actual-form callback** checks.
+- **5** historical identity/reproduction checks; **29** isolated real native StdCall checks.
+- Historical actual-managed failed-start ownership defect reproduction PASS (one check, separate legacy process).
+- **7 missing-VIN** actual-managed cleanup checks, **7 interrupted-VIN** actual-managed cleanup checks.
+- **21 normal managed VIN/FuelTrim/reconnect** checks.
+- Main build four warnings/zero errors; virtual native DLL zero warnings/zero errors; host two warnings/zero errors.
+- Local XML/YAML/braces/original-parser identity checks and all nine changed-file exact readbacks PASS. No local C# execution was claimed; Windows is the executable proof.
+- No Android jobs, physical ECU operation, provider registration, simulator core modification, DTC clear, programming, purchase or merge.
+
+### Wire evidence independently inspected
+
+Pinned unmodified simulator core5436835a4475a979a95680e5030f17acdd7f2069; dedicated synthetic host only. Four separate host/client profiles, no physical bridge.
+
+- Missing: one Open/device, three raw-CAN connects, exactly three application VIN requests (7E0:02 09 02; 7DF:03 22 F1 90; 18DB33F1:03 22 F1 90), zero replies, explicit failure after original three approximately three-second windows, one final Close and all software ownership clear.
+- Partial: one Open, three connects, one VIN FirstFrame 7E8:10 14 49 02 01 54 45 53, one application FC7E0:30 00 00, zero CFs, no VIN accepted, bounded fallback and full cleanup. Test-only host calls the existing fragmenter's overflow handler after the FF has been read to withhold CFs; this is an artificial loss fixture, not a wire frame from the app or a simulator-core repair.
+- Normal: two Open/Connect/Close cycles, exact fictional VIN TESTVIN1234567890 reassembled on both, six scalar replies, then exactly six unanswered requests after silence before cleanup. Sixteen total application writes, twelve received frames. No clear/program/security service in any profile.
+- All host stderr files empty. Normalized host/client logs for all four profiles preserved under docs/evidence/R21-*.
+
+### Artifacts and delivery
+
+Diagnostics14851731398, 290683 bytes, ZIP SHA256 **543159402180ff5adbee703c71b6cace6a37eacd5aa155a915647a5c9486f8ff**.
+Application14851691538, 1864055 bytes, ZIP SHA256 **9ace6d0bb51068f267e7a8784e4786a84fd60e77eb0f8a517b7f7e85e2ccaf1f**.
+EXE SHA256 **0ecd786f10cb8792c531af8fea1ae25d5e9efa8cbc653118bcdb7916575e9080**.
+Downloaded ZIP SHA/CRC, embedded source/run and every payload hash verified. R21 is a changed runtime and supersedes “keep R16” for the next active check; keep R16 as historical baseline. Saved J2534Diag-R21-Windows.zip Library **libfile_d4cbd4ed4e888191bcff6c04fc6eb0a8**, successful receipt1864055 bytes and local metadata persisted.
+
+### Step 4 readiness review
+
+**READY for one controlled installed-RLink managed connection/VIN → ten-second FuelTrims → disconnect check using R21.** Detailed bounded procedure/acceptance is [R21 readiness review](R21_RLINK_READINESS_2026-11-23.md). No physical check was executed here. Existing native TCM handshakes and disconnected screenshots need no repetition. MainForm discovery/selection, physical TOPDON behavior, successful UDS/29-bit VIN modes, and this vehicle's scalar support/accuracy remain UNVERIFIED. This is independent tool compatibility work, not a TFP diagnosis or a transmission repair.

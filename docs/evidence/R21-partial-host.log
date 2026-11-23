@@ -1,0 +1,49 @@
+MANAGED_PROFILE=partial
+NamedPipeServer listening on \\.\pipe\GmEcuSim.PassThru
+MANAGED_VIRTUAL_PIPE_READY SYNTHETIC_ONLY
+Pipe client connected.
+[WIRE] PassThruOpen
+[WIRE] [session] HostConnected (PassThruOpen)
+[WIRE] PassThruReadVersion
+[WIRE] PassThruConnect dev=1 proto=CAN flags=0x0 baud=500000
+[WIRE] PassThruIoctl chan=1 id=0x0A (CLEAR_MSG_FILTERS)
+[WIRE] PassThruStartMsgFilter chan=1 type=PASS_FILTER mask(4)=F0 FF FF 00 pattern(4)=00 00 07 D0 fc(0)=(empty)
+[WIRE] PassThruWriteMsgs chan=1 count=1 timeout=100ms
+tx[0] proto=CAN flags=0x0 data(12)=00 00 07 E0 02 09 02 00 00 00 00 00
+[WIRE] PassThruReadMsgs chan=1 max=200 timeout=5ms -> rc=ERR_TIMEOUT count=1
+rx[0] proto=CAN rxst=0x0 data(12)=00 00 07 E8 10 14 49 02 01 54 45 53
+MANAGED_PARTIAL_VIN_CF_WITHHELD
+[WIRE] PassThruWriteMsgs chan=1 count=1 timeout=100ms
+tx[0] proto=CAN flags=0x0 data(12)=00 00 07 E0 30 00 00 00 00 00 00 00
+[WIRE] PassThruReadMsgs chan=1 max=200 timeout=5ms -> empty
+[WIRE] PassThruReadMsgs chan=1 -> empty (+ 32 more empty polls in the last 1s)
+[WIRE] PassThruReadMsgs chan=1 -> empty (+ 31 more empty polls in the last 1s)
+[WIRE] PassThruStopMsgFilter chan=1 filter=1
+[WIRE] PassThruIoctl chan=1 id=0x0A (CLEAR_MSG_FILTERS)
+[WIRE] PassThruDisconnect chan=1
+[WIRE] PassThruConnect dev=1 proto=CAN flags=0x0 baud=500000
+[WIRE] PassThruIoctl chan=2 id=0x0A (CLEAR_MSG_FILTERS)
+[WIRE] PassThruStartMsgFilter chan=2 type=PASS_FILTER mask(4)=F0 FF FF 00 pattern(4)=00 00 07 D0 fc(0)=(empty)
+[WIRE] PassThruWriteMsgs chan=2 count=1 timeout=100ms
+tx[0] proto=CAN flags=0x0 data(12)=00 00 07 DF 03 22 F1 90 00 00 00 00
+[WIRE] PassThruReadMsgs chan=2 max=200 timeout=5ms -> empty
+[WIRE] PassThruReadMsgs chan=2 -> empty (+ 32 more empty polls in the last 1s)
+[WIRE] PassThruReadMsgs chan=2 -> empty (+ 32 more empty polls in the last 1s)
+[WIRE] PassThruStopMsgFilter chan=2 filter=2
+[WIRE] PassThruIoctl chan=2 id=0x0A (CLEAR_MSG_FILTERS)
+[WIRE] PassThruDisconnect chan=2
+[WIRE] PassThruConnect dev=1 proto=CAN flags=0x100 baud=500000
+[WIRE] PassThruIoctl chan=3 id=0x0A (CLEAR_MSG_FILTERS)
+[WIRE] PassThruStartMsgFilter chan=3 type=PASS_FILTER mask(4)=FF FF FF 00 pattern(4)=18 DA F1 00 fc(0)=(empty)
+[WIRE] PassThruWriteMsgs chan=3 count=1 timeout=100ms
+tx[0] proto=CAN flags=0x100 data(12)=18 DB 33 F1 03 22 F1 90 00 00 00 00
+[WIRE] PassThruReadMsgs chan=3 max=200 timeout=5ms -> empty
+[WIRE] PassThruReadMsgs chan=3 -> empty (+ 32 more empty polls in the last 1s)
+[WIRE] PassThruReadMsgs chan=3 -> empty (+ 31 more empty polls in the last 1s)
+[WIRE] PassThruStopMsgFilter chan=3 filter=3
+[WIRE] PassThruIoctl chan=3 id=0x0A (CLEAR_MSG_FILTERS)
+[WIRE] PassThruDisconnect chan=3
+[WIRE] PassThruClose dev=1
+[WIRE] [session] HostDisconnected (PassThruClose / pipe-drop)
+[WIRE] [session] HostDisconnected (PassThruClose / pipe-drop)
+Pipe client disconnected.

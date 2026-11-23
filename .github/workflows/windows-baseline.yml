@@ -58,6 +58,54 @@ jobs:
           $nativeDll = (Resolve-Path './mock-j2534.dll').Path
           & ./Tests/bin/Release/CanCaptureCsvTests.exe --ci-native-sim $nativeDll
           if ($LASTEXITCODE -ne 0) { throw "Synthetic native J2534 interop failed" }
+
+      - name: Checkout pinned virtual driver for managed integration
+        if: contains(github.event.head_commit.message, '[managed-sim]')
+        uses: actions/checkout@v4
+        with:
+          repository: hjtrbo/GM-ECU-Simulator
+          ref: 5436835a4475a979a95680e5030f17acdd7f2069
+          path: Tests/managed-sim/upstream
+          persist-credentials: false
+      - name: Setup .NET 9 for disposable virtual host
+        if: contains(github.event.head_commit.message, '[managed-sim]')
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Build and exercise actual managed virtual driver and FuelTrims
+        if: contains(github.event.head_commit.message, '[managed-sim]')
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pin = git -C Tests/managed-sim/upstream rev-parse HEAD
+          if ($pin -ne '5436835a4475a979a95680e5030f17acdd7f2069') { throw 'Wrong virtual source pin' }
+          & msbuild Tests/managed-sim/upstream/PassThruShim/PassThruShim.vcxproj /m /p:Configuration=Release /p:Platform=x64
+          if ($LASTEXITCODE -ne 0) { throw 'Virtual native DLL build failed' }
+          & dotnet build Tests/managed-sim/Host.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Virtual host build failed' }
+          $dll = (Resolve-Path 'Tests/managed-sim/upstream/PassThruShim/x64/Release/PassThruShim64.dll').Path
+          $hostExe = (Get-ChildItem Tests/managed-sim/bin -Recurse -Filter Host.exe | Select-Object -First 1).FullName
+          if (-not $hostExe) { throw 'Virtual host executable missing' }
+          $env:SRX_MANAGED_SIM_CI = 'ALLOW'
+          $env:SRX_MANAGED_SIM_DLL_SHA256 = (Get-FileHash $dll -Algorithm SHA256).Hash
+          $env:SRX_MANAGED_SILENCE_FILE = Join-Path $PWD 'diagnostics/managed-silence.flag'
+          Remove-Item $env:SRX_MANAGED_SILENCE_FILE -ErrorAction SilentlyContinue
+          $hostProcess = $null
+          try {
+            $hostProcess = Start-Process $hostExe -PassThru -WindowStyle Hidden -RedirectStandardOutput diagnostics/managed-host.log -RedirectStandardError diagnostics/managed-host.err
+            $ready = $false
+            for ($i=0; $i -lt 100; $i++) {
+              if ($hostProcess.HasExited) { throw 'Virtual host exited before readiness' }
+              if ((Test-Path diagnostics/managed-host.log) -and ((Get-Content diagnostics/managed-host.log -Raw) -match 'MANAGED_VIRTUAL_PIPE_READY')) { $ready = $true; break }
+              Start-Sleep -Milliseconds 100
+            }
+            if (-not $ready) { throw 'Virtual pipe readiness timeout' }
+            & ./Tests/bin/Release/CanCaptureCsvTests.exe --ci-managed-sim $dll 2>&1 | Tee-Object diagnostics/managed-client.log
+            if ($LASTEXITCODE -ne 0) { throw 'Actual managed driver integration failed; preserve logs, no blind retry' }
+          } finally {
+            if ($hostProcess -and -not $hostProcess.HasExited) { Stop-Process $hostProcess.Id -Force; $hostProcess.WaitForExit(5000) | Out-Null }
+            Remove-Item Env:SRX_MANAGED_SIM_CI,Env:SRX_MANAGED_SIM_DLL_SHA256,Env:SRX_MANAGED_SILENCE_FILE -ErrorAction SilentlyContinue
+          }
       - name: Generate engineering preview manifest
         shell: pwsh
         run: |

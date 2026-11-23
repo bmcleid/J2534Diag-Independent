@@ -54,6 +54,79 @@ namespace J2534Diag.Tests
                 pid == 9 ? (byte)126 : (byte)128;
             return new byte[] { 0, 0, 7, 0xE8, 3, 0x41, pid, value };
         }
+
+        public static int RunManaged(string[] args)
+        {
+            if (args.Length != 2 || args[0] != "--ci-managed-sim" ||
+                Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
+                Environment.GetEnvironmentVariable("SRX_MANAGED_SIM_CI") != "ALLOW")
+                throw new InvalidOperationException("Explicit disposable managed CI gate required");
+            string dll = Path.GetFullPath(args[1]);
+            if (!dll.Replace('\\', '/').EndsWith("/Tests/managed-sim/upstream/PassThruShim/x64/Release/PassThruShim64.dll",
+                StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Wrong virtual driver path");
+            string digest;
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            using (var stream = File.OpenRead(dll))
+                digest = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "");
+            if (digest != Environment.GetEnvironmentVariable("SRX_MANAGED_SIM_DLL_SHA256"))
+                throw new InvalidOperationException("Virtual DLL hash mismatch");
+            string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
+            var assembly = Assembly.LoadFrom(Path.Combine(root, "bin", "Release", "J2534Diag.exe"));
+            var managerType = assembly.GetType("J2534Diag.J2534Manager", true);
+            object manager = FormatterServices.GetUninitializedObject(managerType);
+            object receiveGate = Activator.CreateInstance(assembly.GetType("J2534Diag.ReceiveChannelGate", true));
+            managerType.GetField("<ReceiveGate>k__BackingField", BindingFlags.Instance |
+                BindingFlags.NonPublic).SetValue(manager, receiveGate);
+            Form form = null;
+            try
+            {
+                Call(manager, "InitializeCaptureOnly", dll,
+                    Enum.ToObject(assembly.GetType("J2534Diag.BitType", true), 0));
+                Check(managerType.GetProperty("Channel").GetValue(manager) != null,
+                    "Real managed wrapper did not open virtual CAN channel");
+                // Fixture only: permit scalar requests without the unrelated VIN bootstrap.
+                managerType.GetField("<CaptureOnlyMode>k__BackingField", BindingFlags.Instance |
+                    BindingFlags.NonPublic).SetValue(manager, false);
+                form = (Form)Activator.CreateInstance(assembly.GetType("J2534Diag.FuelTrimForm", true),
+                    new object[] { manager });
+                IntPtr handle = form.Handle;
+                Call(form, "StartListening");
+                Check(PumpUntil(() => Value(form, 0x0C) == "1000" && Value(form, 0x11) == "20",
+                    6000), "Managed driver/form workers did not display synthetic RPM/throttle");
+                foreach (byte pid in new byte[] { 6, 7, 8, 9 })
+                {
+                    double value;
+                    Check(double.TryParse(Value(form, pid), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out value),
+                        "Managed scalar not numeric: " + pid.ToString("X2"));
+                }
+                Check(((ComboBox)Get(form, "_responseSource")).Items.Count == 1,
+                    "Managed source selector did not isolate one synthetic ECM");
+                Check((bool)Get(form, "_ownsReceiveChannel"), "Actual form did not retain receive ownership");
+                File.WriteAllText(Environment.GetEnvironmentVariable("SRX_MANAGED_SILENCE_FILE"), "silence");
+                Check(PumpUntil(() => ((CancellationTokenSource)Get(form, "_cts")).IsCancellationRequested,
+                    6000), "Absent virtual replies did not cancel actual managed polling");
+                Check(PumpUntil(() => Value(form, 0x0C) == "Unknown / stale", 1000),
+                    "Managed quiet-stop retained live RPM");
+                Call(form, "StopListening");
+                Check(!(bool)Get(form, "_ownsReceiveChannel"), "Managed form retained receive lease after stop");
+                Check(Get(form, "_cts") == null && Get(form, "_pollReplyGate") == null,
+                    "Managed form session objects not retired");
+                Call(manager, "Disconnect");
+                Check(managerType.GetProperty("Channel").GetValue(manager) == null &&
+                    !(bool)managerType.GetProperty("HasConnectionOrSelection").GetValue(manager),
+                    "Managed driver channel/device/API ownership not closed");
+                Console.WriteLine("PASS: " + _checks +
+                    " actual managed virtual-driver/form assertions; NO PROVIDER REGISTRATION/VEHICLE.");
+                return 0;
+            }
+            finally
+            {
+                if (form != null) { Call(form, "StopListening"); form.Dispose(); }
+                Call(manager, "Disconnect");
+            }
+        }
+
         public static int RunAll()
         {
             string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));

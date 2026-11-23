@@ -14,6 +14,7 @@ namespace J2534Diag.Tests
             if (!ok) throw new Exception(reason);
         }
 
+        [STAThread]
         public static int Main(string[] args)
         {
             try
@@ -38,6 +39,7 @@ namespace J2534Diag.Tests
                 int diskAssertions = CanDiskCaptureLoggerTests.RunAll();
                 int integrityAssertions = CanCaptureIntegrityReportTests.RunAll();
                 int atomicSidecarAssertions = AtomicIntegritySidecarTests.RunAll();
+                int fuelFormAssertions = FuelTrimFormIntegrationTests.RunAll();
                 int fuelTrimAssertions = FuelTrimSampleStateTests.RunAll();
                 int packageAssertions = CaptureEvidencePackageTests.RunAll();
                 int pendingReportAssertions = PendingIntegritySidecarTests.RunAll();
@@ -46,7 +48,7 @@ namespace J2534Diag.Tests
                 int classifierAssertions = CanFrameClassifierTests.RunAll();
                 int nativeSixColumnAssertions = NativeSixColumnCanImportTests.RunAll();
                 int provenanceAssertions = OfflineCaptureProvenanceTests.RunAll();
-                Console.WriteLine("PASS: " + (fuelTrimAssertions + packageAssertions + _assertions + pumpAssertions + j2534Assertions + nativeAssertions + nativeLifecycleAssertions + connectionOwnerAssertions + nativeGuiAssertions + nativeAbiAssertions + diskAssertions + integrityAssertions + atomicSidecarAssertions + pendingReportAssertions + captureOnlyAssertions + lifecycleAssertions + classifierAssertions + nativeSixColumnAssertions + provenanceAssertions) + " assertions across CAN capture regression suites (including evidence packaging).");
+                Console.WriteLine("PASS: " + (fuelFormAssertions + fuelTrimAssertions + packageAssertions + _assertions + pumpAssertions + j2534Assertions + nativeAssertions + nativeLifecycleAssertions + connectionOwnerAssertions + nativeGuiAssertions + nativeAbiAssertions + diskAssertions + integrityAssertions + atomicSidecarAssertions + pendingReportAssertions + captureOnlyAssertions + lifecycleAssertions + classifierAssertions + nativeSixColumnAssertions + provenanceAssertions) + " assertions across CAN capture regression suites (including evidence packaging).");
                 return 0;
             }
             catch (Exception ex)

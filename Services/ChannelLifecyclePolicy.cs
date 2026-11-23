@@ -18,6 +18,18 @@ namespace J2534Diag
                     "Cannot close or reconnect J2534 channel while " + owner + " owns the receive channel.");
         }
 
+        // A reader and its poller share one session token. Any terminal worker
+        // exit cancels its peer; the owner still joins both before releasing a lease.
+        public static void RunCoupledWorker(CancellationTokenSource cancellation,
+            Action work, Action<Exception> onFailure)
+        {
+            if (cancellation == null) throw new ArgumentNullException(nameof(cancellation));
+            if (work == null) throw new ArgumentNullException(nameof(work));
+            try { work(); }
+            catch (Exception ex) { onFailure?.Invoke(ex); }
+            finally { cancellation.Cancel(); }
+        }
+
         public static bool RequestStopAndWait(Thread worker, CancellationTokenSource cancellation, int timeoutMilliseconds)
         {
             if (timeoutMilliseconds < 0) throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));

@@ -83,7 +83,11 @@ namespace J2534Diag
                 RefreshFuelDisplay(false);
             };
             _freshnessTimer = new System.Windows.Forms.Timer(components) { Interval = 250 };
-            _freshnessTimer.Tick += (sender, args) => RefreshFuelDisplay(false);
+            _freshnessTimer.Tick += (sender, args) =>
+            {
+                if (_cts != null && _cts.IsCancellationRequested) _samples.Clear();
+                RefreshFuelDisplay(false);
+            };
             _freshnessTimer.Start();
             RefreshFuelDisplay(false);
 
@@ -188,6 +192,7 @@ namespace J2534Diag
             RefreshFuelDisplay(false);
             _ownsReceiveChannel = true;
             _cts = new CancellationTokenSource();
+            var sessionCancellation = _cts;
 
             try
             {
@@ -214,9 +219,9 @@ namespace J2534Diag
                 j2534Manager.Channel.StartMsgFilter(passFilter);
 
                 //Start background CAN monitor
-                _monitorThread = new Thread(() =>
+                _monitorThread = new Thread(() => ChannelLifecyclePolicy.RunCoupledWorker(sessionCancellation, () =>
                 {
-                    while (!_cts.IsCancellationRequested && j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
+                    while (!sessionCancellation.IsCancellationRequested && j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
                     {
                         try
                         {
@@ -224,7 +229,7 @@ namespace J2534Diag
                             //Debug.WriteLine($"Received {resp.Messages.Length} messages at {DateTime.Now:HH:mm:ss.fff}");
                             foreach (var msg in resp.Messages)
                             {
-                                if (_cts.IsCancellationRequested || j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed)
+                                if (sessionCancellation.IsCancellationRequested || j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed)
                                 {
                                     return;
                                 }
@@ -238,24 +243,24 @@ namespace J2534Diag
                         }
                         Thread.Sleep(1);
                     }
-                })
+                }, ex => Debug.WriteLine("Fuel trim worker failed: " + ex)))
                 { IsBackground = true };
                 _monitorThread.Start();
 
                 // Start polling thread
-                _pollingThread = new Thread(() =>
+                _pollingThread = new Thread(() => ChannelLifecyclePolicy.RunCoupledWorker(sessionCancellation, () =>
                 {
 
-                    while (!_cts.IsCancellationRequested && j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
+                    while (!sessionCancellation.IsCancellationRequested && j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
                     {
                         // Do not probe UDS-F4 as a fallback. Its applicability is
                         // unverified for this vehicle; missing OBD replies stay unknown.
                         foreach (var pid in ObdPids.Where(p => p.Enabled))
                         {
-                            if (_cts.IsCancellationRequested || j2534Manager.Channel == null ||
+                            if (sessionCancellation.IsCancellationRequested || j2534Manager.Channel == null ||
                                 j2534Manager.Channel.IsDisposed) break;
                             var request = BuildObdPidRequest(pid, j2534Manager.BitMode);
-                            if (_cts.IsCancellationRequested || j2534Manager.Channel == null ||
+                            if (sessionCancellation.IsCancellationRequested || j2534Manager.Channel == null ||
                                 j2534Manager.Channel.IsDisposed) return;
                             try
                             {
@@ -271,7 +276,7 @@ namespace J2534Diag
                         Thread.Sleep(5);
 
                     }
-                })
+                }, ex => Debug.WriteLine("Fuel trim worker failed: " + ex)))
                 { IsBackground = true };
                 _pollingThread.Start();
             }
@@ -317,7 +322,8 @@ namespace J2534Diag
                 _pendingSamples.Clear();
                 _sampleRefreshQueued = false;
             }
-            if (IsDisposed || Disposing || !_ownsReceiveChannel) return;
+            if (IsDisposed || Disposing || !_ownsReceiveChannel ||
+                _cts == null || _cts.IsCancellationRequested) return;
             bool accepted = false;
             foreach (var queued in pending)
             {
@@ -524,10 +530,16 @@ namespace J2534Diag
         public void StartListening()
         {
             if (j2534Manager.CaptureOnlyMode) return;
-            if (_monitorThread == null || !_monitorThread.IsAlive)
+            if (_ownsReceiveChannel)
             {
-                StartApiAndThreads();
+                if (_cts != null && !_cts.IsCancellationRequested &&
+                    _monitorThread != null && _monitorThread.IsAlive &&
+                    _pollingThread != null && _pollingThread.IsAlive) return;
+                // Retire both workers and filters before replacing any session field.
+                StopListening();
+                if (_ownsReceiveChannel) return;
             }
+            StartApiAndThreads();
         }
 
         public void StopListening()
@@ -538,8 +550,8 @@ namespace J2534Diag
             RefreshFuelDisplay(false);
             _cts?.Cancel();
             // Do not release the exclusive reader until both worker threads exit.
-            bool pollingStopped = _pollingThread == null || _pollingThread.Join(3000);
-            bool monitorStopped = _monitorThread == null || _monitorThread.Join(3000);
+            bool pollingStopped = ChannelLifecyclePolicy.RequestStopAndWait(_pollingThread, _cts, 3000);
+            bool monitorStopped = ChannelLifecyclePolicy.RequestStopAndWait(_monitorThread, _cts, 3000);
             if (!pollingStopped || !monitorStopped)
             {
                 Debug.WriteLine("Fuel trim receive shutdown pending; retaining channel ownership.");

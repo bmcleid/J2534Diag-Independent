@@ -16,6 +16,7 @@ namespace J2534Diag.Tests
 
         public static int RunAll()
         {
+            CoupledFailureCancelsPeerAndRetainsLeaseUntilJoined();
             MustNotDisconnectWhileCaptureOwnsChannel();
             WaitsForCooperatingMonitorBeforeDisconnect();
             RetainsRunningMonitorAfterTimeout();
@@ -23,6 +24,66 @@ namespace J2534Diag.Tests
             SourceUsesSameGuardForCloseAndReconnect();
             TabNavigationRespectsPendingCaptureShutdown();
             return _checks;
+        }
+
+
+        private static void CoupledFailureCancelsPeerAndRetainsLeaseUntilJoined()
+        {
+            using (var cts = new CancellationTokenSource())
+            using (var entered = new ManualResetEventSlim(false))
+            using (var sawCancellation = new ManualResetEventSlim(false))
+            using (var release = new ManualResetEventSlim(false))
+            {
+                var gate = new ReceiveChannelGate();
+                Check(gate.TryAcquire("FUEL_TRIM"), "Test lease unavailable");
+                var peer = new Thread(() => ChannelLifecyclePolicy.RunCoupledWorker(cts, () =>
+                {
+                    entered.Set();
+                    cts.Token.WaitHandle.WaitOne();
+                    sawCancellation.Set();
+                    release.Wait();
+                }, null)) { IsBackground = true };
+                peer.Start();
+                try
+                {
+                    Check(entered.Wait(2000), "Peer did not start");
+                    var injected = new InvalidOperationException("injected read failure");
+                    Exception reported = null;
+                    ChannelLifecyclePolicy.RunCoupledWorker(cts, () => { throw injected; },
+                        ex => reported = ex);
+                    Check(ReferenceEquals(reported, injected), "Original failure not preserved");
+                    Check(cts.IsCancellationRequested, "Failed reader did not cancel session");
+                    Check(sawCancellation.Wait(2000), "Polling peer did not observe cancellation");
+                    Check(!ChannelLifecyclePolicy.RequestStopAndWait(peer, cts, 10),
+                        "Blocked peer was declared stopped");
+                    Check(gate.CurrentOwner == "FUEL_TRIM", "Lease released before peer stopped");
+                    using (var replacement = new CancellationTokenSource())
+                    {
+                        Check(!replacement.IsCancellationRequested, "New session inherited cancellation");
+                        ChannelLifecyclePolicy.RunCoupledWorker(replacement, () => { }, null);
+                        Check(replacement.IsCancellationRequested, "Normal terminal exit did not cancel peer");
+                    }
+                }
+                finally
+                {
+                    cts.Cancel();
+                    release.Set();
+                    if (!peer.Join(2000)) throw new Exception("Test peer failed cleanup");
+                }
+                Check(ChannelLifecyclePolicy.RequestStopAndWait(peer, cts, 2000),
+                    "Stopped peer could not be retired");
+                gate.Release("FUEL_TRIM");
+                Check(gate.CurrentOwner == null, "Lease not releasable after join");
+            }
+            string root = Path.GetFullPath(Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
+            string form = File.ReadAllText(Path.Combine(root, "Forms", "FuelTrimForm.cs"));
+            Check(form.Split(new[] { "RunCoupledWorker(sessionCancellation" },
+                StringSplitOptions.None).Length == 3, "Both form workers must share cancellation wrapper");
+            Check(form.Contains("if (_ownsReceiveChannel) return;") &&
+                form.Contains("StopListening();"), "Restart does not retain pending session");
+            Check(form.Contains("_cts == null || _cts.IsCancellationRequested) return;"),
+                "Cancelled session still applies queued samples");
         }
 
         private static void MustNotDisconnectWhileCaptureOwnsChannel()

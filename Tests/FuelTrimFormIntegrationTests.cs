@@ -13,6 +13,9 @@ namespace J2534Diag.Tests
     // Provider discovery is bypassed; no physical driver is selected.
     internal static class FuelTrimFormIntegrationTests
     {
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode,
+            SetLastError = true, EntryPoint = "WaitNamedPipeW")]
+        private static extern bool WaitNamedPipe(string name, uint timeout);
         private static int _checks;
         private static void Check(bool ok, string message)
         {
@@ -142,6 +145,10 @@ namespace J2534Diag.Tests
                     "Managed driver channel/device/API ownership not closed");
                 if (vinBootstrap)
                 {
+                    // Pinned shim makes one immediate CreateFile attempt; its server recreates
+                    // the single pipe asynchronously after close. Wait without opening a client.
+                    Check(PumpUntil(() => WaitNamedPipe(@"\\.\pipe\GmEcuSim.PassThru", 50), 5000),
+                        "Virtual host did not rearm its pipe after disconnect");
                     Call(manager, "Initialize", dll);
                     Check((string)managerType.GetProperty("Vin").GetValue(manager) == syntheticVin,
                         "Normal reconnect failed to recover synthetic VIN");

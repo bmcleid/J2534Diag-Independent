@@ -36,6 +36,7 @@ namespace J2534Diag
         private Thread _monitorThread;
         private Thread _pollingThread;
         private CancellationTokenSource _cts;
+        private FuelTrimPollingGate _pollReplyGate;
         private const int ThrottleBins = 10;
         private const int RpmBins = 10;
         private const int cellHeight = 40; // or any value you prefer
@@ -193,6 +194,8 @@ namespace J2534Diag
             _ownsReceiveChannel = true;
             _cts = new CancellationTokenSource();
             var sessionCancellation = _cts;
+            _pollReplyGate = new FuelTrimPollingGate();
+            var sessionPollGate = _pollReplyGate;
 
             try
             {
@@ -247,35 +250,20 @@ namespace J2534Diag
                 { IsBackground = true };
                 _monitorThread.Start();
 
-                // Start polling thread
+                // One pending PID, bounded reply wait and cooperative quiet stop.
                 _pollingThread = new Thread(() => ChannelLifecyclePolicy.RunCoupledWorker(sessionCancellation, () =>
                 {
-
-                    while (!sessionCancellation.IsCancellationRequested && j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
-                    {
-                        // Do not probe UDS-F4 as a fallback. Its applicability is
-                        // unverified for this vehicle; missing OBD replies stay unknown.
-                        foreach (var pid in ObdPids.Where(p => p.Enabled))
+                    sessionPollGate.Run(
+                        () => ObdPids.Where(p => p.Enabled).Select(p => p.Pid).ToArray(),
+                        pid =>
                         {
-                            if (sessionCancellation.IsCancellationRequested || j2534Manager.Channel == null ||
-                                j2534Manager.Channel.IsDisposed) break;
-                            var request = BuildObdPidRequest(pid, j2534Manager.BitMode);
-                            if (sessionCancellation.IsCancellationRequested || j2534Manager.Channel == null ||
-                                j2534Manager.Channel.IsDisposed) return;
-                            try
-                            {
-                                j2534Manager.SendDiagnosticMessage(request);
-                            }
-                            catch (J2534Exception ex)
-                            {
-                                Debug.WriteLine($"Error sending message: {ex.Message}");
-                                return;
-                            }
-                            Thread.Sleep(2);
-                        }
-                        Thread.Sleep(5);
-
-                    }
+                            if (sessionCancellation.IsCancellationRequested ||
+                                j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed) return;
+                            var definition = ObdPids.First(p => p.Pid == pid);
+                            j2534Manager.SendDiagnosticMessage(
+                                BuildObdPidRequest(definition, j2534Manager.BitMode));
+                        },
+                        sessionCancellation.Token);
                 }, ex => Debug.WriteLine("Fuel trim worker failed: " + ex)))
                 { IsBackground = true };
                 _pollingThread.Start();
@@ -291,6 +279,7 @@ namespace J2534Diag
         {
             FuelTrimInput input;
             if (!FuelTrimScalarFrame.TryRead(data, rxStatus, out input)) return;
+            if (input.Protocol == "Mode01") _pollReplyGate?.Observe(input.Pid);
             long received = Stopwatch.GetTimestamp();
             if (!IsHandleCreated || IsDisposed || Disposing) return;
             lock (_sampleQueueLock)
@@ -569,6 +558,8 @@ namespace J2534Diag
                 Debug.WriteLine("Fuel trim filter cleanup failed: " + ex);
                 return;
             }
+            _pollReplyGate?.Dispose();
+            _pollReplyGate = null;
             _cts?.Dispose();
             _cts = null;
             _ownsReceiveChannel = false;

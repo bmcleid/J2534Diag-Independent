@@ -42,4 +42,59 @@ namespace J2534Diag
             return worker.Join(timeoutMilliseconds);
         }
     }
+
+    // Narrow host pacing for FuelTrims, not an OEM timing requirement.
+    public sealed class FuelTrimPollingGate : IDisposable
+    {
+        private readonly object _sync = new object();
+        private readonly AutoResetEvent _reply = new AutoResetEvent(false);
+        private byte? _pendingPid;
+        private readonly int _responseWait;
+        private readonly int _minimumGap;
+        private readonly int _missLimit;
+        public FuelTrimPollingGate(int responseWait = 200, int minimumGap = 50, int missLimit = 6)
+        {
+            if (responseWait < 1 || minimumGap < 1 || missLimit < 1)
+                throw new ArgumentOutOfRangeException();
+            _responseWait = responseWait; _minimumGap = minimumGap; _missLimit = missLimit;
+        }
+        public bool Observe(byte pid)
+        {
+            lock (_sync)
+            {
+                if (_pendingPid != pid) return false;
+                _reply.Set();
+                return true;
+            }
+        }
+        public void Run(Func<byte[]> enabledPids, Action<byte> send, CancellationToken token)
+        {
+            int misses = 0;
+            while (!token.IsCancellationRequested)
+            {
+                var pids = enabledPids();
+                if (pids.Length == 0) return;
+                foreach (byte pid in pids)
+                {
+                    if (token.IsCancellationRequested) return;
+                    lock (_sync) { _reply.Reset(); _pendingPid = pid; }
+                    int result;
+                    try
+                    {
+                        if (token.IsCancellationRequested) return;
+                        send(pid);
+                        // Cancellation wins when both handles are signalled.
+                        result = WaitHandle.WaitAny(new[] { token.WaitHandle, _reply }, _responseWait);
+                    }
+                    finally { lock (_sync) { _pendingPid = null; } }
+                    if (result == 0 || token.IsCancellationRequested) return;
+                    misses = result == 1 ? 0 : misses + 1;
+                    if (misses >= _missLimit) return;
+                    if (token.WaitHandle.WaitOne(_minimumGap)) return;
+                }
+            }
+        }
+        // The owning form disposes only after both workers have joined.
+        public void Dispose() { _reply.Dispose(); }
+    }
 }

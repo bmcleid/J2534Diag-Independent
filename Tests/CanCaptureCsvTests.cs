@@ -19,7 +19,7 @@ namespace J2534Diag.Tests
         {
             try
             {
-                if (args.Length > 0 && args[0] == "--ci-managed-sim")
+                if (args.Length > 0 && (args[0] == "--ci-managed-sim" || args[0] == "--ci-managed-vin"))
                     return FuelTrimFormIntegrationTests.RunManaged(args);
                 if (args.Length > 0) return NativeJ2534InteropSmoke.Run(args);
                 RoundTripWithTimestampAndEscapedFields();
@@ -219,3 +219,4 @@ namespace J2534Diag.Tests
 
     }
 }
+

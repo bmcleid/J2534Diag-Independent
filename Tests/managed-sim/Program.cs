@@ -15,6 +15,8 @@ var node = new EcuNode {
 };
 node.EngineModel.SetOverride(SignalId.EngineRpm, 1000);
 node.EngineModel.SetOverride(SignalId.ThrottlePosition, 20);
+// Deliberately fictional identity; never a vehicle VIN.
+node.SetMode09Info(0x02, System.Text.Encoding.ASCII.GetBytes("TESTVIN1234567890"));
 bus.AddNode(node);
 await using var server = new NamedPipeServer(bus, Console.WriteLine);
 server.Start();
@@ -29,5 +31,6 @@ for (int i = 0; i < 1200; i++) {
     }
     await Task.Delay(50);
 }
-await Task.Delay(TimeSpan.FromSeconds(10));
+await Task.Delay(TimeSpan.FromSeconds(15));
 await server.StopAsync();
+

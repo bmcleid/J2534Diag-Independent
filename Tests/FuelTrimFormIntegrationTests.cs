@@ -9,8 +9,8 @@ using System.Windows.Forms;
 
 namespace J2534Diag.Tests
 {
-    // Loads the real app, but never runs driver discovery or any driver call.
-    // Synthetic callback transport enters the real scalar receive/UI boundary.
+    // Offline form tests plus explicitly gated disposable virtual-driver integration.
+    // Provider discovery is bypassed; no physical driver is selected.
     internal static class FuelTrimFormIntegrationTests
     {
         private static int _checks;
@@ -57,7 +57,8 @@ namespace J2534Diag.Tests
 
         public static int RunManaged(string[] args)
         {
-            if (args.Length != 2 || args[0] != "--ci-managed-sim" ||
+            bool vinBootstrap = args.Length > 0 && args[0] == "--ci-managed-vin";
+            if (args.Length != 2 || (!vinBootstrap && args[0] != "--ci-managed-sim") ||
                 Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
                 Environment.GetEnvironmentVariable("SRX_MANAGED_SIM_CI") != "ALLOW")
                 throw new InvalidOperationException("Explicit disposable managed CI gate required");
@@ -80,13 +81,36 @@ namespace J2534Diag.Tests
             Form form = null;
             try
             {
-                Call(manager, "InitializeCaptureOnly", dll,
-                    Enum.ToObject(assembly.GetType("J2534Diag.BitType", true), 0));
+                const string syntheticVin = "TESTVIN1234567890";
+                if (vinBootstrap)
+                {
+                    object parser = Activator.CreateInstance(assembly.GetType("J2534Diag.IsoTpParser", true));
+                    var frameEvent = parser.GetType().GetEvent("FrameReceived");
+                    var callback = managerType.GetMethod("IsoTpParser_FrameReceived",
+                        BindingFlags.Instance | BindingFlags.NonPublic);
+                    frameEvent.AddEventHandler(parser, Delegate.CreateDelegate(frameEvent.EventHandlerType, manager, callback));
+                    Set(manager, "_isoTpParser", parser);
+                    Call(manager, "Initialize", dll);
+                    Check((string)managerType.GetProperty("Vin").GetValue(manager) == syntheticVin,
+                        "Normal startup did not reassemble exact synthetic Mode09 VIN");
+                    Check(managerType.GetProperty("VinMode").GetValue(manager).ToString() == "ObdMode09" &&
+                        managerType.GetProperty("BitMode").GetValue(manager).ToString() == "BITS_11",
+                        "Normal startup unexpectedly fell through to UDS/29-bit");
+                    Check(!(bool)managerType.GetProperty("CaptureOnlyMode").GetValue(manager),
+                        "Normal startup did not select active diagnostic mode");
+                    Check(Get(manager, "_monitorThread") == null && Get(manager, "_cts") == null,
+                        "VIN monitor not retired before FuelTrims takes receive ownership");
+                }
+                else
+                {
+                    Call(manager, "InitializeCaptureOnly", dll,
+                        Enum.ToObject(assembly.GetType("J2534Diag.BitType", true), 0));
+                    // R19 fixture: permit scalars without VIN bootstrap.
+                    managerType.GetField("<CaptureOnlyMode>k__BackingField", BindingFlags.Instance |
+                        BindingFlags.NonPublic).SetValue(manager, false);
+                }
                 Check(managerType.GetProperty("Channel").GetValue(manager) != null,
                     "Real managed wrapper did not open virtual CAN channel");
-                // Fixture only: permit scalar requests without the unrelated VIN bootstrap.
-                managerType.GetField("<CaptureOnlyMode>k__BackingField", BindingFlags.Instance |
-                    BindingFlags.NonPublic).SetValue(manager, false);
                 form = (Form)Activator.CreateInstance(assembly.GetType("J2534Diag.FuelTrimForm", true),
                     new object[] { manager });
                 IntPtr handle = form.Handle;
@@ -116,8 +140,20 @@ namespace J2534Diag.Tests
                 Check(managerType.GetProperty("Channel").GetValue(manager) == null &&
                     !(bool)managerType.GetProperty("HasConnectionOrSelection").GetValue(manager),
                     "Managed driver channel/device/API ownership not closed");
+                if (vinBootstrap)
+                {
+                    Call(manager, "Initialize", dll);
+                    Check((string)managerType.GetProperty("Vin").GetValue(manager) == syntheticVin,
+                        "Normal reconnect failed to recover synthetic VIN");
+                    Check(Get(manager, "_monitorThread") == null && Get(manager, "_cts") == null,
+                        "Reconnected VIN worker retained receive state");
+                    Call(manager, "Disconnect");
+                    Check(managerType.GetProperty("Channel").GetValue(manager) == null &&
+                        !(bool)managerType.GetProperty("HasConnectionOrSelection").GetValue(manager),
+                        "Reconnected managed handles not closed");
+                }
                 Console.WriteLine("PASS: " + _checks +
-                    " actual managed virtual-driver/form assertions; NO PROVIDER REGISTRATION/VEHICLE.");
+                    " actual managed virtual-driver/form assertions; VIN_BOOTSTRAP=" + vinBootstrap + "; NO PROVIDER REGISTRATION/VEHICLE.");
                 return 0;
             }
             finally
@@ -231,3 +267,4 @@ namespace J2534Diag.Tests
         }
     }
 }
+

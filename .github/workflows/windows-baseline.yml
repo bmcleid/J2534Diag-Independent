@@ -100,7 +100,7 @@ jobs:
               Start-Sleep -Milliseconds 100
             }
             if (-not $ready) { throw 'Virtual pipe readiness timeout' }
-            & ./Tests/bin/Release/CanCaptureCsvTests.exe --ci-managed-sim $dll 2>&1 | Tee-Object diagnostics/managed-client.log
+            & ./Tests/bin/Release/CanCaptureCsvTests.exe --ci-managed-vin $dll 2>&1 | Tee-Object diagnostics/managed-client.log
             if ($LASTEXITCODE -ne 0) { throw 'Actual managed driver integration failed; preserve logs, no blind retry' }
           } finally {
             if ($hostProcess -and -not $hostProcess.HasExited) { Stop-Process $hostProcess.Id -Force; $hostProcess.WaitForExit(5000) | Out-Null }
@@ -154,3 +154,4 @@ jobs:
           name: J2534Diag-baseline-windows
           path: bin/Release/**
           if-no-files-found: error
+

@@ -341,3 +341,33 @@ Windows45228558797/job137881569616 SUCCESS: application build0errors(4 unchanged
 Diagnostics artifact14847196031,ZIP SHA25648cb8489f7144fa2b18b2be8bd1568d1d4cf46803d91737819ca9534e895a5cb,CRC PASS. Application artifact14845786079,ZIP SHA256c6858cfad0835b2c71c47bf1993da5e869e0af41894cc7c7478a1da6b5915f2a,CRC/all7 payload hashes/source/run PASS. EXE SHA256131f86f7ac39478f75f86c0f7d96e2bd8af0facdb96f33a08a6183f21e023ac2 is byte-for-byte deliveredR16. KEEP R16 Librarylibfile_43b7b0d93904819192f973290bdb4cdc;no download/install/equivalent screenshot needed.
 
 Supersedes R18 managed open/filter/write/read/worker/shutdown integration UNVERIFIED for this virtual profile only. Remaining: normalactiveConnectVIN/discovery bootstrap,end-to-end reconnect/newsession via normalUI,actualTOPDON physical compatibility,vehiclePID support/data accuracy. Do not promote nativeTCM handshakes or virtualECM values into physical validation. Next highest-value offline check is normalVINbootstrap against explicit syntheticVIN,not a new vehicle baseline or repetition of13/21 existing checks. No live operation authorized/requested by this checkpoint. [skip ci]
+
+## R20 — 2026-11-23: normal managed VIN startup and reconnect verified virtually
+
+**CONFIRMED, software/virtual profile only.** Test source `8fc89554492f033e4f2aeea7c4623177fd297a10`, branch `feature/native-gui-capture-preview`, draft PR #29. No production source changes.
+
+The fixture now seeds deliberately fictional 17-byte identity `TESTVIN1234567890` through pinned upstream EcuNode.SetMode09Info. It initializes the actual application's IsoTpParser and event callback and invokes normal J2534Manager.Initialize(dll), rather than opening capture-only and altering its mode flag. Provider discovery and MainForm device-selection UI remain bypassed. Existing simulator core stays unmodified at `5436835a4475a979a95680e5030f17acdd7f2069`; no provider registration or physical bridge.
+
+### Results and failure accounting
+
+- First source `72fbb218e9d7089c1c5a4807e7f0777d651883c3`: [Windows run 45236302428](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/45236302428), job `137908834650`, **FAILURE** at immediate reopen. Initial normal VIN startup, scalar session, silence stop and cleanup had passed. Baseline 6595 regression assertions (including 21 actual form), plus 29 native interop checks passed. Preserve this failed run; do not call the cycle all green.
+- Classified as virtual transport/harness readiness: pinned server awaits old pipe handler disposal before recreating its single listening instance; pinned shim EnsureConnected makes one immediate CreateFileW attempt, reports “simulator is not running” for any failure and has no pipe-ready wait. The host had logged clean close and pipe disconnection. No evidence justified changing production reconnect.
+- Corrected fixture uses bounded, nonconnecting Win32 WaitNamedPipeW readiness (up to five seconds) before its one normal reopen. No driver/server core changes, no blind same-SHA rerun.
+- Corrected [Windows run 45236838539](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/45236838539), job `137910678322`, **SUCCESS**. **21 managed integration assertions**, **6591 regression assertions** (includes the prior 21 actual-form checks), and **29 native StdCall checks**. Main app 4 warnings/0 errors; virtual native DLL 0 warnings/0 errors; host 2 warnings/0 errors.
+- Two Windows validations in this repair cycle: original failed harness then corrected source passed. No Android jobs, physical tests, registration, programming, DTC clearing, merge or user install.
+
+### Independently inspected evidence
+
+Successful wire trace contains two normal open/version/raw-CAN500k/filter lifecycles. Each sends `7E0:02 09 02`, receives `7E8:10 14 49 02 01 54 45 53`, sends `7E0:30 00 00`, receives CF1 `21 54 56 49 4E 31 32 33` and CF2 `22 34 35 36 37 38 39 30`, and verifies exact reassembled fictional VIN. Mode remained 11-bit ObdMode09; no UDS fallback occurred. Initial VIN worker/CTS retired before real FuelTrim workers acquired the channel. Six scalar values arrived through actual managed wrapper; after synthetic replies were disabled exactly six unanswered requests preceded stop. Both lifecycles end in disconnect/close. Trace shows only Mode09, its flow control and the six Mode01 scalar requests; no other application services.
+
+- Failed diagnostics artifact `14848513579`: ZIP SHA256 `53f67033a15e92828f65ee8224f4863ad39763c1d8bfccce7bf68409b36065cc`.
+- Successful diagnostics artifact `14849282316`: ZIP SHA256 `bde3d7cb413fd745cc612dcb83914f73b9b74317e2e072e42cc6cbb88e4665b2`.
+- Successful app artifact `14849257476`: ZIP SHA256 `999fe4983d123d2d3d1343ef5935e5a381c50f5ee6c1b29be991c6ab7233f795`.
+- Downloaded ZIP CRC and SHA checked; EXE SHA256 `131f86f7ac39478f75f86c0f7d96e2bd8af0facdb96f33a08a6183f21e023ac2` is byte-identical R16. **Keep R16; no new download required.**
+- Both host/client traces preserved under `docs/evidence/R20-*` as normalized text.
+
+### Limits and next action
+
+Normal manager Mode09 bootstrap and reconnect are now confirmed for this virtual profile, superseding the R19 bootstrap gap. This does not validate MainForm provider discovery/selection, absent or partial VIN fallback, source isolation/sequence correctness under malformed ISO-TP, 29-bit paths, installed TOPDON behavior, or actual SRX data/support. WaitNamedPipe is fixture synchronization, not evidence of an automatic retry in production. SendFlowControl currently emits STmin=0 even though the caller passes separationTime=2; observed bytes are recorded, not claimed as two milliseconds.
+
+Next offline gate: inspect/test failed or incomplete VIN startup and cross-source/malformed-frame acceptance before recommending broader vehicle connection testing. Existing parser uses one unscoped buffer and does not check CF sequence; that is a source-confirmed limitation, not yet a demonstrated vehicle failure. No repeat physical handshake or disconnected screenshot is justified.

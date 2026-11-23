@@ -1,0 +1,13 @@
+FAIL: System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation. ---> SAE.J2534.J2534Exception: PassThruShim: GmEcuSimulator.exe is not running
+   at SAE.J2534.API.CheckResult(ResultCode Result)
+   at SAE.J2534.API.GetDevice(String DeviceName)
+   at J2534Diag.J2534Manager.InitializeChannel(String dllFileName) in D:\a\J2534Diag-Independent\J2534Diag-Independent\Services\J2534Manager.cs:line 312
+   at J2534Diag.J2534Manager.Initialize(String dllFileName) in D:\a\J2534Diag-Independent\J2534Diag-Independent\Services\J2534Manager.cs:line 250
+   --- End of inner exception stack trace ---
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Object[] arguments, Signature sig, Boolean constructor)
+   at System.Reflection.RuntimeMethodInfo.UnsafeInvokeInternal(Object obj, Object[] parameters, Object[] arguments)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at System.Reflection.MethodBase.Invoke(Object obj, Object[] parameters)
+   at J2534Diag.Tests.FuelTrimFormIntegrationTests.Call(Object target, String name, Object[] args)
+   at J2534Diag.Tests.FuelTrimFormIntegrationTests.RunManaged(String[] args)
+   at J2534Diag.Tests.CanCaptureCsvTests.Main(String[] args)

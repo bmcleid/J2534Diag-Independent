@@ -38,13 +38,14 @@ namespace J2534Diag.Tests
                 int diskAssertions = CanDiskCaptureLoggerTests.RunAll();
                 int integrityAssertions = CanCaptureIntegrityReportTests.RunAll();
                 int atomicSidecarAssertions = AtomicIntegritySidecarTests.RunAll();
+                int packageAssertions = CaptureEvidencePackageTests.RunAll();
                 int pendingReportAssertions = PendingIntegritySidecarTests.RunAll();
                 int captureOnlyAssertions = CaptureOnlySafetyTests.RunAll();
                 int lifecycleAssertions = ChannelLifecyclePolicyTests.RunAll();
                 int classifierAssertions = CanFrameClassifierTests.RunAll();
                 int nativeSixColumnAssertions = NativeSixColumnCanImportTests.RunAll();
                 int provenanceAssertions = OfflineCaptureProvenanceTests.RunAll();
-                Console.WriteLine("PASS: " + (_assertions + pumpAssertions + j2534Assertions + nativeAssertions + nativeLifecycleAssertions + connectionOwnerAssertions + nativeGuiAssertions + nativeAbiAssertions + diskAssertions + integrityAssertions + atomicSidecarAssertions + pendingReportAssertions + captureOnlyAssertions + lifecycleAssertions + classifierAssertions + nativeSixColumnAssertions + provenanceAssertions) + " assertions across sixty-four CAN capture regression tests.");
+                Console.WriteLine("PASS: " + (packageAssertions + _assertions + pumpAssertions + j2534Assertions + nativeAssertions + nativeLifecycleAssertions + connectionOwnerAssertions + nativeGuiAssertions + nativeAbiAssertions + diskAssertions + integrityAssertions + atomicSidecarAssertions + pendingReportAssertions + captureOnlyAssertions + lifecycleAssertions + classifierAssertions + nativeSixColumnAssertions + provenanceAssertions) + " assertions across CAN capture regression suites (including evidence packaging).");
                 return 0;
             }
             catch (Exception ex)

@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using SAE.J2534;
 
@@ -13,6 +14,13 @@ namespace J2534Diag
 {
     public partial class CanListenerForm : Form
     {
+        private bool _packageInProgress;
+        private readonly Button _packageButton = new Button
+        {
+            Text = "Save capture package",
+            Size = new System.Drawing.Size(170, 24),
+            Location = new System.Drawing.Point(10, 10)
+        };
         private const int MAX_RECORDS = 10000;
         private Thread _listenThread;
         private CancellationTokenSource _cts;
@@ -113,6 +121,11 @@ namespace J2534Diag
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
             });
 
+            // Reserve a toolbar row above the grid; do not overlay data rows.
+            dataGridViewMessages.Top += 32;
+            dataGridViewMessages.Height -= 32;
+            Controls.Add(_packageButton);
+            _packageButton.Click += SaveCapturePackage_Click;
             Controls.Add(_diskLogOption);
             Controls.Add(_retryReportButton);
             _retryReportButton.BringToFront();
@@ -249,6 +262,61 @@ namespace J2534Diag
             }
         }
 
+
+        private async void SaveCapturePackage_Click(object sender, EventArgs e)
+        {
+            if (_packageInProgress) return;
+            if (_isListening || _pendingIntegrityReport != null)
+            {
+                MessageBox.Show("Stop capture and recover any pending integrity report before packaging.",
+                    "Capture package", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            using (var source = new OpenFileDialog
+            {
+                Filter = "Saved CAN recordings (*.csv)|*.csv",
+                Title = "Select the original saved CAN recording",
+                FileName = _diskLogPath ?? ""
+            })
+            {
+                if (source.ShowDialog() != DialogResult.OK) return;
+                using (var target = new SaveFileDialog
+                {
+                    Filter = "Capture packages (*.zip)|*.zip",
+                    FileName = Path.GetFileNameWithoutExtension(source.FileName) + ".capture.zip",
+                    OverwritePrompt = false
+                })
+                {
+                    if (target.ShowDialog() != DialogResult.OK) return;
+                    _packageInProgress = true;
+                    _packageButton.Enabled = false;
+                    btnStart.Enabled = false;
+                    try
+                    {
+                        string csv = source.FileName;
+                        string output = target.FileName;
+                        await Task.Run(() => CaptureEvidencePackage.Create(csv, output));
+                        MessageBox.Show("Capture package saved and checksums verified:\n" + output +
+                            "\nIncludes original CSV bytes and any available companion integrity report. " +
+                            "See README.txt for report availability and evidence limits.",
+                            "Capture package saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Package could not be saved: " + ex.Message +
+                            "\nOriginal evidence files were not changed.",
+                            "Capture package", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                    finally
+                    {
+                        _packageInProgress = false;
+                        _packageButton.Enabled = true;
+                        btnStart.Enabled = true;
+                    }
+                }
+            }
+        }
+
         private void btnExportCsv_Click(object sender, EventArgs e)
         {
             if (_isListening)
@@ -313,6 +381,12 @@ namespace J2534Diag
         // stopped receiver can still have unsaved finalized evidence.
         public bool PrepareToClose()
         {
+            if (_packageInProgress)
+            {
+                MessageBox.Show("Wait for the capture package to finish before closing.",
+                    "Package in progress", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return false;
+            }
             if (!StopListening()) return false;
             if (_pendingIntegrityReport == null) return true;
             if (MessageBox.Show(
@@ -359,7 +433,7 @@ namespace J2534Diag
 
         public void StartListening()
         {
-            if (_isListening) return;
+            if (_isListening || _packageInProgress) return;
             if (_pendingIntegrityReport != null)
             {
                 MessageBox.Show("An earlier integrity report still needs recovery. Use Retry integrity before starting a new capture.",

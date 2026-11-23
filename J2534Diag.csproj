@@ -130,6 +130,7 @@
       <DependentUpon>SelectedVehicleControl.cs</DependentUpon>
     </Compile>
     <Compile Include="Services\CaptureEvidencePackage.cs" />
+    <Compile Include="Services\FuelTrimSampleState.cs" />
     <Compile Include="Services\VinDecoder.cs" />
     <EmbeddedResource Include="Forms\CanListenerForm.resx">
       <DependentUpon>CanListenerForm.cs</DependentUpon>

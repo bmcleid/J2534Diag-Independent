@@ -19,6 +19,8 @@
       <HintPath>..\packages\J2534-Sharp.1.0.0-CI00036\lib\net48\J2534-Sharp.dll</HintPath>
     </Reference>
     <Compile Include="CanCaptureCsvTests.cs" />
+    <Compile Include="FuelTrimSampleStateTests.cs" />
+    <Compile Include="..\Services\FuelTrimSampleState.cs"><Link>FuelTrimSampleState.cs</Link></Compile>
     <Compile Include="CaptureEvidencePackageTests.cs" />
     <Compile Include="..\Services\CaptureEvidencePackage.cs"><Link>CaptureEvidencePackage.cs</Link></Compile>
     <Compile Include="CaptureOnlySafetyTests.cs" />

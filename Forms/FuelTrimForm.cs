@@ -38,13 +38,6 @@ namespace J2534Diag
         readonly List<UdsPid> UdsPids;
         private readonly Dictionary<byte, UdsPid> _udsPidsByDidLowByte;
 
-        // ISO-TP reassembly state
-        List<byte> isotpBuffer = new List<byte>();
-        int isotpExpectedLength = 0;
-        bool isotpCollecting = false;
-
-        DateTime lastFrameTime = DateTime.Now;
-        string partialVin = "";
         private const string ReceiveOwner = "FUEL_TRIM";
         private bool _ownsReceiveChannel;
         private Thread _monitorThread;
@@ -57,10 +50,17 @@ namespace J2534Diag
         private double?[,] trimGridBank1 = new double?[ThrottleBins, RpmBins];
         private double?[,] trimGridBank2 = new double?[ThrottleBins, RpmBins];
 
-        private double lastThrottle = 0;
-        private double lastRpm = 0;
-        private double lastStft1 = 0, lastLtft1 = 0;
-        private double lastStft2 = 0, lastLtft2 = 0;
+        private readonly FuelTrimSampleState _samples = new FuelTrimSampleState(Stopwatch.Frequency * 2);
+        private readonly ComboBox _responseSource = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList, Width = 285
+        };
+        private System.Windows.Forms.Timer _freshnessTimer;
+        private int _displayGeneration;
+        private readonly object _sampleQueueLock = new object();
+        private readonly Dictionary<string, Tuple<FuelTrimInput, long, int>> _pendingSamples =
+            new Dictionary<string, Tuple<FuelTrimInput, long, int>>();
+        private bool _sampleRefreshQueued;
         private DateTime _liveDataProtocolWindowStart = DateTime.MinValue;
         private DateTime _lastObdResponseTime = DateTime.MinValue;
         private DateTime _lastUdsResponseTime = DateTime.MinValue;
@@ -78,7 +78,26 @@ namespace J2534Diag
             UdsPids = UdsPidMap.GetUdsPids(useImperialUnits);
             _udsPidsByDidLowByte = UdsPids.ToDictionary(pid => pid.DidLowByte);
             SetupPidDisplayControls();
-            UpdateTrimGridDisplay();
+            flpActions.Controls.Add(new Label { Text = "Response source:", AutoSize = true });
+            flpActions.Controls.Add(_responseSource);
+            flpActions.Controls.Add(new Label
+            {
+                Text = "2 s freshness (app policy). Grids show observed history; address is not ECU identity.",
+                AutoSize = true
+            });
+            tlpRight.RowStyles[1].Height = 76;
+            lblBank1.Text = "Bank 1 observed history";
+            lblBank2.Text = "Bank 2 observed history";
+            _responseSource.SelectedIndexChanged += (sender, args) =>
+            {
+                trimGridBank1 = new double?[ThrottleBins, RpmBins];
+                trimGridBank2 = new double?[ThrottleBins, RpmBins];
+                RefreshFuelDisplay(false);
+            };
+            _freshnessTimer = new System.Windows.Forms.Timer(components) { Interval = 250 };
+            _freshnessTimer.Tick += (sender, args) => RefreshFuelDisplay(false);
+            _freshnessTimer.Start();
+            RefreshFuelDisplay(false);
 
             // Start everything after the form is loaded
             this.Load += Form1_Load;
@@ -173,6 +192,12 @@ namespace J2534Diag
                 Debug.WriteLine("Fuel trim cannot start; receiver owned by " + j2534Manager.ReceiveGate.CurrentOwner);
                 return;
             }
+            _samples.Clear();
+            _responseSource.Items.Clear();
+            trimGridBank1 = new double?[ThrottleBins, RpmBins];
+            trimGridBank2 = new double?[ThrottleBins, RpmBins];
+            int generation = Interlocked.Increment(ref _displayGeneration);
+            RefreshFuelDisplay(false);
             _ownsReceiveChannel = true;
             _cts = new CancellationTokenSource();
             _liveDataProtocolWindowStart = DateTime.UtcNow;
@@ -219,7 +244,7 @@ namespace J2534Diag
                                     return;
                                 }
                                 // Process immediately
-                                ParseIsoTpMessage(msg.Data, j2534Manager.Channel);
+                                QueueScalarSample(msg.Data, unchecked((uint)msg.RxStatus), generation);
                             }
                         }
                         catch
@@ -325,104 +350,71 @@ namespace J2534Diag
             return request;
         }
 
-        void ParseIsoTpMessage(byte[] data, Channel channel)
+        private void QueueScalarSample(byte[] data, uint rxStatus, int generation)
         {
-            if (data == null || data.Length < 5) return; // 4 bytes CAN ID + at least 1 byte payload
-
-
-            //// Only process messages from known UDS/OBD2 response IDs
-            //uint canId = (uint)(data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3]);
-            //if (canId != 0x07E8 && canId != 0x07E0 && canId != 0x07DF)
-            //    return;
-
-            var payload = data.Skip(4).ToArray();
-            if (payload.Length == 0) return;
-
-            Debug.WriteLine($"Processing CAN ID: {BitConverter.ToString(data.Take(4).ToArray())} Payload: {BitConverter.ToString(payload)} (Time: {DateTime.Now:HH:mm:ss.fff})");
-
-            byte pci = payload[0];
-            int frameType = (pci & 0xF0) >> 4;
-
-            // Update timestamp for ISO-TP timeout detection
-            lastFrameTime = DateTime.Now;
-
-            switch (frameType)
+            FuelTrimInput input;
+            if (!FuelTrimScalarFrame.TryRead(data, rxStatus, out input)) return;
+            long received = Stopwatch.GetTimestamp();
+            if (!IsHandleCreated || IsDisposed || Disposing) return;
+            lock (_sampleQueueLock)
             {
-                case 0x0: // Single Frame
-                    {
-                        int sfLen = pci & 0x0F;
-                        if (payload.Length >= 1 + sfLen)
-                        {
-                            var msg = payload.Skip(1).Take(sfLen).ToArray();
-                            TryPrintPidValue(msg);
-                        }
-                        //else
-                        //Console.WriteLine("Single Frame: Payload too short");
-                        break;
-                    }
-                case 0x1: // First Frame
-                    {
-                        if (payload.Length >= 2)
-                        {
-                            var responseCanId = data.Take(4).ToArray();
-
-                            isotpExpectedLength = ((pci & 0x0F) << 8) + payload[1];
-                            isotpBuffer.Clear();
-                            isotpBuffer.AddRange(payload.Skip(2));
-                            isotpCollecting = true;
-
-                            // Insert a small delay to ensure timing is right for flow control
-                            Thread.Sleep(2);
-
-                            // Always send FC to the sender of the First Frame
-                            SendFlowControl(responseCanId, blockSize: 0, separationTime: 2);
-                        }
-                        break;
-                    }
-                case 0x2: // Consecutive Frame
-                    {
-                        int seqNum = pci & 0x0F;
-                        if (payload.Length > 1 && isotpCollecting)
-                        {
-                            isotpBuffer.AddRange(payload.Skip(1));
-
-                            if (isotpBuffer.Count >= isotpExpectedLength)
-                            {
-                                isotpCollecting = false;
-                                var msg = isotpBuffer.Take(isotpExpectedLength).ToArray();
-                                TryPrintPidValue(msg);
-                            }
-                        }
-                        break;
-                    }
-                case 0x3: // Flow Control
-                    break;
-                default:
-                    break;
+                string key = input.SourceKey + "/" + input.Pid;
+                if (!_pendingSamples.ContainsKey(key) && _pendingSamples.Count >= 96) return;
+                // Latest scalar observation per address/protocol/PID, not a raw logger.
+                _pendingSamples[key] = Tuple.Create(input, received, generation);
+                if (_sampleRefreshQueued) return;
+                _sampleRefreshQueued = true;
+            }
+            try { BeginInvoke(new Action(FlushScalarSamples)); }
+            catch (InvalidOperationException)
+            {
+                lock (_sampleQueueLock)
+                {
+                    _pendingSamples.Clear();
+                    _sampleRefreshQueued = false;
+                }
             }
         }
 
-        void SendFlowControl(byte[] canId, int blockSize = 0, int separationTime = 0)
+        private void FlushScalarSamples()
         {
-            var fc = new byte[12];
-
-            if (j2534Manager.BitMode == BitType.BITS_11)
+            List<Tuple<FuelTrimInput, long, int>> pending;
+            lock (_sampleQueueLock)
             {
-                fc[0] = canId[0];
-                fc[1] = canId[1];
-                fc[2] = canId[2];
-                fc[3] = (byte)(canId[3] - 0x08);
+                pending = _pendingSamples.Values.ToList();
+                _pendingSamples.Clear();
+                _sampleRefreshQueued = false;
             }
-            else
+            if (IsDisposed || Disposing || !_ownsReceiveChannel) return;
+            bool accepted = false;
+            foreach (var queued in pending)
             {
-                fc[0] = canId[0];
-                fc[1] = canId[1];
-                fc[2] = canId[3];
-                fc[3] = canId[2];
+                if (queued.Item3 != _displayGeneration) continue;
+                FuelTrimInput input = queued.Item1;
+                double value;
+                if (input.Protocol == "Mode01")
+                {
+                    var definition = ObdPids.FirstOrDefault(p => p.Pid == input.Pid);
+                    if (definition == null) continue;
+                    value = definition.Formula(input.Data);
+                    _lastObdResponseTime = DateTime.UtcNow;
+                }
+                else
+                {
+                    UdsPid definition;
+                    if (!_udsPidsByDidLowByte.TryGetValue(input.Pid, out definition)) continue;
+                    value = definition.Formula(input.Data);
+                    _lastUdsResponseTime = DateTime.UtcNow;
+                }
+                if (!_samples.Update(input.SourceKey, input.Pid, value, queued.Item2)) continue;
+                if (!_responseSource.Items.Contains(input.SourceKey))
+                {
+                    _responseSource.Items.Add(input.SourceKey);
+                    if (_responseSource.SelectedIndex < 0) _responseSource.SelectedIndex = 0;
+                }
+                accepted = true;
             }
-
-            fc[4] = 0x30;
-            j2534Manager.SendDiagnosticMessage(fc);
+            RefreshFuelDisplay(accepted);
         }
 
         private LiveDataProtocol GetLiveDataProtocolToPoll()
@@ -457,51 +449,6 @@ namespace J2534Diag
             return LiveDataProtocol.Obd;
         }
 
-        private void TryPrintPidValue(byte[] payload)
-        {
-            if (payload.Length < 2) return;
-
-            if (payload[0] == 0x41)
-            {
-                _lastObdResponseTime = DateTime.UtcNow;
-                TryPrintObdPidValue(payload);
-                return;
-            }
-
-            if (payload.Length >= 4 && payload[0] == 0x62 && payload[1] == 0xF4)
-            {
-                _lastUdsResponseTime = DateTime.UtcNow;
-                TryPrintUdsPidValue(payload);
-            }
-        }
-
-        private void TryPrintObdPidValue(byte[] payload)
-        {
-            if (payload.Length < 2 || payload[0] != 0x41) return;
-
-            byte pid = payload[1];
-            var pidDef = ObdPids.FirstOrDefault(p => p.Pid == pid);
-            if (pidDef != null)
-            {
-                var data = payload.Skip(2).ToArray();
-                double value = pidDef.Formula(data);
-                UpdateLiveData(pid, value, pidDef.Unit);
-            }
-        }
-
-        private void TryPrintUdsPidValue(byte[] payload)
-        {
-            byte didLowByte = payload[2];
-            if (!_udsPidsByDidLowByte.TryGetValue(didLowByte, out var pidDef))
-            {
-                return;
-            }
-
-            var data = payload.Skip(3).ToArray();
-            double value = pidDef.Formula(data);
-            UpdateLiveData(didLowByte, value, pidDef.Unit);
-        }
-
         byte[] BuildObdPidRequest(ObdPid pid, BitType bitMode)
         {
             // 4 bytes ArbId, 1 byte Sid, 1 byte Mode, 1 byte Pid, pad with 0x00 to 12 bytes
@@ -524,63 +471,34 @@ namespace J2534Diag
             return request;
         }
 
-        private void UpdateLiveData(byte pid, double value, string unit)
+        private void RefreshFuelDisplay(bool recordHistory)
         {
-            UpdatePidDisplay(pid, value, unit);
-
-            switch (pid)
+            var snapshot = _samples.Snapshot(_responseSource.SelectedItem as string, Stopwatch.GetTimestamp());
+            foreach (var definition in ObdPids)
             {
-                case 0x11:
-                    lastThrottle = value;
-                    break;
-                case 0x0C:
-                    lastRpm = value;
-                    break;
-                case 0x06:
-                    lastStft1 = value;
-                    break;
-                case 0x07:
-                    lastLtft1 = value;
-                    break;
-                case 0x08:
-                    lastStft2 = value;
-                    break;
-                case 0x09:
-                    lastLtft2 = value;
-                    break;
-            }
-
-            if (lastThrottle >= 0 && lastRpm >= 0)
-            {
-                int tBin = Math.Min((int)(lastThrottle / 10.0), ThrottleBins - 1);
-                int rBin = Math.Min((int)(lastRpm / 500.0), RpmBins - 1);
-
-                double totalTrim1 = lastStft1 + lastLtft1;
-                trimGridBank1[tBin, rBin] = totalTrim1;
-
-                double totalTrim2 = lastStft2 + lastLtft2;
-                trimGridBank2[tBin, rBin] = totalTrim2;
-
-                UpdateTrimGridDisplay();
-            }
-        }
-
-        private void UpdatePidDisplay(byte pid, double value, string unit)
-        {
-            if (_pidControls.TryGetValue(pid, out var control))
-            {
-                if (control.InvokeRequired)
+                PidDisplayControl control;
+                if (_pidControls.TryGetValue(definition.Pid, out control))
                 {
-                    control.Invoke(new Action(() => control.ValueText = value.ToString()));
-
+                    double? value = snapshot.Value(definition.Pid);
+                    control.ValueText = value.HasValue
+                        ? value.Value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
+                        : "Unknown / stale";
                 }
             }
-            else
+            if (recordHistory)
             {
-                control.ValueText = value.ToString();
+                for (int bank = 1; bank <= 2; bank++)
+                {
+                    double throttle, rpm, total;
+                    if (!snapshot.TryBank(bank, out throttle, out rpm, out total)) continue;
+                    int tBin = Math.Min((int)(throttle / 10.0), ThrottleBins - 1);
+                    int rBin = Math.Min((int)(rpm / 500.0), RpmBins - 1);
+                    (bank == 1 ? trimGridBank1 : trimGridBank2)[tBin, rBin] = total;
+                }
             }
-            //Debug.WriteLine($"PID {pid:X2} Value: {value} {unit} (Time: {DateTime.Now:HH:mm:ss.fff})");
+            UpdateTrimGridDisplay();
         }
+
         private void UpdateTrimGridDisplay()
         {
             UpdateSingleTrimGridDisplay(dgvTrimGridBank1, trimGridBank1, "Bank 1");
@@ -717,6 +635,9 @@ namespace J2534Diag
         public void StopListening()
         {
             if (!_ownsReceiveChannel) return;
+            Interlocked.Increment(ref _displayGeneration);
+            _samples.Clear();
+            RefreshFuelDisplay(false);
             _cts?.Cancel();
             // Do not release the exclusive reader until both worker threads exit.
             bool pollingStopped = _pollingThread == null || _pollingThread.Join(3000);

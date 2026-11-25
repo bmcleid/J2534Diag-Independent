@@ -182,6 +182,7 @@ namespace J2534Diag.Tests
                     string faultExport = Path.Combine(root, "diagnostics", "managed-broken-pipe-session.csv");
                     Call(form, "ExportSessionTo", faultExport);
                     string evidence = File.ReadAllText(faultExport);
+                    Check(((Label)Get(form, "_sessionHealth")).Text.Contains("Driver error"), "Broken driver health reason hidden");
                     Check(evidence.Contains("CleanupError") && (evidence.Contains("WorkerError") || evidence.Contains("ReceiveError")) &&
                         evidence.Contains("DisconnectOutcome=Failed:"), "Fault export falsely reports successful cleanup");
                     Console.WriteLine("PASS: " + _checks + " actual broken-driver cancellation/retained-ownership/export checks. Virtual test-process exit releases IPC; no physical driver.");
@@ -214,6 +215,7 @@ namespace J2534Diag.Tests
                     6000), "Absent virtual replies did not cancel actual managed polling");
                 Check(PumpUntil(() => Value(form, 0x0C) == "Unknown / stale", 1000),
                     "Managed quiet-stop retained live RPM");
+                Check(((Label)Get(form, "_sessionHealth")).Text.Contains("Unanswered requests"), "Quiet stop health reason hidden");
                 Call(form, "StopListening");
                 Check(!(bool)Get(form, "_ownsReceiveChannel"), "Managed form retained receive lease after stop");
                 Check(Get(form, "_cts") == null && Get(form, "_pollReplyGate") == null,
@@ -228,7 +230,7 @@ namespace J2534Diag.Tests
                 Call(form, "ExportSessionTo", normalExport);
                 string exported = File.ReadAllText(normalExport);
                 Check(exported.Contains("DisconnectOutcome=Succeeded") && exported.Contains("SessionStop") &&
-                    exported.Contains("Observation") && exported.Contains("R22") && exported.Contains("TESTVIN1234567890"),
+                    exported.Contains("Observation") && exported.Contains("R23") && exported.Contains("TESTVIN1234567890"),
                     "Actual form export lost identity, observations or stop/disconnect outcome");
                 if (vinBootstrap)
                 {
@@ -268,7 +270,7 @@ namespace J2534Diag.Tests
 
         public static int RunAll()
         {
-            Console.WriteLine("R22 owner-approved validation: direct client viewport sizing after preserved layout failures.");
+            Console.WriteLine("R23 validation: accepted scalar accounting and distinct stop reasons.");
             string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
             var assembly = Assembly.LoadFrom(Path.Combine(root, "bin", "Release", "J2534Diag.exe"));
             Type managerType = assembly.GetType("J2534Diag.J2534Manager", true);
@@ -306,7 +308,7 @@ namespace J2534Diag.Tests
                 grid1.FirstDisplayedScrollingRowIndex = 9; grid2.FirstDisplayedScrollingRowIndex = 9;
                 Check(grid1.GetRowDisplayRectangle(9, false).Height > 0 && grid2.GetRowDisplayRectangle(9, false).Height > 0,
                     "Bottom history row not accessible through grid scrolling");
-                Check(form.Text.Contains("R22") && ((Button)Get(form, "_exportButton")).Visible,
+                Check(form.Text.Contains("R23") && ((Button)Get(form, "_exportButton")).Visible,
                     "Build identifier or export button not visible");
                 if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
                     using (var bitmap = new System.Drawing.Bitmap(form.Width, form.Height))
@@ -332,6 +334,24 @@ namespace J2534Diag.Tests
                     Set(form, "_cts", cts); Set(form, "_pollReplyGate", gate);
                     Set(form, "_ownsReceiveChannel", true); Set(form, "_displayGeneration", 1);
                     Check((bool)Call(receiveGate, "TryAcquire", "FUEL_TRIM"), "Cannot acquire synthetic session");
+                    object report = Get(form, "_sessionReport");
+                    Call(report, "Begin", "offline form fixture", "", DateTime.UtcNow);
+                    for (int i = 0; i < 5; i++) Call(form, "QueueScalarSample", Reply(6), 0u, 1);
+                    Call(form, "FlushScalarSamples");
+                    Check((long)report.GetType().GetProperty("AcceptedObservations").GetValue(report) == 1,
+                        "Coalesced form samples did not yield exactly one accepted observation");
+                    string queueExport = Path.Combine(Path.GetTempPath(), "J2534Diag-queue-" + Guid.NewGuid().ToString("N") + ".csv");
+                    try
+                    {
+                        Call(form, "ExportSessionTo", queueExport);
+                        Check(File.ReadAllText(queueExport).Contains("CoalescedBeforeAcceptance=4"), "Form queue did not account replaced samples");
+                    }
+                    finally { File.Delete(queueExport); }
+                    long acceptedBeforeClear = (long)report.GetType().GetProperty("AcceptedObservations").GetValue(report);
+                    Call(form, "btnClearFuelTrims_Click", null, EventArgs.Empty);
+                    Check((long)report.GetType().GetProperty("AcceptedObservations").GetValue(report) == acceptedBeforeClear,
+                        "Clear Charts erased accepted report observations");
+
                     var pids = new byte[] { 0x0C, 6, 7, 8, 9, 0x11 };
                     var definitions = (IEnumerable)Get(form, "ObdPids");
                     int freezeBank1 = 0, silence = 0, sent = 0;
@@ -385,6 +405,13 @@ namespace J2534Diag.Tests
                         using (var fresh = new CancellationTokenSource())
                         {
                             Set(form, "_cts", fresh); Set(form, "_displayGeneration", 2);
+                            object retiredGate = Activator.CreateInstance(assembly.GetType("J2534Diag.FuelTrimPollingGate", true), new object[] { 5, 1, 1 });
+                            Set(form, "_pollReplyGate", retiredGate);
+                            Call(retiredGate, "Run", (Func<byte[]>)(() => new byte[] { 0x0C }),
+                                (Action<byte>)(pid => Call(form, "QueueScalarSample", Reply(pid), 0u, 1)), fresh.Token);
+                            Check((string)retiredGate.GetType().GetProperty("LastStopReason").GetValue(retiredGate) == "Unanswered requests",
+                                "Retired callback acknowledged new session request");
+                            Call(retiredGate, "Dispose"); Set(form, "_pollReplyGate", null);
                             Call(form, "QueueScalarSample", Reply(0x0C), 0u, 1);
                             Application.DoEvents();
                             Check(Value(form, 0x0C) == "Unknown / stale", "Old generation leaked into new session");
@@ -410,6 +437,7 @@ namespace J2534Diag.Tests
         }
     }
 }
+
 
 
 

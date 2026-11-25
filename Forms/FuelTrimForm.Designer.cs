@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -19,6 +19,7 @@ namespace J2534Diag
         {
             if (disposing)
             {
+                DiscardPendingSamples(FuelTrimEvidenceCounter.UnavailableUiDiscarded);
                 if (j2534Manager != null && _disconnectReporter != null)
                     j2534Manager.DisconnectOutcomeChanged -= _disconnectReporter;
                 components?.Dispose();
@@ -146,4 +147,5 @@ namespace J2534Diag
         #endregion
     }
 }
+
 

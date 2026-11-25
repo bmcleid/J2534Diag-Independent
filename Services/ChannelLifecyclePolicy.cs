@@ -67,13 +67,21 @@ namespace J2534Diag
                 return true;
             }
         }
+        public string LastStopReason { get; private set; } = "Not started";
         public void Run(Func<byte[]> enabledPids, Action<byte> send, CancellationToken token)
+        {
+            LastStopReason = "Running";
+            try { RunCore(enabledPids, send, token); }
+            catch { LastStopReason = "Worker error"; throw; }
+            finally { if (LastStopReason == "Running") LastStopReason = "Cancelled"; }
+        }
+        private void RunCore(Func<byte[]> enabledPids, Action<byte> send, CancellationToken token)
         {
             int misses = 0;
             while (!token.IsCancellationRequested)
             {
                 var pids = enabledPids();
-                if (pids.Length == 0) return;
+                if (pids.Length == 0) { LastStopReason = "No enabled PIDs"; return; }
                 foreach (byte pid in pids)
                 {
                     if (token.IsCancellationRequested) return;
@@ -89,7 +97,7 @@ namespace J2534Diag
                     finally { lock (_sync) { _pendingPid = null; } }
                     if (result == 0 || token.IsCancellationRequested) return;
                     misses = result == 1 ? 0 : misses + 1;
-                    if (misses >= _missLimit) return;
+                    if (misses >= _missLimit) { LastStopReason = "Unanswered requests"; return; }
                     if (token.WaitHandle.WaitOne(_minimumGap)) return;
                 }
             }
@@ -98,3 +106,4 @@ namespace J2534Diag
         public void Dispose() { _reply.Dispose(); }
     }
 }
+

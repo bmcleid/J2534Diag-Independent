@@ -75,6 +75,46 @@ namespace J2534Diag.Tests
                 Check(bounded.RetainedRows == 12 && bounded.DiscardedRows == 25, "Buffer limit/count wrong");
                 bounded.Export(file, "R22", "hash", "Not attempted");
                 Check(Read(file)[1][15].Contains("DiscardedOldestRows=25"), "Truncation hidden in export");
+                var audit = new FuelTrimSessionReport(1000, 12);
+                audit.Begin("clock fixture", "", utc);
+                audit.Observe("A", 6, 1, 100, utc, 100);
+                audit.Refresh(101, utc.AddDays(1));
+                audit.Export(file, "R23", "hash", "Not attempted");
+                Check(!Read(file).Any(r => r[12] == "Stale"), "Wall-clock forward jump expired fresh monotonic sample");
+                audit.Refresh(2101, utc.AddDays(-1));
+                audit.SelectSource("A", utc); audit.SelectSource("B", utc);
+                audit.ChartsCleared(utc);
+                audit.Account(FuelTrimEvidenceCounter.CoalescedBeforeAcceptance, 4);
+                audit.Account(FuelTrimEvidenceCounter.InactiveOrGenerationDiscarded, 2);
+                audit.SetStatus("Unanswered requests", "six misses", utc);
+                audit.Stop(2200, utc, "owner stop");
+                Check(audit.SessionState == "Unanswered requests", "Quiet stop reason overwritten");
+                audit.Export(file, "R23", "hash", "Succeeded"); rows = Read(file);
+                Check(rows.Any(r => r[2] == "PidSummary" && r[8] == "06" && r[15].Contains("AcceptedObservations=1;StaleTransitions=1")), "Eviction lost per-PID totals or backward UTC jump prevented expiry");
+                Check(rows.Any(r => r[2] == "SourceSelected") && rows.Any(r => r[2] == "ChartsCleared") && audit.AcceptedObservations == 1, "Display events altered accepted evidence");
+                Check(rows[1][15].Contains("CoalescedBeforeAcceptance=4") && rows[1][15].Contains("InactiveOrGenerationDiscarded=2"), "Queue accounting absent");
+                string original = File.ReadAllText(file); int beforeFailure = audit.RetainedRows;
+                bool lockedFailed = false;
+                using (var locked = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                    try { audit.Export(file, "R23", "hash", "Succeeded"); } catch (IOException) { lockedFailed = true; }
+                Check(lockedFailed && File.ReadAllText(file) == original && audit.RetainedRows == beforeFailure, "Failed overwrite damaged saved or buffered evidence");
+                Check(!Directory.GetFiles(directory, "*.tmp").Any(), "Failed overwrite left temp file");
+                audit.Export(file, "R23", "hash", "Succeeded");
+                Check(Read(file).Count == rows.Count, "Retry changed evidence row count");
+                audit.Begin("fault fixture", "", utc);
+                audit.SetStatus("Driver error", "fixture", utc);
+                audit.SetStatus("Cleanup pending", "fixture", utc);
+                audit.Stop(3000, utc, "stop");
+                Check(audit.SessionState == "Driver error; cleanup pending", "Cleanup hid driver failure");
+                using (var gate = new FuelTrimPollingGate(1, 1, 1))
+                {
+                    gate.Run(() => new byte[] { 6 }, pid => { }, System.Threading.CancellationToken.None);
+                    Check(gate.LastStopReason == "Unanswered requests", "Unanswered polling not distinguished");
+                    gate.Run(() => new byte[0], pid => { }, System.Threading.CancellationToken.None);
+                    Check(gate.LastStopReason == "No enabled PIDs", "Disabled polling not distinguished");
+                    try { gate.Run(() => new byte[] { 6 }, pid => { throw new IOException("fixture"); }, System.Threading.CancellationToken.None); } catch (IOException) { }
+                    Check(gate.LastStopReason == "Worker error", "Worker failure mislabeled unanswered");
+                }
                 if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
                 {
                     string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
@@ -87,3 +127,4 @@ namespace J2534Diag.Tests
         }
     }
 }
+

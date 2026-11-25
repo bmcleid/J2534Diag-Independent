@@ -222,11 +222,12 @@ namespace J2534Diag
         public void Initialize(string dllFileName)
         {
             RequireManagedConnectionLease();  // Acquire BEFORE touching the driver.
-            LastDisconnectOutcome = "Not attempted for current connection";
             try
             {
             StopVinMonitorSafely();
             CloseChannelAndDevice();
+            // A refused reconnect still belongs to the retained old connection.
+            LastDisconnectOutcome = "Not attempted for current connection";
             CaptureOnlyMode = false;
             Vin = null;
 
@@ -279,12 +280,12 @@ namespace J2534Diag
             if (bitMode != BitType.BITS_11 && bitMode != BitType.BITS_29)
                 throw new ArgumentOutOfRangeException(nameof(bitMode));
             RequireManagedConnectionLease();
-            LastDisconnectOutcome = "Not attempted for current connection"; // No native overlap during reconnect.
             try
             {
                 // Keep the same owner across a managed reconnect.
                 StopVinMonitorSafely();
                 CloseChannelAndDevice();
+                LastDisconnectOutcome = "Not attempted for current connection";
                 // Register each acquired handle immediately so that any
                 // failed next step can be safely retried on cleanup.
                 Api = APIFactory.GetAPI(dllFileName);
@@ -562,5 +563,3 @@ namespace J2534Diag
         }
     }
 }
-
-

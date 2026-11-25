@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Text.RegularExpressions;
 using Microsoft.VisualBasic.FileIO;
 using J2534Diag;
 
@@ -22,12 +24,107 @@ namespace J2534Diag.Tests
             }
             return rows;
         }
+        private static void ExtendedContinuity(string directory, DateTime utc)
+        {
+            string file = Path.Combine(directory, "continuity.csv");
+            var report = new FuelTrimSessionReport(1000);
+            report.Begin("connection-A", "TESTVIN0000000001", utc);
+            report.Observe("source-A", 6, 1, 1, utc, 1); report.Observe("source-A", 7, 2, 2, utc, 2);
+            report.Stop(3, utc, "tab departed");
+            report.Begin("connection-B", "TESTVIN0000000002", utc);
+            report.SelectSource("source-B", utc);
+            report.Observe("source-B", 6, 3, 4, utc, 4); report.Observe("source-B", 7, 4, 5, utc, 5);
+            report.Export(file, "fixture", "hash", "Not attempted for current connection");
+            var context = Read(file);
+            Check(context.Where(r => r[2] == "Observation").Select(r => r[1]).Distinct().Count() == 2,
+                "Connection contexts share a report session identity");
+            Check(context.Where(r => r[2] == "Observation").All(r =>
+                (r[5] == "connection-A" && r[6] == "TESTVIN0000000001" && r[7] == "source-A") ||
+                (r[5] == "connection-B" && r[6] == "TESTVIN0000000002" && r[7] == "source-B")), "VIN/mode/source crossed sessions");
+            byte[] pids = { 0x0C, 6, 7, 8, 9, 0x11 };
+            for (int i = 0; i < 60000; i++)
+                if (!report.Observe("source-B", pids[i % 6], i % 100, i + 1000, utc.AddTicks(i), i + 1000))
+                    throw new Exception("Extended fixture observation rejected");
+            Check(report.RetainedRows == 20000 && report.DiscardedRows > 40000 && report.AcceptedObservations == 60004,
+                "Long synthetic session violated capacity or lifetime totals");
+            long produced = 0; Exception failure = null;
+            using (var stop = new ManualResetEvent(false))
+            using (var started = new ManualResetEvent(false))
+            {
+                var worker = new Thread(() =>
+                {
+                    try
+                    {
+                        while (!stop.WaitOne(0))
+                        {
+                            long tick = 62000 + produced;
+                            if (!report.Observe("source-B", 6, 5, tick, utc, tick)) throw new Exception("Concurrent fixture rejected");
+                            Interlocked.Increment(ref produced); started.Set();
+                            if (produced % 2000 == 0) Thread.Sleep(1);
+                        }
+                    }
+                    catch (Exception ex) { failure = ex; started.Set(); }
+                });
+                worker.Start();
+                try
+                {
+                    Check(started.WaitOne(2000), "Concurrent observation worker did not start");
+                    for (int i = 0; i < 3; i++)
+                    {
+                        report.Export(file, "fixture", "hash", "Not attempted for current connection");
+                        var rows = Read(file);
+                        int retained = int.Parse(Regex.Match(rows[1][15], @"(?:^|;)RetainedRows=(\d+)").Groups[1].Value, CultureInfo.InvariantCulture);
+                        var summaries = rows.Where(r => r[2] == "PidSummary").ToArray();
+                        Check(rows.Count == retained + 8 && retained == 20000 && summaries.Length == 6 && rows.All(r => r.Length == 16),
+                            "Concurrent export snapshot row count/shape inconsistent");
+                        foreach (var summary in summaries)
+                        {
+                            long total = long.Parse(Regex.Match(summary[15], @"AcceptedObservations=(\d+)").Groups[1].Value, CultureInfo.InvariantCulture);
+                            Check(total >= rows.LongCount(r => r[2] == "Observation" && r[8] == summary[8]),
+                                "Snapshot summary smaller than its retained PID observations");
+                        }
+                    }
+                }
+                finally { stop.Set(); if (!worker.Join(3000)) throw new Exception("Concurrent fixture did not retire"); }
+            }
+            Check(failure == null && report.AcceptedObservations == 60004 + produced,
+                "Concurrent observations lost, duplicated or failed: " + failure);
+            report.Export(file, "fixture", "hash", "Not attempted for current connection");
+            var final = Read(file);
+            Check(final.Where(r => r[2] == "PidSummary").Sum(r => long.Parse(Regex.Match(r[15], @"AcceptedObservations=(\d+)").Groups[1].Value,
+                CultureInfo.InvariantCulture)) == report.AcceptedObservations, "Final lifetime summary total mismatch");
+            Check(!Directory.GetFiles(directory, "*.tmp").Any(), "Concurrent exports left temporary files");
+            if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
+            {
+                string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
+                File.Copy(file, Path.Combine(root, "diagnostics", "report-extended-continuity.csv"), true);
+            }
+            using (var gate = new FuelTrimPollingGate(5, 1, 2))
+            using (var cancellation = new CancellationTokenSource())
+            {
+                byte[] enabled = { 6 }; var sent = new List<byte>();
+                gate.Run(() => enabled, pid =>
+                {
+                    sent.Add(pid); gate.Observe(pid);
+                    if (sent.Count == 1) enabled = new byte[] { 6, 7 };
+                    if (pid == 7) cancellation.Cancel();
+                }, cancellation.Token);
+                Check(sent.SequenceEqual(new byte[] { 6, 6, 7 }) && gate.LastStopReason == "Cancelled",
+                    "Enabled-set refresh or cancellation-over-reply behavior changed");
+                Check(!gate.Observe(7), "Retired pending PID accepted acknowledgement");
+                enabled = new byte[] { 6 }; sent.Clear();
+                gate.Run(() => enabled, pid => { sent.Add(pid); gate.Observe(pid); enabled = new byte[0]; }, CancellationToken.None);
+                Check(sent.SequenceEqual(new byte[] { 6 }) && gate.LastStopReason == "No enabled PIDs", "Disabling all PIDs did not terminate next polling cycle");
+            }
+        }
+
         public static int RunAll()
         {
             string directory = Path.Combine(Path.GetTempPath(), "J2534Diag-report-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
             try
             {
+                ExtendedContinuity(directory, new DateTime(2026, 11, 25, 12, 0, 0, DateTimeKind.Utc));
                 string file = Path.Combine(directory, "session.csv");
                 var report = new FuelTrimSessionReport(1000);
                 DateTime utc = new DateTime(2026, 11, 24, 12, 0, 0, DateTimeKind.Utc);

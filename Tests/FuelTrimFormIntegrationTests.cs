@@ -141,6 +141,43 @@ namespace J2534Diag.Tests
             }
         }
 
+        private static void AuditRefusedReconnect(Assembly assembly, Type managerType)
+        {
+            object manager = FormatterServices.GetUninitializedObject(managerType);
+            object gate = Activator.CreateInstance(assembly.GetType("J2534Diag.ReceiveChannelGate", true));
+            managerType.GetField("<ReceiveGate>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(manager, gate);
+            managerType.GetField("<Vin>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(manager, "TESTVIN0000000001");
+            Check((bool)Call(gate, "TryAcquire", "FUEL_TRIM"), "Cannot acquire retained-session fixture");
+            try
+            {
+                try { Call(manager, "Disconnect"); } catch (TargetInvocationException ex) { Check(ex.InnerException is InvalidOperationException, "Wrong disconnect refusal"); }
+                string failed = (string)managerType.GetProperty("LastDisconnectOutcome").GetValue(manager);
+                Check(failed.StartsWith("Failed:"), "Prior failed disconnect missing");
+                foreach (string method in new[] { "Initialize", "InitializeCaptureOnly" })
+                {
+                    Exception refusal = null;
+                    try
+                    {
+                        if (method == "Initialize") Call(manager, method, "not-a-real-provider.dll");
+                        else Call(manager, method, "not-a-real-provider.dll", Enum.ToObject(assembly.GetType("J2534Diag.BitType", true), 0));
+                    }
+                    catch (TargetInvocationException ex) { refusal = ex.InnerException; }
+                    Check(refusal is InvalidOperationException || refusal is AggregateException, "Reconnect did not stop at retained receive lease");
+                    Check((string)managerType.GetProperty("LastDisconnectOutcome").GetValue(manager) == failed,
+                        "Refused " + method + " erased the retained connection's disconnect failure");
+                    Check((string)managerType.GetProperty("Vin").GetValue(manager) == "TESTVIN0000000001" &&
+                        (string)Call(gate, "get_CurrentOwner") == "FUEL_TRIM", "Refused reconnect changed retained connection context");
+                    Check(managerType.GetProperty("Channel").GetValue(manager) == null && managerType.GetProperty("Api").GetValue(manager) == null,
+                        "Refused reconnect touched a driver before the ownership gate");
+                }
+            }
+            finally { Call(gate, "Release", "FUEL_TRIM"); Call(manager, "Disconnect"); }
+            Check((string)managerType.GetProperty("LastDisconnectOutcome").GetValue(manager) == "Succeeded" &&
+                !(bool)managerType.GetProperty("HasConnectionOrSelection").GetValue(manager), "Retry after lease retirement failed to clean up");
+            Call(manager, "Disconnect");
+            Check((string)managerType.GetProperty("LastDisconnectOutcome").GetValue(manager) == "Succeeded", "Repeated idle disconnect changed success outcome");
+        }
+
         public static int RunManaged(string[] args)
         {
             bool brokenPipe = args.Length > 0 && args[0] == "--ci-managed-broken-pipe";
@@ -313,7 +350,7 @@ namespace J2534Diag.Tests
                 Call(form, "ExportSessionTo", normalExport);
                 string exported = File.ReadAllText(normalExport);
                 Check(exported.Contains("DisconnectOutcome=Succeeded") && exported.Contains("SessionStop") &&
-                    exported.Contains("Observation") && exported.Contains("R24") && exported.Contains("TESTVIN1234567890"),
+                    exported.Contains("Observation") && exported.Contains("R25") && exported.Contains("TESTVIN1234567890"),
                     "Actual form export lost identity, observations or stop/disconnect outcome");
                 if (vinBootstrap)
                 {
@@ -322,6 +359,8 @@ namespace J2534Diag.Tests
                     Check(PumpUntil(() => WaitNamedPipe(@"\\.\pipe\GmEcuSim.PassThru", 50), 5000),
                         "Virtual host did not rearm its pipe after disconnect");
                     Call(manager, "Initialize", dll);
+                    Check((string)managerType.GetProperty("LastDisconnectOutcome").GetValue(manager) == "Not attempted for current connection",
+                        "Successful reconnect retained previous disconnect outcome");
                     Check((string)managerType.GetProperty("Vin").GetValue(manager) == syntheticVin,
                         "Normal reconnect failed to recover synthetic VIN");
                     Check(Get(manager, "_monitorThread") == null && Get(manager, "_cts") == null,
@@ -353,7 +392,7 @@ namespace J2534Diag.Tests
 
         public static int RunAll()
         {
-            Console.WriteLine("R24 validation: stop-boundary queue retirement and terminal reason retention.");
+            Console.WriteLine("R25 validation: refused reconnect evidence and session/export continuity.");
             string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
             var assembly = Assembly.LoadFrom(Path.Combine(root, "bin", "Release", "J2534Diag.exe"));
             Type managerType = assembly.GetType("J2534Diag.J2534Manager", true);
@@ -391,7 +430,7 @@ namespace J2534Diag.Tests
                 grid1.FirstDisplayedScrollingRowIndex = 9; grid2.FirstDisplayedScrollingRowIndex = 9;
                 Check(grid1.GetRowDisplayRectangle(9, false).Height > 0 && grid2.GetRowDisplayRectangle(9, false).Height > 0,
                     "Bottom history row not accessible through grid scrolling");
-                Check(form.Text.Contains("R24") && ((Button)Get(form, "_exportButton")).Visible,
+                Check(form.Text.Contains("R25") && ((Button)Get(form, "_exportButton")).Visible,
                     "Build identifier or export button not visible");
                 if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
                     using (var bitmap = new System.Drawing.Bitmap(form.Width, form.Height))
@@ -533,6 +572,7 @@ namespace J2534Diag.Tests
                 }
             }
             AuditQueueAndIdleExport(assembly, managerType);
+            AuditRefusedReconnect(assembly, managerType);
             Console.WriteLine("PASS: " + _checks + " actual FuelTrimForm integration assertions; synthetic callbacks; NO DRIVER/VEHICLE.");
             return _checks;
         }

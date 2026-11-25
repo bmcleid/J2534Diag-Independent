@@ -58,6 +58,89 @@ namespace J2534Diag.Tests
             return new byte[] { 0, 0, 7, 0xE8, 3, 0x41, pid, value };
         }
 
+        private static void AuditQueueAndIdleExport(Assembly assembly, Type managerType)
+        {
+            object manager = FormatterServices.GetUninitializedObject(managerType);
+            object receiveGate = Activator.CreateInstance(assembly.GetType("J2534Diag.ReceiveChannelGate", true));
+            managerType.GetField("<ReceiveGate>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(manager, receiveGate);
+            string export = Path.Combine(Path.GetTempPath(), "J2534Diag-audit-" + Guid.NewGuid().ToString("N") + ".csv");
+            using (var form = (Form)Activator.CreateInstance(assembly.GetType("J2534Diag.FuelTrimForm", true), new object[] { manager }))
+            using (var cts = new CancellationTokenSource())
+            {
+                IntPtr handle = form.Handle;
+                object report = Get(form, "_sessionReport");
+                Type counterType = assembly.GetType("J2534Diag.FuelTrimEvidenceCounter", true);
+                Func<string, long> count = name => (long)Call(report, "Counter", Enum.Parse(counterType, name));
+                Func<long> accepted = () => (long)report.GetType().GetProperty("AcceptedObservations").GetValue(report);
+                try
+                {
+                    Call(form, "ExportSessionTo", export);
+                    string idle = File.ReadAllText(export);
+                    Check(idle.Contains("SessionState=Idle") && !idle.Contains("\"Observation\""), "Pre-session export fabricated observations or activity");
+                    Check(idle.Split(new[] { "\"PidSummary\"" }, StringSplitOptions.None).Length == 7, "Idle export lacks six zero summaries");
+                    Call(report, "Begin", "bounded source audit", "", DateTime.UtcNow);
+                    Set(form, "_ownsReceiveChannel", true); Set(form, "_cts", cts); Set(form, "_displayGeneration", 1);
+                    byte[] pids = { 0x0C, 6, 7, 8, 9, 0x11 };
+                    for (int source = 0; source < 17; source++)
+                        foreach (byte pid in pids)
+                        {
+                            byte[] frame = Reply(pid);
+                            frame[0] = 0x18; frame[1] = 0xDA; frame[2] = 0xF1; frame[3] = (byte)source;
+                            Call(form, "QueueScalarSample", frame, 0x100u, 1);
+                        }
+                    Check(count("EligibleScalarFrames") == 102 && count("QueueCapacityDiscarded") == 6,
+                        "Queue capacity did not account exactly six of 102 distinct scalar callbacks");
+                    Call(form, "FlushScalarSamples");
+                    var selector = (ComboBox)Get(form, "_responseSource");
+                    Check(accepted() == 96 && selector.Items.Count == 16, "16-source boundary changed accepted observations");
+                    selector.SelectedIndex = 1;
+                    Call(form, "btnClearFuelTrims_Click", null, EventArgs.Empty);
+                    Check(accepted() == 96, "Source selection or Clear Charts erased accepted observations");
+                    byte[] seventeenth = Reply(6); seventeenth[0] = 0x18; seventeenth[1] = 0xDA;
+                    seventeenth[2] = 0xF1; seventeenth[3] = 16;
+                    Call(form, "QueueScalarSample", seventeenth, 0x100u, 1); Call(form, "FlushScalarSamples");
+                    Check(count("DecodeOrStateRejected") == 1 && accepted() == 96 && selector.Items.Count == 16,
+                        "Source-cap rejection hidden or evicted an accepted source");
+                    Call(form, "QueueScalarSample", new byte[0], 0u, 1);
+                    Check(count("NonScalarOrInvalidIgnored") == 1, "Invalid input not counted separately");
+                    Call(form, "ExportSessionTo", export);
+                    string audit = File.ReadAllText(export);
+                    Check(audit.Contains("SourceSelected") && audit.Contains("ChartsCleared") && audit.Contains("QueueCapacityDiscarded=6"),
+                        "Actual-form export omitted display events or queue-capacity evidence");
+
+                    // Force a callback to wait after its first active-session check.
+                    object sync = Get(form, "_sampleQueueLock"); Exception failure = null;
+                    var worker = new Thread(() => { try { Call(form, "QueueScalarSample", Reply(6), 0u, 1); } catch (Exception ex) { failure = ex; } });
+                    long eligible = count("EligibleScalarFrames"), inactive = count("InactiveOrGenerationDiscarded");
+                    Monitor.Enter(sync);
+                    try
+                    {
+                        worker.Start();
+                        Check(SpinWait.SpinUntil(() => count("EligibleScalarFrames") == eligible + 1 &&
+                            (worker.ThreadState & System.Threading.ThreadState.WaitSleepJoin) != 0, 2000),
+                            "Callback did not reach the contended queue lock");
+                        Set(form, "_displayGeneration", 2); cts.Cancel();
+                        Call(form, "DiscardPendingSamples", Enum.Parse(counterType, "InactiveOrGenerationDiscarded"));
+                    }
+                    finally { Monitor.Exit(sync); }
+                    Check(worker.Join(2000) && failure == null, "Contended callback did not retire: " + failure);
+                    Check(((IDictionary)Get(form, "_pendingSamples")).Count == 0 &&
+                        count("InactiveOrGenerationDiscarded") == inactive + 1 && accepted() == 96,
+                        "Retired callback entered the queue after stop's drain or was counted twice");
+                    Call(report, "SetStatus", "No enabled PIDs", "all disabled", DateTime.UtcNow);
+                    Check(PumpUntil(() => ((Label)Get(form, "_sessionHealth")).Text.Contains("No enabled PIDs"), 1000),
+                        "Freshness timer overwrote the disabled-PID stop reason");
+                    Call(form, "ExportSessionTo", export);
+                    Check(File.ReadAllText(export).Contains("SessionState=No enabled PIDs"), "Export lost disabled-PID stop reason");
+                }
+                finally
+                {
+                    Set(form, "_ownsReceiveChannel", false); Set(form, "_cts", null);
+                    if (File.Exists(export)) File.Delete(export);
+                }
+            }
+        }
+
         public static int RunManaged(string[] args)
         {
             bool brokenPipe = args.Length > 0 && args[0] == "--ci-managed-broken-pipe";
@@ -230,7 +313,7 @@ namespace J2534Diag.Tests
                 Call(form, "ExportSessionTo", normalExport);
                 string exported = File.ReadAllText(normalExport);
                 Check(exported.Contains("DisconnectOutcome=Succeeded") && exported.Contains("SessionStop") &&
-                    exported.Contains("Observation") && exported.Contains("R23") && exported.Contains("TESTVIN1234567890"),
+                    exported.Contains("Observation") && exported.Contains("R24") && exported.Contains("TESTVIN1234567890"),
                     "Actual form export lost identity, observations or stop/disconnect outcome");
                 if (vinBootstrap)
                 {
@@ -270,7 +353,7 @@ namespace J2534Diag.Tests
 
         public static int RunAll()
         {
-            Console.WriteLine("R23 validation: accepted scalar accounting and distinct stop reasons.");
+            Console.WriteLine("R24 validation: stop-boundary queue retirement and terminal reason retention.");
             string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
             var assembly = Assembly.LoadFrom(Path.Combine(root, "bin", "Release", "J2534Diag.exe"));
             Type managerType = assembly.GetType("J2534Diag.J2534Manager", true);
@@ -308,7 +391,7 @@ namespace J2534Diag.Tests
                 grid1.FirstDisplayedScrollingRowIndex = 9; grid2.FirstDisplayedScrollingRowIndex = 9;
                 Check(grid1.GetRowDisplayRectangle(9, false).Height > 0 && grid2.GetRowDisplayRectangle(9, false).Height > 0,
                     "Bottom history row not accessible through grid scrolling");
-                Check(form.Text.Contains("R23") && ((Button)Get(form, "_exportButton")).Visible,
+                Check(form.Text.Contains("R24") && ((Button)Get(form, "_exportButton")).Visible,
                     "Build identifier or export button not visible");
                 if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
                     using (var bitmap = new System.Drawing.Bitmap(form.Width, form.Height))
@@ -325,6 +408,18 @@ namespace J2534Diag.Tests
                     using (var bitmap = new System.Drawing.Bitmap(form.Width, form.Height))
                     { form.DrawToBitmap(bitmap, new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height));
                       bitmap.Save(Path.Combine(root, "diagnostics", "fuel-layout-narrow.png")); }
+                var health = (Label)Get(form, "_sessionHealth");
+                var actions = (FlowLayoutPanel)Get(form, "flpActions");
+                Check(health.Bottom <= actions.ClientSize.Height && health.Right <= actions.ClientSize.Width,
+                    "Narrow session health clipped in action viewport");
+                var originalFont = form.Font;
+                using (var enlarged = new System.Drawing.Font(originalFont.FontFamily, originalFont.Size * 1.25f))
+                {
+                    form.Font = enlarged; Call(form, "LayoutFuelPanels"); Application.DoEvents();
+                    Check(health.Bottom <= actions.ClientSize.Height && health.Right <= actions.ClientSize.Width,
+                        "125-percent font session health clipped");
+                    form.Font = originalFont; Call(form, "LayoutFuelPanels"); Application.DoEvents();
+                }
                 form.Hide();
                 Check(string.IsNullOrEmpty(Convert.ToString(grid1.Rows[7].Cells[2].Value)), "Initial grid not blank");
                 object gate = Activator.CreateInstance(assembly.GetType("J2534Diag.FuelTrimPollingGate", true),
@@ -437,12 +532,9 @@ namespace J2534Diag.Tests
                     }
                 }
             }
+            AuditQueueAndIdleExport(assembly, managerType);
             Console.WriteLine("PASS: " + _checks + " actual FuelTrimForm integration assertions; synthetic callbacks; NO DRIVER/VEHICLE.");
             return _checks;
         }
     }
 }
-
-
-
-

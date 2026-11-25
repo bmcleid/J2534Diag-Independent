@@ -53,7 +53,7 @@ namespace J2534Diag
                     state = "Driver error; cleanup pending";
                 if (_status.StartsWith("Driver error", StringComparison.Ordinal) &&
                     !state.StartsWith("Driver error", StringComparison.Ordinal)) return;
-                if (_status == "Unanswered requests" && state == "Stopped") return;
+                if ((_status == "Unanswered requests" || _status == "No enabled PIDs") && state == "Stopped") return;
                 if (_status == state) return;
                 _status = state;
                 Add(utc, "SessionState", details: "State=" + state + ";Reason=" + detail);
@@ -221,4 +221,3 @@ namespace J2534Diag
         }
     }
 }
-

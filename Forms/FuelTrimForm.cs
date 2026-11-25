@@ -400,6 +400,14 @@ namespace J2534Diag
             }
             lock (_sampleQueueLock)
             {
+                // Stop may retire the generation while this callback waits for the queue lock.
+                // Recheck inside the same lock used to drain retired pending entries.
+                if (generation != Volatile.Read(ref _displayGeneration) || !_ownsReceiveChannel ||
+                    _cts == null || _cts.IsCancellationRequested)
+                {
+                    _sessionReport.Account(FuelTrimEvidenceCounter.InactiveOrGenerationDiscarded);
+                    return;
+                }
                 string key = input.SourceKey + "/" + input.Pid;
                 if (!_pendingSamples.ContainsKey(key) && _pendingSamples.Count >= 96)
                 {
@@ -700,5 +708,3 @@ namespace J2534Diag
         }
     }
 }
-
-

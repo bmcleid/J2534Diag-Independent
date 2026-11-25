@@ -106,6 +106,12 @@ namespace J2534Diag.Tests
                 audit.SetStatus("Cleanup pending", "fixture", utc);
                 audit.Stop(3000, utc, "stop");
                 Check(audit.SessionState == "Driver error; cleanup pending", "Cleanup hid driver failure");
+                audit.Begin("disabled fixture", "", utc);
+                audit.SetStatus("No enabled PIDs", "all disabled", utc);
+                audit.Stop(4000, utc, "timer stop");
+                Check(audit.SessionState == "No enabled PIDs", "Stop hid disabled-PID reason");
+                audit.Export(file, "R24", "hash", "Not attempted");
+                Check(Read(file)[1][15].Contains("SessionState=No enabled PIDs"), "Disabled reason absent from saved metadata");
                 using (var gate = new FuelTrimPollingGate(1, 1, 1))
                 {
                     gate.Run(() => new byte[] { 6 }, pid => { }, System.Threading.CancellationToken.None);
@@ -127,4 +133,3 @@ namespace J2534Diag.Tests
         }
     }
 }
-

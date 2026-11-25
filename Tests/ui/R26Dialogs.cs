@@ -58,7 +58,18 @@ internal static class R26Dialogs
             if (caption.ToString() != title) return true;
             found = window; return false;
         }, IntPtr.Zero);
-        return found == IntPtr.Zero ? null : AutomationElement.FromHandle(found);
+        if (found != IntPtr.Zero) return AutomationElement.FromHandle(found);
+        // The common Save dialog can have an accessible owned-window entry
+        // even when the native caption/PID lookup does not identify it.
+        // Both failed-run UI trees retained these owned dialog descendants.
+        foreach (var owner in Windows())
+        {
+            var owned = owner.FindFirst(TreeScope.Descendants, new AndCondition(
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Window),
+                new PropertyCondition(AutomationElement.NameProperty, title)));
+            if (owned != null) return owned;
+        }
+        return null;
     }
     static AutomationElement WaitWindow(string title)
     {
@@ -79,7 +90,13 @@ internal static class R26Dialogs
         var worker = new Thread(() => { try { ((InvokePattern)element.GetCurrentPattern(InvokePattern.Pattern)).Invoke(); } catch (ElementNotAvailableException) { } catch (Exception ex) { Console.WriteLine("ACTION: " + ex); } });
         worker.IsBackground = true; worker.SetApartmentState(ApartmentState.STA); worker.Start();
     }
-    static void Foreground(AutomationElement window) { SetForegroundWindow(new IntPtr(window.Current.NativeWindowHandle)); Thread.Sleep(120); }
+    static void Foreground(AutomationElement window)
+    {
+        int handle = window.Current.NativeWindowHandle;
+        if (handle != 0) SetForegroundWindow(new IntPtr(handle));
+        else window.SetFocus();
+        Thread.Sleep(120);
+    }
     static void Keys(AutomationElement window, string keys) { Foreground(window); SendKeys.SendWait(keys); Thread.Sleep(150); }
     static void Screenshot(string name)
     {

@@ -169,7 +169,8 @@ namespace J2534Diag.Tests
                 StringSplitOptions.None).Length == 3, "Both form workers must share cancellation wrapper");
             Check(form.Contains("if (_ownsReceiveChannel) return;") &&
                 form.Contains("StopListening();"), "Restart does not retain pending session");
-            Check(form.Contains("_cts == null || _cts.IsCancellationRequested) return;"),
+            Check(form.Contains("_cts == null || _cts.IsCancellationRequested)") &&
+                form.Contains("FuelTrimEvidenceCounter.InactiveOrGenerationDiscarded"),
                 "Cancelled session still applies queued samples");
         }
 
@@ -311,3 +312,4 @@ namespace J2534Diag.Tests
         }
     }
 }
+

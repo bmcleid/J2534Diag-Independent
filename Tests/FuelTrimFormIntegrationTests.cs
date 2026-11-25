@@ -393,6 +393,11 @@ namespace J2534Diag.Tests
                         Check(PumpUntil(() => !worker.IsAlive, 3000), "Silence did not terminate actual polling gate");
                         Check(cts.IsCancellationRequested, "Quiet terminal exit did not cancel session");
                         Check(PumpUntil(() => Value(form, 0x0C) == "Unknown / stale", 1000), "Cancelled session retained live values");
+                        long beforeCancelledCallback = (long)report.GetType().GetProperty("AcceptedObservations").GetValue(report);
+                        Call(form, "QueueScalarSample", Reply(6), 0u, 1);
+                        Call(form, "FlushScalarSamples");
+                        Check((long)report.GetType().GetProperty("AcceptedObservations").GetValue(report) == beforeCancelledCallback,
+                            "Cancelled callback became an accepted observation");
                         Check(workerFailure == null, "Synthetic worker failed: " + workerFailure);
                         Check(sent >= 6, "Full request cycle not exercised");
                         Call(form, "StartListening");

@@ -293,9 +293,11 @@ namespace J2534Diag.Tests
                 form.ClientSize = new System.Drawing.Size(1360, 640);
                 Application.DoEvents(); Call(form, "LayoutFuelPanels"); Application.DoEvents();
                 var panel = (Panel)Get(form, "pnlGrids");
-                Check(((TableLayoutPanel)Get(form, "tlpRight")).RowCount == 3, "Grid placed outside declared row count");
+                Check(panel.Parent == form && ((Control)Get(form, "flpPids")).Parent == form &&
+                    ((Control)Get(form, "flpActions")).Parent == form, "Three viewport regions not attached to actual form");
                 Console.WriteLine("LAYOUT wide client=" + form.ClientSize + " panel=" + panel.ClientSize +
                     " grid1=" + grid1.Bounds + " grid2=" + grid2.Bounds);
+                Check(panel.ClientSize.Width == form.ClientSize.Width - 12, "Grid viewport did not follow actual form width");
                 Check(panel.ClientSize.Width >= 1000, "Hosted test did not provide a wide viewport");
                 Check(grid1.Top == grid2.Top && grid2.Left > grid1.Right, "Wide layout banks not side by side");
                 Check(grid1.Bottom <= panel.ClientSize.Height && grid2.Bottom <= panel.ClientSize.Height,

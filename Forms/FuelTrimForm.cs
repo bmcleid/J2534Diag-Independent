@@ -117,13 +117,18 @@ namespace J2534Diag
 
         private void LayoutFuelPanels()
         {
-            if (_layoutBusy || pnlGrids.ClientSize.Width <= 0) return;
+            if (_layoutBusy || ClientSize.Width <= 12) return;
             _layoutBusy = true;
             try
             {
-                int gaugeWidth = Math.Max(1, flpPids.ClientSize.Width);
-                int rows = Math.Max(1, (int)Math.Ceiling(6 * 146.0 / gaugeWidth));
-                tlpRight.RowStyles[0].Height = Math.Min(264, rows * 128 + 8);
+                int availableWidth = Math.Max(1, ClientSize.Width - 12);
+                int rows = Math.Max(1, (int)Math.Ceiling(6 * 146.0 / availableWidth));
+                int gaugeHeight = Math.Min(264, rows * 128 + 8);
+                flpPids.SetBounds(6, 6, availableWidth, gaugeHeight);
+                int actionHeight = Math.Max(36, flpActions.GetPreferredSize(new Size(availableWidth, 0)).Height);
+                flpActions.SetBounds(6, flpPids.Bottom + 4, availableWidth, actionHeight);
+                pnlGrids.SetBounds(6, flpActions.Bottom + 6, availableWidth,
+                    Math.Max(80, ClientSize.Height - flpActions.Bottom - 12));
                 bool stacked = pnlGrids.ClientSize.Width < 1000;
                 int width = Math.Max(320, stacked ? pnlGrids.ClientSize.Width - 28 : (pnlGrids.ClientSize.Width - 32) / 2);
                 int height = Math.Max(180, Math.Min(424, pnlGrids.ClientSize.Height - 30));

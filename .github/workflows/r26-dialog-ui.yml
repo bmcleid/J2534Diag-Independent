@@ -1,0 +1,79 @@
+name: R26 exact-binary dialog check
+on:
+  push:
+    branches: ['test/r26-dialog-ui-20261125']
+    paths:
+      - 'Tests/ui/**'
+      - '.github/workflows/r26-dialog-ui.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  dialogs:
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - name: Download preserved R26 runtime without rebuilding product
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 45652987542
+          name: J2534Diag-baseline-windows
+          path: runtime
+      - name: Verify exact runtime and empty J2534 provider registry
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force diagnostics | Out-Null
+          $exe = (Get-FileHash runtime/J2534Diag.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($exe -ne 'e5ba2abf8ee1a2eedc04f088b08d90d44c6ad78b4dbb506e8d825afc95bc3eba') { throw 'Wrong R26 executable' }
+          $manifest = Get-Content runtime/ENGINEERING_PREVIEW_MANIFEST.txt -Raw
+          if (-not $manifest.Contains('SourceCommit=f0a43d1da720f0fb6261934939bdb1c571c44ef4')) { throw 'Wrong R26 source' }
+          foreach ($line in ($manifest -split "`n")) {
+            if ($line.Trim() -match '^([0-9A-F]{64})  (.+)$') {
+              $expected = $Matches[1]; $file = Join-Path runtime $Matches[2]
+              if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ne $expected) { throw "Payload mismatch: $file" }
+            }
+          }
+          $providers = @()
+          foreach ($view in @([Microsoft.Win32.RegistryView]::Registry64, [Microsoft.Win32.RegistryView]::Registry32)) {
+            foreach ($hive in @([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryHive]::CurrentUser)) {
+              $root = [Microsoft.Win32.RegistryKey]::OpenBaseKey($hive, $view)
+              try {
+                foreach ($key in @('SOFTWARE\PassThruSupport.04.04', 'SOFTWARE\PassThruSupport.05.00')) {
+                  $node = $root.OpenSubKey($key)
+                  if ($node) { try { $providers += @($node.GetSubKeyNames() | ForEach-Object { "$hive/$view/$key/$_" }) } finally { $node.Dispose() } }
+                }
+              } finally { $root.Dispose() }
+            }
+          }
+          $providers | Set-Content diagnostics/provider-registry.txt
+          if ($providers.Count -ne 0) { throw 'Refuse UI fixture when any J2534 provider is registered' }
+          'RegisteredProviders=0;NoProductBuild=True;RuntimeRun=45652987542' | Set-Content diagnostics/preflight.txt
+      - name: Compile UI harness only
+        shell: pwsh
+        run: |
+          & msbuild.exe Tests/ui/R26Dialogs.csproj /p:Configuration=Release /verbosity:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Exercise actual R26 dialogs and keyboard without provider
+        shell: pwsh
+        run: |
+          $process = Start-Process Tests/ui/bin/Release/R26Dialogs.exe -ArgumentList @((Join-Path $pwd runtime), (Join-Path $pwd diagnostics)) -PassThru -RedirectStandardOutput diagnostics/ui.log -RedirectStandardError diagnostics/ui-error.log
+          if (-not $process.WaitForExit(180000)) { Stop-Process -Id $process.Id -Force; throw 'UI harness exceeded bounded three-minute wait' }
+          Get-Content diagnostics/ui.log
+          Get-Content diagnostics/ui-error.log
+          if ($process.ExitCode -ne 0) { throw "UI harness failed: $($process.ExitCode)" }
+          if ((Get-FileHash runtime/J2534Diag.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e5ba2abf8ee1a2eedc04f088b08d90d44c6ad78b4dbb506e8d825afc95bc3eba') { throw 'R26 runtime changed' }
+      - name: Preserve scoped evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: R26-exact-binary-dialog-evidence
+          path: diagnostics/**
+          retention-days: 14

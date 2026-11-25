@@ -1,10 +1,6 @@
 name: Windows baseline build
 
 on:
-  push:
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

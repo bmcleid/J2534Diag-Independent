@@ -516,3 +516,12 @@ Saved **J2534Diag-R22-Windows.zip**, Library **libfile_2d5935213950819183a381144
 ### Use and limits
 
 Extract R22 into its own folder, open J2534Diag.exe, and confirm title **R22 /26faeb740bb6**. Fuel Trims now has **Export session…**; it remains available after stopping/disconnecting. CSV is a bounded app observation/session record, not a raw CAN capture. Build identity/export/layout/lifecycle work is complete; no additional vehicle scan is needed to close this task. Physical installed-RLink acceptance remains the recorded R21 session until R22 is separately observed. No TFP or fuel-system fault/repair conclusion follows.
+
+
+### R22 owner offline GUI acceptance — November24,2026
+
+Owner reports **“all looks right”** and supplies Screenshot2026-11-24 214257.png, Library **libfile_63a5c7f530648191b23cdfbb47d76ffe**, original SHA256 **8511b4b6a95b6b430ca783fed4fe31887d7d376af4665b7b5230ab221017f74d**.
+
+**CONFIRMED from supplied image:** title and action row show **R22 /26faeb740bb6**; Export session button is visible; both Bank1/Bank2 history grids are fully shown side by side with rows90% through0% and RPM columns0–4500; six gauges show Unknown/stale, source selector blank, statusDisconnected. This closes owner-side full-width offline layout/build-identifier/export-control visibility acceptance and supplies the uncropped wide view missing from the hosted bitmap. The owner also reports the overall check looks right; no further screenshot/resizing repetition is needed.
+
+This does not establish a user-generated export file or a new physical R22 connection. Export content/lifecycle behavior retains the existing Windows/virtual test evidence; R21 remains the accepted physical session. No additional vehicle scan, build, CI, provider change, programming or merge was requested/performed.

@@ -420,3 +420,14 @@ Downloaded ZIP SHA/CRC, embedded source/run and every payload hash verified. R21
 ### Step 4 readiness review
 
 **READY for one controlled installed-RLink managed connection/VIN → ten-second FuelTrims → disconnect check using R21.** Detailed bounded procedure/acceptance is [R21 readiness review](R21_RLINK_READINESS_2026-11-23.md). No physical check was executed here. Existing native TCM handshakes and disconnected screenshots need no repetition. MainForm discovery/selection, physical TOPDON behavior, successful UDS/29-bit VIN modes, and this vehicle's scalar support/accuracy remain UNVERIFIED. This is independent tool compatibility work, not a TFP diagnosis or a transmission repair.
+
+## R21 physical GUI evidence — November 24, 2026
+
+**CONFIRMED from owner-supplied screenshots:** installed provider is displayed as RLink; receiver is Original J2534-Sharp; capture-only is unchecked; connection screen says Active diagnostics connected. Status bar shows Connected, VIN **3GYFNEE31CS519173**, and 2012 CADILLAC SRX (6 Cyl,3.6 L). Fuel Trims shows response source **0x7E8 / Mode01** and six numeric values:
+RPM559.5; STFT Bank1 **3.125%**; LTFT Bank1 **7.031%**; STFT Bank2 **-1.563%**; LTFT Bank2 **13.281%**; throttle **16.863%**. Colored observed-history cells are visible near the bottom, but the screenshot clips the lower grid; do not infer their complete contents.
+
+This closes the prior physical GUI connection/correct-VIN/six-scalar-display gap for this observed session. It does not independently verify the executable hash/build, raw packets, cadence, VIN request mode, dynamic freshness, scalar accuracy, fuel-control conditions or ECU identity from its address. R21 use is contextual from the immediately preceding delivery/extraction/check instructions; the screenshots have no build identifier. No diagnosis or fuel-system fault conclusion follows from one frame of displayed trims.
+
+Evidence: Screenshot2026-11-24 203137(1).png, Librarylibfile_8f5d8c64126c819198c26605b9872876, SHA256 **6a1471bef1837aec7296971a6230e981455a693c266289d0de8843894e37f266** (FuelTrims); Screenshot2026-11-24 203030(1).png, Librarylibfile_46b5320bc0d08191b5e24301fc5f69c0, SHA256 **03c55c617bfd7a62846731c3d28966baafff814bcff265a8990618f2154b72c1** (Vehicle). Supplied images inspected directly; local original image hashes measured.
+
+**Remaining acceptance:** normal Disconnect completion without error is not shown or owner-confirmed in this exchange. Ask only for that result if not already completed; do not repeat Connect or the accepted display check. No new scan/build/CI/driver installation/clear/programming/parking-brake procedure is needed. Independent J2534Diag evidence; do not conflate with the separate Vgate RPM-only session or OneApp.

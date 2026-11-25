@@ -284,10 +284,19 @@ namespace J2534Diag.Tests
                 Check(Value(form, 6) == "Unknown / stale", "Initial missing value fabricated");
                 var grid1 = (DataGridView)Get(form, "dgvTrimGridBank1");
                 var grid2 = (DataGridView)Get(form, "dgvTrimGridBank2");
+                // Override the hosted desktop's default maximum tracking size;
+                // a requested 1360px form can otherwise be clamped to its 1024px screen.
+                form.MaximumSize = new System.Drawing.Size(2000, 1400);
+                form.StartPosition = FormStartPosition.Manual;
+                form.Location = System.Drawing.Point.Empty;
+                form.Show();
                 form.ClientSize = new System.Drawing.Size(1360, 640);
-                form.Show(); Application.DoEvents(); Call(form, "LayoutFuelPanels"); Application.DoEvents();
+                Application.DoEvents(); Call(form, "LayoutFuelPanels"); Application.DoEvents();
                 var panel = (Panel)Get(form, "pnlGrids");
                 Check(((TableLayoutPanel)Get(form, "tlpRight")).RowCount == 3, "Grid placed outside declared row count");
+                Console.WriteLine("LAYOUT wide client=" + form.ClientSize + " panel=" + panel.ClientSize +
+                    " grid1=" + grid1.Bounds + " grid2=" + grid2.Bounds);
+                Check(panel.ClientSize.Width >= 1000, "Hosted test did not provide a wide viewport");
                 Check(grid1.Top == grid2.Top && grid2.Left > grid1.Right, "Wide layout banks not side by side");
                 Check(grid1.Bottom <= panel.ClientSize.Height && grid2.Bottom <= panel.ClientSize.Height,
                     "Wide grids clipped outside their viewport");
@@ -301,6 +310,8 @@ namespace J2534Diag.Tests
                     { form.DrawToBitmap(bitmap, new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height));
                       bitmap.Save(Path.Combine(root, "diagnostics", "fuel-layout-wide.png")); }
                 form.ClientSize = new System.Drawing.Size(800, 600); Application.DoEvents(); Call(form, "LayoutFuelPanels"); Application.DoEvents();
+                Console.WriteLine("LAYOUT narrow client=" + form.ClientSize + " panel=" + panel.ClientSize +
+                    " grid1=" + grid1.Bounds + " grid2=" + grid2.Bounds);
                 Check(grid2.Top > grid1.Bottom && panel.AutoScrollMinSize.Height > panel.ClientSize.Height,
                     "Narrow banks did not stack with outer scrolling");
                 panel.ScrollControlIntoView(grid2); Application.DoEvents();

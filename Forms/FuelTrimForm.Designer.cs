@@ -155,6 +155,7 @@ namespace J2534Diag
             // --- Right TableLayoutPanel to stack flpPids and pnlGrids ---
             this.tlpRight = new TableLayoutPanel();
             this.tlpRight.ColumnCount = 1;
+            this.tlpRight.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             this.tlpRight.RowCount = 3;
             this.tlpRight.Dock = DockStyle.Fill;
             this.tlpRight.RowStyles.Add(new RowStyle(SizeType.Absolute, 140F)); // Height for PID controls

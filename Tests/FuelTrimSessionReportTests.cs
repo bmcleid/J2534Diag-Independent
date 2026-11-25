@@ -72,6 +72,7 @@ namespace J2534Diag.Tests
                     for (int i = 0; i < 3; i++)
                     {
                         report.Export(file, "fixture", "hash", "Not attempted for current connection");
+                        Check(SpinWait.SpinUntil(() => report.ObservationsSinceExport > 0, 2000), "Export acknowledged observations arriving after its snapshot");
                         var rows = Read(file);
                         int retained = int.Parse(Regex.Match(rows[1][15], @"(?:^|;)RetainedRows=(\d+)").Groups[1].Value, CultureInfo.InvariantCulture);
                         var summaries = rows.Where(r => r[2] == "PidSummary").ToArray();
@@ -91,6 +92,7 @@ namespace J2534Diag.Tests
                 "Concurrent observations lost, duplicated or failed: " + failure);
             report.Export(file, "fixture", "hash", "Not attempted for current connection");
             var final = Read(file);
+            Check(report.ObservationsSinceExport == 0, "Final export left unchanged snapshot unacknowledged");
             Check(final.Where(r => r[2] == "PidSummary").Sum(r => long.Parse(Regex.Match(r[15], @"AcceptedObservations=(\d+)").Groups[1].Value,
                 CultureInfo.InvariantCulture)) == report.AcceptedObservations, "Final lifetime summary total mismatch");
             Check(!Directory.GetFiles(directory, "*.tmp").Any(), "Concurrent exports left temporary files");
@@ -172,6 +174,7 @@ namespace J2534Diag.Tests
                 Check(bounded.RetainedRows == 12 && bounded.DiscardedRows == 25, "Buffer limit/count wrong");
                 bounded.Export(file, "R22", "hash", "Not attempted");
                 Check(Read(file)[1][15].Contains("DiscardedOldestRows=25"), "Truncation hidden in export");
+                Check(bounded.HealthText().Contains("Rows evicted: 25") && bounded.HealthText().Contains("Sample drops: 0"), "Health conflated row eviction with queue loss");
                 var audit = new FuelTrimSessionReport(1000, 12);
                 audit.Begin("clock fixture", "", utc);
                 audit.Observe("A", 6, 1, 100, utc, 100);
@@ -209,6 +212,20 @@ namespace J2534Diag.Tests
                 Check(audit.SessionState == "No enabled PIDs", "Stop hid disabled-PID reason");
                 audit.Export(file, "R24", "hash", "Not attempted");
                 Check(Read(file)[1][15].Contains("SessionState=No enabled PIDs"), "Disabled reason absent from saved metadata");
+                var watermark = new FuelTrimSessionReport(1000); watermark.Begin("watermark", "", utc);
+                watermark.Observe("A", 6, 1, 1, utc, 1);
+                Check(watermark.ObservationsSinceExport == 1, "New observation not marked unsaved");
+                watermark.Export(file, "R26", "hash", "Not attempted");
+                Check(watermark.ObservationsSinceExport == 0, "Successful export did not acknowledge snapshot");
+                watermark.Observe("A", 6, 2, 2, utc, 2); bool watermarkFailed = false;
+                using (var locked = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                    try { watermark.Export(file, "R26", "hash", "Not attempted"); } catch (IOException) { watermarkFailed = true; }
+                Check(watermarkFailed && watermark.ObservationsSinceExport == 1, "Failed export acknowledged unsaved observation");
+                watermark.Begin("new session", "", utc); watermark.Observe("B", 6, 3, 3, utc, 3);
+                Check(watermark.ObservationsSinceExport == 2, "Restart lost unexported lifetime observations");
+                watermark.Export(file, "R26", "hash", "Not attempted");
+                Check(watermark.ObservationsSinceExport == 0, "Retry did not acknowledge retained observations");
+
                 using (var gate = new FuelTrimPollingGate(1, 1, 1))
                 {
                     gate.Run(() => new byte[] { 6 }, pid => { }, System.Threading.CancellationToken.None);

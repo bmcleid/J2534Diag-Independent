@@ -159,6 +159,11 @@ namespace J2534Diag
                     "Channel shutdown pending", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+            if (fuelTrimForm != null && !fuelTrimForm.ConfirmReportBeforeClose())
+            {
+                e.Cancel = true;
+                return;
+            }
             base.OnFormClosing(e);
             if (!e.Cancel)
                 j2534Manager?.Dispose();
@@ -209,4 +214,3 @@ namespace J2534Diag
         }
     }
 }
-

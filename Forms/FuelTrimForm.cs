@@ -59,6 +59,8 @@ namespace J2534Diag
         private readonly Button _exportButton = new Button { Text = "Export session…", AutoSize = true };
         private readonly Label _sessionHealth = new Label { Text = "Session: Idle", AutoSize = true, ForeColor = Color.DarkBlue };
         private Action<string> _disconnectReporter;
+        private Func<DialogResult> _chooseUnsavedReportAction;
+        private Func<bool> _saveUnsavedReport;
         private bool _layoutBusy;
         public bool BatchMode { get; private set; } = false;
 
@@ -82,6 +84,11 @@ namespace J2534Diag
             });
             flpActions.Controls.Add(_exportButton);
             _exportButton.Click += (sender, args) => ExportSession();
+            _chooseUnsavedReportAction = () => MessageBox.Show(this,
+                _sessionReport.ObservationsSinceExport + " new observations since the last successful export.\n" +
+                "Save the current bounded session report before closing?\nYes: export. No: close without exporting. Cancel: keep the app open.",
+                "Session report", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            _saveUnsavedReport = ExportSession;
             flpActions.Controls.Add(new Label { Text = BuildIdentity.Description, AutoSize = true });
             flpActions.Controls.Add(_sessionHealth);
             SizeChanged += (sender, args) => LayoutFuelPanels();
@@ -146,6 +153,7 @@ namespace J2534Diag
                 int rows = Math.Max(1, (int)Math.Ceiling(6 * 146.0 / availableWidth));
                 int gaugeHeight = Math.Min(264, rows * 128 + 8);
                 flpPids.SetBounds(6, 6, availableWidth, gaugeHeight);
+                _sessionHealth.MaximumSize = new Size(Math.Max(1, availableWidth - 12), 0);
                 int actionHeight = Math.Max(36, flpActions.GetPreferredSize(new Size(availableWidth, 0)).Height);
                 flpActions.SetBounds(6, flpPids.Bottom + 4, availableWidth, actionHeight);
                 pnlGrids.SetBounds(6, flpActions.Bottom + 6, availableWidth,
@@ -170,19 +178,34 @@ namespace J2534Diag
             finally { _layoutBusy = false; }
         }
 
-        private void ExportSession()
+        private bool ExportSession()
         {
             using (var dialog = new SaveFileDialog { Filter = "Session CSV (*.csv)|*.csv", DefaultExt = "csv",
                 FileName = "J2534Diag-" + BuildIdentity.Release + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".csv" })
-                if (dialog.ShowDialog(this) == DialogResult.OK)
-                    try { ExportSessionTo(dialog.FileName); }
-                    catch (Exception ex) { MessageBox.Show(this, "Session export failed: " + ex.Message, "Export", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK) return false;
+                try { ExportSessionTo(dialog.FileName); return true; }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "Session export failed: " + ex.Message, "Export", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return false;
+                }
+            }
+        }
+        internal bool ConfirmReportBeforeClose()
+        {
+            if (_sessionReport.ObservationsSinceExport == 0) return true;
+            DialogResult decision = _chooseUnsavedReportAction();
+            if (decision == DialogResult.No) return true;
+            if (decision != DialogResult.Yes) return false;
+            return _saveUnsavedReport() && _sessionReport.ObservationsSinceExport == 0;
         }
         internal void ExportSessionTo(string path)
         {
             _sessionReport.Refresh(Stopwatch.GetTimestamp(), DateTime.UtcNow);
             _sessionReport.Export(path, BuildIdentity.Description + " / " + BuildIdentity.SourceCommit,
                 BuildIdentity.ExecutableSha256(), j2534Manager.LastDisconnectOutcome);
+            UpdateSessionHealth();
         }
 
         private void SetupPidDisplayControls()
@@ -504,7 +527,7 @@ namespace J2534Diag
                 if (_pidControls.TryGetValue(definition.Pid, out control))
                 {
                     double? value = snapshot.Value(definition.Pid);
-                    control.ValueText = value.HasValue
+                    control.ValueText = !definition.Enabled ? "Disabled" : value.HasValue
                         ? value.Value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
                         : "Unknown / stale";
                 }

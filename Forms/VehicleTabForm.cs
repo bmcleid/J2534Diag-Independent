@@ -174,6 +174,20 @@ namespace J2534Diag
         //    return false;
         //}
 
+        private void RefreshConnectionControls()
+        {
+            bool retained = j2534Manager.HasConnectionOrSelection;
+            _disconnectButton.Enabled = retained;
+            btnConnect.Enabled = !retained && j2534Manager.Devices?.Any() == true;
+            _receiverSelect.Enabled = !retained;
+            cbDevices.Enabled = !retained;
+            _captureOnlyCheck.Enabled = !retained && _receiverSelect.SelectedIndex == 0;
+            _canWidthSelect.Enabled = !retained && _captureOnlyCheck.Checked && _receiverSelect.SelectedIndex == 0;
+            if (!retained) btnConnect.Text = "Connect";
+            else if (btnConnect.Text == "Connect" || btnConnect.Text == "Connecting ...")
+                btnConnect.Text = "Connection retained — Disconnect to retry";
+        }
+
         private void DisconnectButton_Click(object sender, EventArgs e)
         {
             try
@@ -196,7 +210,7 @@ namespace J2534Diag
             }
             finally
             {
-                _disconnectButton.Enabled = j2534Manager.HasConnectionOrSelection;
+                RefreshConnectionControls();
             }
         }
 
@@ -289,7 +303,7 @@ namespace J2534Diag
             }
             finally
             {
-                btnConnect.Enabled = true;
+                RefreshConnectionControls();
             }
         }
     }

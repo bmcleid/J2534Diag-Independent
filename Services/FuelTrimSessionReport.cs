@@ -31,7 +31,8 @@ namespace J2534Diag
         private readonly long _frequency;
         private string _session = "", _mode = "Not started", _vin = "";
         private bool _active;
-        private long _discarded;
+        private long _discarded, _exportedObservations;
+        public long ObservationsSinceExport { get { lock (_sync) return Math.Max(0, _observed.Values.Sum() - _exportedObservations); } }
         private string _status = "Idle", _selectedSource = "";
         private readonly Dictionary<byte, long> _observed = Pids.ToDictionary(p => p, p => 0L);
         private readonly Dictionary<byte, long> _stale = Pids.ToDictionary(p => p, p => 0L);
@@ -81,7 +82,9 @@ namespace J2534Diag
                     _counters[FuelTrimEvidenceCounter.DecodeOrStateRejected] +
                     _counters[FuelTrimEvidenceCounter.ReportObservationRejected];
                 return "Session: " + _status + " | Accepted: " + _observed.Values.Sum() +
-                    " | Coalesced: " + _counters[FuelTrimEvidenceCounter.CoalescedBeforeAcceptance] + " | Discarded: " + dropped;
+                    " | Coalesced: " + _counters[FuelTrimEvidenceCounter.CoalescedBeforeAcceptance] +
+                    " | Sample drops: " + dropped + " | Rows evicted: " + _discarded +
+                    " | New since export: " + Math.Max(0, _observed.Values.Sum() - _exportedObservations);
             }
         }
         public FuelTrimSessionReport(long frequency, int capacity = 20000)
@@ -183,10 +186,11 @@ namespace J2534Diag
         private static string Quote(string value) { return "\"" + (value ?? "").Replace("\"", "\"\"") + "\""; }
         public void Export(string path, string build, string exeSha256, string disconnectOutcome)
         {
-            Row[] rows; Row[] summaries; long discarded; string counters, state;
+            Row[] rows; Row[] summaries; long discarded, exportedObservations; string counters, state;
             lock (_sync)
             {
                 rows = _rows.ToArray(); discarded = _discarded; state = _status;
+                exportedObservations = _observed.Values.Sum();
                 counters = string.Join(";", _counters.Select(p => p.Key + "=" + p.Value.ToString(CultureInfo.InvariantCulture)));
                 summaries = Pids.Select(pid => new Row { Utc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
                     Event = "PidSummary", Pid = pid.ToString("X2"), Name = Name(pid), Unit = pid == 0x0C ? "rpm" : "%",
@@ -216,6 +220,9 @@ namespace J2534Diag
                 }
                 if (File.Exists(full)) File.Replace(temp, full, null);
                 else File.Move(temp, full);
+                // A failed save must not acknowledge evidence; observations arriving
+                // after this snapshot remain unexported.
+                lock (_sync) _exportedObservations = exportedObservations;
             }
             finally { if (File.Exists(temp)) File.Delete(temp); }
         }

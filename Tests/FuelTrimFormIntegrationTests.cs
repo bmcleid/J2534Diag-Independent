@@ -268,6 +268,7 @@ namespace J2534Diag.Tests
 
         public static int RunAll()
         {
+            Console.WriteLine("R22 owner-approved validation: direct client viewport sizing after preserved layout failures.");
             string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
             var assembly = Assembly.LoadFrom(Path.Combine(root, "bin", "Release", "J2534Diag.exe"));
             Type managerType = assembly.GetType("J2534Diag.J2534Manager", true);

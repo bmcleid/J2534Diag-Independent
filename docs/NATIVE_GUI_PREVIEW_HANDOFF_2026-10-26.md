@@ -431,3 +431,12 @@ This closes the prior physical GUI connection/correct-VIN/six-scalar-display gap
 Evidence: Screenshot2026-11-24 203137(1).png, Librarylibfile_8f5d8c64126c819198c26605b9872876, SHA256 **6a1471bef1837aec7296971a6230e981455a693c266289d0de8843894e37f266** (FuelTrims); Screenshot2026-11-24 203030(1).png, Librarylibfile_46b5320bc0d08191b5e24301fc5f69c0, SHA256 **03c55c617bfd7a62846731c3d28966baafff814bcff265a8990618f2154b72c1** (Vehicle). Supplied images inspected directly; local original image hashes measured.
 
 **Remaining acceptance:** normal Disconnect completion without error is not shown or owner-confirmed in this exchange. Ask only for that result if not already completed; do not repeat Connect or the accepted display check. No new scan/build/CI/driver installation/clear/programming/parking-brake procedure is needed. Independent J2534Diag evidence; do not conflate with the separate Vgate RPM-only session or OneApp.
+
+
+### November 24, 2026 — owner-confirmed successful Disconnect; bounded physical acceptance closed
+
+Owner explicitly answered: “Yes. No error on disconnect.” **CONFIRMED at owner-report level:** normal Disconnect completed without an error after the supplied correct-VIN and six-scalar screenshots. This supersedes the immediately preceding remaining-disconnect acceptance statement.
+
+The requested installed-RLink managed connection → correct vehicle VIN → six displayed Mode01 values → error-free Disconnect gate is now complete for this observed session. No repeat scan, reconnect, disconnected screenshot or build is needed. Preserve the earlier limits: exact running EXE identity was not visible in screenshots; packet provenance, cadence, dynamic freshness, scalar accuracy, enhanced TCM/TFP interpretation, all VIN fallback success modes and broader operating-condition coverage remain unverified. No transmission or fuel-system repair is established by tool acceptance.
+
+Next independent-tool development can proceed offline from this accepted baseline. No additional physical vehicle operation is pending from this gate. No runtime edit, CI, merge, driver change or code clearing occurred while recording this confirmation.

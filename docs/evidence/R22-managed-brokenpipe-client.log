@@ -1,0 +1,1 @@
+PASS: 18 actual broken-driver cancellation/retained-ownership/export checks. Virtual test-process exit releases IPC; no physical driver.

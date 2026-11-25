@@ -170,8 +170,21 @@ namespace J2534Diag
         /// Close an idle J2534 connection. Refuses if any application capture
         /// or diagnostic reader still holds its receive lease.
         /// </summary>
+        public string LastDisconnectOutcome { get; private set; } = "Not attempted";
+        public event Action<string> DisconnectOutcomeChanged;
+        private void ReportDisconnect(string outcome)
+        {
+            LastDisconnectOutcome = outcome;
+            // An evidence/UI subscriber must never change driver cleanup behavior.
+            var handlers = DisconnectOutcomeChanged;
+            if (handlers != null) foreach (Action<string> handler in handlers.GetInvocationList())
+                try { handler(outcome); } catch (Exception ex) { Debug.WriteLine(ex); }
+        }
         public void Disconnect()
         {
+            ReportDisconnect("Pending");
+            try
+            {
             StopVinMonitorSafely();
             if (NativeModeSelected || NativeSession != null || _nativeApi != null)
             {
@@ -182,6 +195,13 @@ namespace J2534Diag
             CloseChannelAndDevice();
             ReleaseManagedLeaseIfClosed();
             _mainForm?.UpdateSelectedVehicle(false, null);
+                ReportDisconnect("Succeeded");
+            }
+            catch (Exception ex)
+            {
+                ReportDisconnect("Failed: " + ex.GetType().Name + ": " + ex.Message);
+                throw;
+            }
         }
 
         private void CloseChannelAndDevice()
@@ -202,6 +222,7 @@ namespace J2534Diag
         public void Initialize(string dllFileName)
         {
             RequireManagedConnectionLease();  // Acquire BEFORE touching the driver.
+            LastDisconnectOutcome = "Not attempted for current connection";
             try
             {
             StopVinMonitorSafely();
@@ -257,7 +278,8 @@ namespace J2534Diag
                 throw new ArgumentException("Select an installed J2534 DLL.", nameof(dllFileName));
             if (bitMode != BitType.BITS_11 && bitMode != BitType.BITS_29)
                 throw new ArgumentOutOfRangeException(nameof(bitMode));
-            RequireManagedConnectionLease(); // No native overlap during reconnect.
+            RequireManagedConnectionLease();
+            LastDisconnectOutcome = "Not attempted for current connection"; // No native overlap during reconnect.
             try
             {
                 // Keep the same owner across a managed reconnect.
@@ -540,4 +562,5 @@ namespace J2534Diag
         }
     }
 }
+
 

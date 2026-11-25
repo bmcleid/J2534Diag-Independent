@@ -20,6 +20,8 @@ namespace J2534Diag
         public MainForm()
         {
             InitializeComponent();
+            Text = "J2534Diag " + BuildIdentity.Description;
+            MinimumSize = new System.Drawing.Size(680, 500);
         }
 
         public void UpdateSelectedVehicle(bool connected, string vin)
@@ -207,3 +209,4 @@ namespace J2534Diag
         }
     }
 }
+

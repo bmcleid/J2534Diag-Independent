@@ -21,7 +21,7 @@ namespace J2534Diag.Tests
             {
                 if (args.Length == 2 && args[0] == "--ci-vin-baseline")
                     return VinStartupTests.RunBaseline(args[1]);
-                if (args.Length > 0 && (args[0] == "--ci-managed-vin-legacy" || args[0] == "--ci-managed-vin-failure" || args[0] == "--ci-managed-sim" || args[0] == "--ci-managed-vin"))
+                if (args.Length > 0 && (args[0] == "--ci-managed-broken-pipe" || args[0] == "--ci-managed-vin-legacy" || args[0] == "--ci-managed-vin-failure" || args[0] == "--ci-managed-sim" || args[0] == "--ci-managed-vin"))
                     return FuelTrimFormIntegrationTests.RunManaged(args);
                 if (args.Length > 0) return NativeJ2534InteropSmoke.Run(args);
                 RoundTripWithTimestampAndEscapedFields();
@@ -43,6 +43,7 @@ namespace J2534Diag.Tests
                 int diskAssertions = CanDiskCaptureLoggerTests.RunAll();
                 int integrityAssertions = CanCaptureIntegrityReportTests.RunAll();
                 int atomicSidecarAssertions = AtomicIntegritySidecarTests.RunAll();
+                int reportAssertions = FuelTrimSessionReportTests.RunAll();
                 int vinAssertions = VinStartupTests.RunAll();
                 int fuelFormAssertions = FuelTrimFormIntegrationTests.RunAll();
                 int fuelTrimAssertions = FuelTrimSampleStateTests.RunAll();
@@ -53,7 +54,7 @@ namespace J2534Diag.Tests
                 int classifierAssertions = CanFrameClassifierTests.RunAll();
                 int nativeSixColumnAssertions = NativeSixColumnCanImportTests.RunAll();
                 int provenanceAssertions = OfflineCaptureProvenanceTests.RunAll();
-                Console.WriteLine("PASS: " + (vinAssertions + fuelFormAssertions + fuelTrimAssertions + packageAssertions + _assertions + pumpAssertions + j2534Assertions + nativeAssertions + nativeLifecycleAssertions + connectionOwnerAssertions + nativeGuiAssertions + nativeAbiAssertions + diskAssertions + integrityAssertions + atomicSidecarAssertions + pendingReportAssertions + captureOnlyAssertions + lifecycleAssertions + classifierAssertions + nativeSixColumnAssertions + provenanceAssertions) + " assertions across CAN capture regression suites (including evidence packaging).");
+                Console.WriteLine("PASS: " + (reportAssertions + vinAssertions + fuelFormAssertions + fuelTrimAssertions + packageAssertions + _assertions + pumpAssertions + j2534Assertions + nativeAssertions + nativeLifecycleAssertions + connectionOwnerAssertions + nativeGuiAssertions + nativeAbiAssertions + diskAssertions + integrityAssertions + atomicSidecarAssertions + pendingReportAssertions + captureOnlyAssertions + lifecycleAssertions + classifierAssertions + nativeSixColumnAssertions + provenanceAssertions) + " assertions across CAN capture regression suites (including evidence packaging).");
                 return 0;
             }
             catch (Exception ex)
@@ -222,5 +223,6 @@ namespace J2534Diag.Tests
 
     }
 }
+
 
 

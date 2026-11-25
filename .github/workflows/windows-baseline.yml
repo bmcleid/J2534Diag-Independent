@@ -30,6 +30,10 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path diagnostics | Out-Null
+          $identity = Get-Content Services/BuildIdentity.cs -Raw
+          $identity = $identity.Replace('SourceCommit = "workspace"', "SourceCommit = `"$env:GITHUB_SHA`"")
+          Set-Content Services/BuildIdentity.cs $identity -Encoding UTF8
+          if (-not $identity.Contains($env:GITHUB_SHA)) { throw 'Build identity stamp missing' }
           & msbuild.exe J2534Diag.sln '/p:Configuration=Release' '/p:Platform=Any CPU' '/verbosity:diagnostic' '/flp:logfile=diagnostics/msbuild.log;verbosity=diagnostic' '/bl:diagnostics/msbuild.binlog'
           if ($LASTEXITCODE -ne 0) {
             Write-Host '=== Compilation errors and final log entries ==='
@@ -104,10 +108,11 @@ jobs:
           $env:SRX_MANAGED_SIM_CI = 'ALLOW'
           $env:SRX_MANAGED_SIM_DLL_SHA256 = (Get-FileHash $dll -Algorithm SHA256).Hash
           $env:SRX_BASELINE_APP = (Resolve-Path 'Tests/baseline/runtime/J2534Diag.exe').Path
-          foreach ($case in @('legacy','missing','partial','normal')) {
-            $env:SRX_MANAGED_PROFILE = switch ($case) { 'normal' { 'normal' } 'partial' { 'partial' } default { 'silent' } }
+          foreach ($case in @('legacy','missing','partial','normal','brokenpipe')) {
+            $env:SRX_MANAGED_PROFILE = switch ($case) { 'normal' { 'normal' } 'partial' { 'partial' } 'brokenpipe' { 'brokenpipe' } default { 'silent' } }
             $env:SRX_MANAGED_SILENCE_FILE = Join-Path $PWD "diagnostics/managed-$case-silence.flag"
-            Remove-Item $env:SRX_MANAGED_SILENCE_FILE -ErrorAction SilentlyContinue
+            $env:SRX_MANAGED_BREAK_FILE = Join-Path $PWD "diagnostics/managed-$case-break.flag"
+            Remove-Item $env:SRX_MANAGED_SILENCE_FILE,$env:SRX_MANAGED_BREAK_FILE -ErrorAction SilentlyContinue
             $hostProcess = $null
             try {
               $hostProcess = Start-Process $hostExe -PassThru -WindowStyle Hidden -RedirectStandardOutput "diagnostics/managed-$case-host.log" -RedirectStandardError "diagnostics/managed-$case-host.err"
@@ -118,14 +123,14 @@ jobs:
                 Start-Sleep -Milliseconds 100
               }
               if (-not $ready) { throw 'Virtual pipe readiness timeout' }
-              $mode = switch ($case) { 'legacy' { '--ci-managed-vin-legacy' } 'missing' { '--ci-managed-vin-failure' } 'partial' { '--ci-managed-vin-failure' } 'normal' { '--ci-managed-vin' } }
+              $mode = switch ($case) { 'legacy' { '--ci-managed-vin-legacy' } 'missing' { '--ci-managed-vin-failure' } 'partial' { '--ci-managed-vin-failure' } 'normal' { '--ci-managed-vin' } 'brokenpipe' { '--ci-managed-broken-pipe' } }
               & ./Tests/bin/Release/CanCaptureCsvTests.exe $mode $dll 2>&1 | Tee-Object "diagnostics/managed-$case-client.log"
               if ($LASTEXITCODE -ne 0) { throw "Managed $case failed; preserve logs, no blind retry" }
             } finally {
               if ($hostProcess -and -not $hostProcess.HasExited) { Stop-Process $hostProcess.Id -Force; $hostProcess.WaitForExit(5000) | Out-Null }
             }
           }
-          Remove-Item Env:SRX_MANAGED_SIM_CI,Env:SRX_MANAGED_SIM_DLL_SHA256,Env:SRX_MANAGED_SILENCE_FILE,Env:SRX_MANAGED_PROFILE,Env:SRX_BASELINE_APP -ErrorAction SilentlyContinue
+          Remove-Item Env:SRX_MANAGED_SIM_CI,Env:SRX_MANAGED_SIM_DLL_SHA256,Env:SRX_MANAGED_SILENCE_FILE,Env:SRX_MANAGED_PROFILE,Env:SRX_BASELINE_APP,Env:SRX_MANAGED_BREAK_FILE -ErrorAction SilentlyContinue
       - name: Generate engineering preview manifest
         shell: pwsh
         run: |
@@ -174,5 +179,6 @@ jobs:
           name: J2534Diag-baseline-windows
           path: bin/Release/**
           if-no-files-found: error
+
 
 

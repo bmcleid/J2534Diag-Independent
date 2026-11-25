@@ -131,6 +131,8 @@
     </Compile>
     <Compile Include="Services\CaptureEvidencePackage.cs" />
     <Compile Include="Services\FuelTrimSampleState.cs" />
+    <Compile Include="Services\FuelTrimSessionReport.cs" />
+    <Compile Include="Services\BuildIdentity.cs" />
     <Compile Include="Services\VinDecoder.cs" />
     <EmbeddedResource Include="Forms\CanListenerForm.resx">
       <DependentUpon>CanListenerForm.cs</DependentUpon>

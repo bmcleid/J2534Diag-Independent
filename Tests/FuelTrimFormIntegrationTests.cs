@@ -60,9 +60,10 @@ namespace J2534Diag.Tests
 
         public static int RunManaged(string[] args)
         {
+            bool brokenPipe = args.Length > 0 && args[0] == "--ci-managed-broken-pipe";
             bool missingVin = args.Length > 0 && args[0] == "--ci-managed-vin-failure";
             bool legacyFailure = args.Length > 0 && args[0] == "--ci-managed-vin-legacy";
-            bool vinBootstrap = missingVin || legacyFailure || (args.Length > 0 && args[0] == "--ci-managed-vin");
+            bool vinBootstrap = brokenPipe || missingVin || legacyFailure || (args.Length > 0 && args[0] == "--ci-managed-vin");
             if (args.Length != 2 || (!vinBootstrap && args[0] != "--ci-managed-sim") ||
                 Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
                 Environment.GetEnvironmentVariable("SRX_MANAGED_SIM_CI") != "ALLOW")
@@ -164,6 +165,50 @@ namespace J2534Diag.Tests
                 Check(((ComboBox)Get(form, "_responseSource")).Items.Count == 1,
                     "Managed source selector did not isolate one synthetic ECM");
                 Check((bool)Get(form, "_ownsReceiveChannel"), "Actual form did not retain receive ownership");
+                if (brokenPipe)
+                {
+                    File.WriteAllText(Environment.GetEnvironmentVariable("SRX_MANAGED_BREAK_FILE"), "break virtual IPC only");
+                    Check(PumpUntil(() => ((CancellationTokenSource)Get(form, "_cts")).IsCancellationRequested,
+                        6000), "Interrupted virtual driver did not cancel peers");
+                    Call(form, "StopListening");
+                    Check(Get(form, "_monitorThread") == null && Get(form, "_pollingThread") == null,
+                        "Faulted virtual workers not joined");
+                    Check((bool)Get(form, "_ownsReceiveChannel"), "Broken filter cleanup falsely released ownership");
+                    Exception refusal = null;
+                    try { Call(manager, "Disconnect"); } catch (TargetInvocationException ex) { refusal = ex.InnerException; }
+                    Check(refusal is InvalidOperationException, "Disconnect bypassed retained receive lease after driver fault");
+                    Check(((string)managerType.GetProperty("LastDisconnectOutcome").GetValue(manager)).StartsWith("Failed:"),
+                        "Disconnect error not preserved");
+                    string faultExport = Path.Combine(root, "diagnostics", "managed-broken-pipe-session.csv");
+                    Call(form, "ExportSessionTo", faultExport);
+                    string evidence = File.ReadAllText(faultExport);
+                    Check(evidence.Contains("CleanupError") && (evidence.Contains("WorkerError") || evidence.Contains("ReceiveError")) &&
+                        evidence.Contains("DisconnectOutcome=Failed:"), "Fault export falsely reports successful cleanup");
+                    Console.WriteLine("PASS: " + _checks + " actual broken-driver cancellation/retained-ownership/export checks. Virtual test-process exit releases IPC; no physical driver.");
+                    return 0;
+                }
+                // Repeated start must not create a second poller/reader.
+                object originalCancellation = Get(form, "_cts");
+                Call(form, "StartListening");
+                Check(ReferenceEquals(originalCancellation, Get(form, "_cts")), "Duplicate Start replaced a running session");
+                using (var main = (Form)Activator.CreateInstance(assembly.GetType("J2534Diag.MainForm", true)))
+                {
+                    Set(main, "j2534Manager", manager); Set(main, "fuelTrimForm", form);
+                    var tabs = (TabControl)Get(main, "tabControl1");
+                    for (int repeat = 0; repeat < 3; repeat++)
+                    {
+                        tabs.SelectedTab = tabs.TabPages["tabVehicle"];
+                        Call(main, "tabControl1_SelectedIndexChanged", null, EventArgs.Empty);
+                        Check(!(bool)Get(form, "_ownsReceiveChannel") && Get(form, "_cts") == null,
+                            "Tab departure retained previous workers/lease");
+                        tabs.SelectedTab = tabs.TabPages["tabFuelTrim"];
+                        Call(main, "tabControl1_SelectedIndexChanged", null, EventArgs.Empty);
+                        Check(PumpUntil(() => Value(form, 0x0C) == "1000", 6000), "Tab return did not resume observations");
+                        Check(Get(form, "_monitorThread") is Thread && ((Thread)Get(form, "_monitorThread")).IsAlive &&
+                            Get(form, "_pollingThread") is Thread && ((Thread)Get(form, "_pollingThread")).IsAlive,
+                            "Restarted session lacks its worker pair");
+                    }
+                }
                 File.WriteAllText(Environment.GetEnvironmentVariable("SRX_MANAGED_SILENCE_FILE"), "silence");
                 Check(PumpUntil(() => ((CancellationTokenSource)Get(form, "_cts")).IsCancellationRequested,
                     6000), "Absent virtual replies did not cancel actual managed polling");
@@ -177,6 +222,14 @@ namespace J2534Diag.Tests
                 Check(managerType.GetProperty("Channel").GetValue(manager) == null &&
                     !(bool)managerType.GetProperty("HasConnectionOrSelection").GetValue(manager),
                     "Managed driver channel/device/API ownership not closed");
+                Check((string)managerType.GetProperty("LastDisconnectOutcome").GetValue(manager) == "Succeeded",
+                    "Successful disconnect not recorded");
+                string normalExport = Path.Combine(root, "diagnostics", "managed-normal-session.csv");
+                Call(form, "ExportSessionTo", normalExport);
+                string exported = File.ReadAllText(normalExport);
+                Check(exported.Contains("DisconnectOutcome=Succeeded") && exported.Contains("SessionStop") &&
+                    exported.Contains("Observation") && exported.Contains("R22") && exported.Contains("TESTVIN1234567890"),
+                    "Actual form export lost identity, observations or stop/disconnect outcome");
                 if (vinBootstrap)
                 {
                     // Pinned shim makes one immediate CreateFile attempt; its server recreates
@@ -199,8 +252,17 @@ namespace J2534Diag.Tests
             }
             finally
             {
-                if (form != null) { Call(form, "StopListening"); form.Dispose(); }
-                Call(manager, "Disconnect");
+                if (brokenPipe)
+                {
+                    // Expected safe retention cannot be force-closed after IPC death.
+                    // This isolated CI process exits after joined workers; OS retires virtual handles.
+                    form?.Dispose();
+                }
+                else
+                {
+                    if (form != null) { Call(form, "StopListening"); form.Dispose(); }
+                    Call(manager, "Disconnect");
+                }
             }
         }
 
@@ -222,6 +284,32 @@ namespace J2534Diag.Tests
                 Check(Value(form, 6) == "Unknown / stale", "Initial missing value fabricated");
                 var grid1 = (DataGridView)Get(form, "dgvTrimGridBank1");
                 var grid2 = (DataGridView)Get(form, "dgvTrimGridBank2");
+                form.ClientSize = new System.Drawing.Size(1360, 640);
+                form.Show(); Application.DoEvents(); Call(form, "LayoutFuelPanels"); Application.DoEvents();
+                var panel = (Panel)Get(form, "pnlGrids");
+                Check(((TableLayoutPanel)Get(form, "tlpRight")).RowCount == 3, "Grid placed outside declared row count");
+                Check(grid1.Top == grid2.Top && grid2.Left > grid1.Right, "Wide layout banks not side by side");
+                Check(grid1.Bottom <= panel.ClientSize.Height && grid2.Bottom <= panel.ClientSize.Height,
+                    "Wide grids clipped outside their viewport");
+                grid1.FirstDisplayedScrollingRowIndex = 9; grid2.FirstDisplayedScrollingRowIndex = 9;
+                Check(grid1.GetRowDisplayRectangle(9, false).Height > 0 && grid2.GetRowDisplayRectangle(9, false).Height > 0,
+                    "Bottom history row not accessible through grid scrolling");
+                Check(form.Text.Contains("R22") && ((Button)Get(form, "_exportButton")).Visible,
+                    "Build identifier or export button not visible");
+                if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
+                    using (var bitmap = new System.Drawing.Bitmap(form.Width, form.Height))
+                    { form.DrawToBitmap(bitmap, new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height));
+                      bitmap.Save(Path.Combine(root, "diagnostics", "fuel-layout-wide.png")); }
+                form.ClientSize = new System.Drawing.Size(800, 600); Application.DoEvents(); Call(form, "LayoutFuelPanels"); Application.DoEvents();
+                Check(grid2.Top > grid1.Bottom && panel.AutoScrollMinSize.Height > panel.ClientSize.Height,
+                    "Narrow banks did not stack with outer scrolling");
+                panel.ScrollControlIntoView(grid2); Application.DoEvents();
+                Check(grid2.Bounds.IntersectsWith(panel.ClientRectangle), "Second narrow bank cannot scroll into view");
+                if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
+                    using (var bitmap = new System.Drawing.Bitmap(form.Width, form.Height))
+                    { form.DrawToBitmap(bitmap, new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height));
+                      bitmap.Save(Path.Combine(root, "diagnostics", "fuel-layout-narrow.png")); }
+                form.Hide();
                 Check(string.IsNullOrEmpty(Convert.ToString(grid1.Rows[7].Cells[2].Value)), "Initial grid not blank");
                 object gate = Activator.CreateInstance(assembly.GetType("J2534Diag.FuelTrimPollingGate", true),
                     new object[] { 50, 10, 6 });
@@ -308,5 +396,6 @@ namespace J2534Diag.Tests
         }
     }
 }
+
 
 

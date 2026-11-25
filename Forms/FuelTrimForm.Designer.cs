@@ -20,9 +20,11 @@ namespace J2534Diag
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                if (j2534Manager != null && _disconnectReporter != null)
+                    j2534Manager.DisconnectOutcomeChanged -= _disconnectReporter;
+                components?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -37,18 +39,19 @@ namespace J2534Diag
 
             // Main TableLayoutPanel
             this.tlpMain = new TableLayoutPanel();
-            this.tlpMain.ColumnCount = 2;
-            this.tlpMain.RowCount = 2;
+            this.tlpMain.ColumnCount = 1;
+            this.tlpMain.RowCount = 1;
             this.tlpMain.Dock = DockStyle.Fill;
             this.tlpMain.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));  // Right panel fills rest
             this.tlpMain.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));        // Main area
-            this.tlpMain.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));        // Bottom panel height
+
 
             // PID Panel (right, top)
             this.flpPids = new FlowLayoutPanel();
             this.flpPids.Dock = DockStyle.Fill;
             this.flpPids.AutoScroll = true;
             this.flpPids.WrapContents = true;
+            this.flpPids.Padding = new Padding(4);
 
             // Bottom Panel (spans both columns)
             this.pnlBottom = new Panel();
@@ -130,6 +133,8 @@ namespace J2534Diag
             flpActions = new FlowLayoutPanel();
             flpActions.Dock = DockStyle.Fill; // Or DockStyle.Fill for center/left alignment
             flpActions.AutoSize = true;
+            flpActions.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            flpActions.WrapContents = true;
             flpActions.FlowDirection = FlowDirection.LeftToRight;
             //flpActions.Padding = new Padding(10, 10, 10, 10);
 
@@ -150,10 +155,10 @@ namespace J2534Diag
             // --- Right TableLayoutPanel to stack flpPids and pnlGrids ---
             this.tlpRight = new TableLayoutPanel();
             this.tlpRight.ColumnCount = 1;
-            this.tlpRight.RowCount = 2;
+            this.tlpRight.RowCount = 3;
             this.tlpRight.Dock = DockStyle.Fill;
             this.tlpRight.RowStyles.Add(new RowStyle(SizeType.Absolute, 140F)); // Height for PID controls
-            this.tlpRight.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F)); // Height for PID controls
+            this.tlpRight.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // Wrapped action row
             this.tlpRight.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));  // Grids fill the rest
             this.tlpRight.Controls.Add(this.flpPids, 0, 0);
             this.tlpRight.Controls.Add(this.flpActions, 0, 1);
@@ -169,3 +174,4 @@ namespace J2534Diag
         #endregion
     }
 }
+

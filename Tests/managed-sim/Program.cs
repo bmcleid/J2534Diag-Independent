@@ -33,6 +33,12 @@ server.Start();
 Console.WriteLine("MANAGED_VIRTUAL_PIPE_READY SYNTHETIC_ONLY");
 Console.Out.Flush();
 for (int i = 0; i < 1200; i++) {
+    if (File.Exists(Environment.GetEnvironmentVariable("SRX_MANAGED_BREAK_FILE"))) {
+        Console.WriteLine("MANAGED_VIRTUAL_PIPE_INTERRUPTED"); Console.Out.Flush();
+        await server.StopAsync();
+        await Task.Delay(TimeSpan.FromSeconds(10));
+        return;
+    }
     if (File.Exists(Environment.GetEnvironmentVariable("SRX_MANAGED_SILENCE_FILE"))) {
         node.Mode1Supported = new HashSet<byte>();
         Console.WriteLine("MANAGED_VIRTUAL_REPLIES_DISABLED");
@@ -43,5 +49,6 @@ for (int i = 0; i < 1200; i++) {
 }
 await Task.Delay(TimeSpan.FromSeconds(15));
 await server.StopAsync();
+
 
 

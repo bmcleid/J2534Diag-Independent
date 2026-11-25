@@ -22,6 +22,10 @@ internal static class R26Dialogs
     static string runtime, output; static int checks, currentPid; static Form main, fuel;
     static object manager; static Thread ui; static Exception uiError; static Assembly app;
     static readonly List<string> notes = new List<string>();
+    delegate bool EnumWindowCallback(IntPtr window, IntPtr parameter);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowCallback callback, IntPtr parameter);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder title, int maximum);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] static extern bool PostMessage(IntPtr window, uint message, IntPtr wparam, IntPtr lparam);
     static string Hash(string file) { using (var sha = SHA256.Create()) using (var stream = File.OpenRead(file)) return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant(); }
@@ -43,7 +47,18 @@ internal static class R26Dialogs
     }
     static AutomationElement Window(string title)
     {
-        return Windows().FirstOrDefault(w => w.Current.Name == title);
+        // Owned Win32 dialogs are nested beneath their owner in UIA's tree,
+        // not necessarily desktop children. Enumerate their native windows.
+        IntPtr found = IntPtr.Zero;
+        EnumWindows((window, parameter) =>
+        {
+            uint pid; GetWindowThreadProcessId(window, out pid);
+            if (pid != currentPid) return true;
+            var caption = new StringBuilder(512); GetWindowText(window, caption, caption.Capacity);
+            if (caption.ToString() != title) return true;
+            found = window; return false;
+        }, IntPtr.Zero);
+        return found == IntPtr.Zero ? null : AutomationElement.FromHandle(found);
     }
     static AutomationElement WaitWindow(string title)
     {

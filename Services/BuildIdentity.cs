@@ -7,7 +7,7 @@ namespace J2534Diag
 {
     public static class BuildIdentity
     {
-        public const string Release = "R26";
+        public const string Release = "R27";
         public const string SourceCommit = "workspace"; // Stamped by the existing Windows job before compilation.
         public static string Description => Release + " / " + SourceCommit.Substring(0, Math.Min(12, SourceCommit.Length));
         public static string ExecutableSha256()

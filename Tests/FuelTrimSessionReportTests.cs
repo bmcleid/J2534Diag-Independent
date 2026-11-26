@@ -72,7 +72,7 @@ namespace J2534Diag.Tests
                     for (int i = 0; i < 3; i++)
                     {
                         report.Export(file, "fixture", "hash", "Not attempted for current connection");
-                        Check(SpinWait.SpinUntil(() => report.ObservationsSinceExport > 0, 2000), "Export acknowledged observations arriving after its snapshot");
+                        Check(SpinWait.SpinUntil(() => report.ObservationsSinceExport > 0 && report.HasUnexportedChanges, 2000), "Export acknowledged observations arriving after its snapshot");
                         var rows = Read(file);
                         int retained = int.Parse(Regex.Match(rows[1][15], @"(?:^|;)RetainedRows=(\d+)").Groups[1].Value, CultureInfo.InvariantCulture);
                         var summaries = rows.Where(r => r[2] == "PidSummary").ToArray();
@@ -92,7 +92,7 @@ namespace J2534Diag.Tests
                 "Concurrent observations lost, duplicated or failed: " + failure);
             report.Export(file, "fixture", "hash", "Not attempted for current connection");
             var final = Read(file);
-            Check(report.ObservationsSinceExport == 0, "Final export left unchanged snapshot unacknowledged");
+            Check(report.ObservationsSinceExport == 0 && !report.HasUnexportedChanges, "Final export left unchanged snapshot unacknowledged");
             Check(final.Where(r => r[2] == "PidSummary").Sum(r => long.Parse(Regex.Match(r[15], @"AcceptedObservations=(\d+)").Groups[1].Value,
                 CultureInfo.InvariantCulture)) == report.AcceptedObservations, "Final lifetime summary total mismatch");
             Check(!Directory.GetFiles(directory, "*.tmp").Any(), "Concurrent exports left temporary files");
@@ -225,6 +225,37 @@ namespace J2534Diag.Tests
                 Check(watermark.ObservationsSinceExport == 2, "Restart lost unexported lifetime observations");
                 watermark.Export(file, "R26", "hash", "Not attempted");
                 Check(watermark.ObservationsSinceExport == 0, "Retry did not acknowledge retained observations");
+
+                var eventsOnly = new FuelTrimSessionReport(1000);
+                Check(!eventsOnly.HasUnexportedChanges, "Fresh empty report falsely dirty");
+                eventsOnly.Account(FuelTrimEvidenceCounter.QueueCapacityDiscarded, 0);
+                Check(!eventsOnly.HasUnexportedChanges, "Zero counter update falsely dirty");
+                eventsOnly.Begin("event-only", "", utc);
+                eventsOnly.SetStatus("Unanswered requests", "no reply", utc);
+                Check(eventsOnly.HasUnexportedChanges && eventsOnly.ObservationsSinceExport == 0,
+                    "No-response session events were not protected");
+                eventsOnly.Export(file, "R27", "hash", "Not attempted");
+                Check(!eventsOnly.HasUnexportedChanges, "Successful event-only save stayed dirty");
+                eventsOnly.Event("Disconnect", "Failed: fixture", utc);
+                Check(eventsOnly.HasUnexportedChanges && eventsOnly.ObservationsSinceExport == 0 &&
+                    eventsOnly.HealthText().Contains("Unsaved report: Yes"), "Disconnect-only change was hidden after export");
+                using (var locked = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    bool eventFailed = false;
+                    try { eventsOnly.Export(file, "R27", "hash", "Failed: fixture"); } catch (IOException) { eventFailed = true; }
+                    Check(eventFailed && eventsOnly.HasUnexportedChanges, "Failed event-only save acknowledged changes");
+                }
+                eventsOnly.Export(file, "R27", "hash", "Failed: fixture");
+                Check(!eventsOnly.HasUnexportedChanges && Read(file).Any(r => r[2] == "Disconnect" && r[15] == "Failed: fixture"),
+                    "Event-only retry lost disconnect evidence");
+                eventsOnly.Account(FuelTrimEvidenceCounter.QueueCapacityDiscarded, 3);
+                Check(eventsOnly.HasUnexportedChanges && eventsOnly.ObservationsSinceExport == 0,
+                    "Counter-only change not protected");
+                eventsOnly.Export(file, "R27", "hash", "Failed: fixture");
+                Check(!eventsOnly.HasUnexportedChanges && Read(file)[1][15].Contains("QueueCapacityDiscarded=3"),
+                    "Counter-only save lost metadata");
+                eventsOnly.SetStatus("Unanswered requests", "same status", utc);
+                Check(!eventsOnly.HasUnexportedChanges, "Unchanged status prompted repeatedly");
 
                 using (var gate = new FuelTrimPollingGate(1, 1, 1))
                 {

@@ -86,6 +86,7 @@ namespace J2534Diag
             _exportButton.Click += (sender, args) => ExportSession();
             _chooseUnsavedReportAction = () => MessageBox.Show(this,
                 _sessionReport.ObservationsSinceExport + " new observations since the last successful export.\n" +
+                "The report contains unsaved observations, events or counter changes.\n" +
                 "Save the current bounded session report before closing?\nYes: export. No: close without exporting. Cancel: keep the app open.",
                 "Session report", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
             _saveUnsavedReport = ExportSession;
@@ -194,11 +195,11 @@ namespace J2534Diag
         }
         internal bool ConfirmReportBeforeClose()
         {
-            if (_sessionReport.ObservationsSinceExport == 0) return true;
+            if (!_sessionReport.HasUnexportedChanges) return true;
             DialogResult decision = _chooseUnsavedReportAction();
             if (decision == DialogResult.No) return true;
             if (decision != DialogResult.Yes) return false;
-            return _saveUnsavedReport() && _sessionReport.ObservationsSinceExport == 0;
+            return _saveUnsavedReport() && !_sessionReport.HasUnexportedChanges;
         }
         internal void ExportSessionTo(string path)
         {

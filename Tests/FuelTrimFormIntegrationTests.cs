@@ -229,6 +229,21 @@ namespace J2534Diag.Tests
                     Check((bool)Call(form, "ConfirmReportBeforeClose") && unsaved() == 0 && saves == 1 && File.ReadAllText(file).Contains("Observation"), "Save-before-close did not preserve report");
                     Set(form, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => { throw new Exception("Unexpected clean-report prompt"); }));
                     Check((bool)Call(form, "ConfirmReportBeforeClose"), "Exported report prompted again");
+                    Call(report, "Event", "Disconnect", "Failed: event-only fixture", DateTime.UtcNow);
+                    Check(unsaved() == 0, "Event-only fixture unexpectedly created an observation");
+                    Set(form, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.Cancel));
+                    Check(!(bool)Call(form, "ConfirmReportBeforeClose"), "Event-only Cancel allowed close");
+                    Set(form, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.No));
+                    Check((bool)Call(form, "ConfirmReportBeforeClose") &&
+                        (bool)report.GetType().GetProperty("HasUnexportedChanges").GetValue(report), "Event-only No pretended to save");
+                    Set(form, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.Yes));
+                    Set(form, "_saveUnsavedReport", (Func<bool>)(() => false));
+                    Check(!(bool)Call(form, "ConfirmReportBeforeClose"), "Event-only cancelled save allowed close");
+                    Set(form, "_saveUnsavedReport", save);
+                    Check((bool)Call(form, "ConfirmReportBeforeClose") && File.ReadAllText(file).Contains("Failed: event-only fixture") &&
+                        !(bool)report.GetType().GetProperty("HasUnexportedChanges").GetValue(report), "Event-only save failed to preserve changes");
+                    Set(form, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => { throw new Exception("Unexpected event-only clean prompt"); }));
+                    Check((bool)Call(form, "ConfirmReportBeforeClose"), "Unchanged event-only export prompted again");
                     Call(report, "Observe", "source", (byte)6, 1.0, 100L, DateTime.UtcNow, 100L);
                     Set(form, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.Cancel));
                     Set(main, "j2534Manager", manager); Set(main, "fuelTrimForm", form);
@@ -439,7 +454,7 @@ namespace J2534Diag.Tests
                 Call(form, "ExportSessionTo", normalExport);
                 string exported = File.ReadAllText(normalExport);
                 Check(exported.Contains("DisconnectOutcome=Succeeded") && exported.Contains("SessionStop") &&
-                    exported.Contains("Observation") && exported.Contains("R26") && exported.Contains("TESTVIN1234567890"),
+                    exported.Contains("Observation") && exported.Contains("R27") && exported.Contains("TESTVIN1234567890"),
                     "Actual form export lost identity, observations or stop/disconnect outcome");
                 if (vinBootstrap)
                 {
@@ -519,7 +534,7 @@ namespace J2534Diag.Tests
                 grid1.FirstDisplayedScrollingRowIndex = 9; grid2.FirstDisplayedScrollingRowIndex = 9;
                 Check(grid1.GetRowDisplayRectangle(9, false).Height > 0 && grid2.GetRowDisplayRectangle(9, false).Height > 0,
                     "Bottom history row not accessible through grid scrolling");
-                Check(form.Text.Contains("R26") && ((Button)Get(form, "_exportButton")).Visible,
+                Check(form.Text.Contains("R27") && ((Button)Get(form, "_exportButton")).Visible,
                     "Build identifier or export button not visible");
                 if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
                     using (var bitmap = new System.Drawing.Bitmap(form.Width, form.Height))

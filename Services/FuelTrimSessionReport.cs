@@ -31,7 +31,8 @@ namespace J2534Diag
         private readonly long _frequency;
         private string _session = "", _mode = "Not started", _vin = "";
         private bool _active;
-        private long _discarded, _exportedObservations;
+        private long _discarded, _exportedObservations, _revision, _exportedRevision;
+        public bool HasUnexportedChanges { get { lock (_sync) return _revision != _exportedRevision; } }
         public long ObservationsSinceExport { get { lock (_sync) return Math.Max(0, _observed.Values.Sum() - _exportedObservations); } }
         private string _status = "Idle", _selectedSource = "";
         private readonly Dictionary<byte, long> _observed = Pids.ToDictionary(p => p, p => 0L);
@@ -44,7 +45,11 @@ namespace J2534Diag
         public void Account(FuelTrimEvidenceCounter counter, int count = 1)
         {
             if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
-            lock (_sync) _counters[counter] += count;
+            lock (_sync)
+            {
+                if (count == 0) return;
+                _counters[counter] += count; _revision++;
+            }
         }
         public void SetStatus(string state, string detail, DateTime utc)
         {
@@ -84,7 +89,8 @@ namespace J2534Diag
                 return "Session: " + _status + " | Accepted: " + _observed.Values.Sum() +
                     " | Coalesced: " + _counters[FuelTrimEvidenceCounter.CoalescedBeforeAcceptance] +
                     " | Sample drops: " + dropped + " | Rows evicted: " + _discarded +
-                    " | New since export: " + Math.Max(0, _observed.Values.Sum() - _exportedObservations);
+                    " | New since export: " + Math.Max(0, _observed.Values.Sum() - _exportedObservations) +
+                    " | Unsaved report: " + (_revision != _exportedRevision ? "Yes" : "No");
             }
         }
         public FuelTrimSessionReport(long frequency, int capacity = 20000)
@@ -104,6 +110,7 @@ namespace J2534Diag
             double? value = null, string state = "", double? age = null, long? ticks = null, string details = "")
         {
             if (_rows.Count == _capacity) { _rows.Dequeue(); _discarded++; }
+            _revision++;
             _rows.Enqueue(new Row { Utc = utc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
                 Session = _session, Event = kind, Mode = _mode, Vin = _vin, Source = source,
                 Pid = pid.HasValue ? pid.Value.ToString("X2") : "", Name = pid.HasValue ? Name(pid.Value) : "",
@@ -186,11 +193,11 @@ namespace J2534Diag
         private static string Quote(string value) { return "\"" + (value ?? "").Replace("\"", "\"\"") + "\""; }
         public void Export(string path, string build, string exeSha256, string disconnectOutcome)
         {
-            Row[] rows; Row[] summaries; long discarded, exportedObservations; string counters, state;
+            Row[] rows; Row[] summaries; long discarded, exportedObservations, exportedRevision; string counters, state;
             lock (_sync)
             {
                 rows = _rows.ToArray(); discarded = _discarded; state = _status;
-                exportedObservations = _observed.Values.Sum();
+                exportedObservations = _observed.Values.Sum(); exportedRevision = _revision;
                 counters = string.Join(";", _counters.Select(p => p.Key + "=" + p.Value.ToString(CultureInfo.InvariantCulture)));
                 summaries = Pids.Select(pid => new Row { Utc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
                     Event = "PidSummary", Pid = pid.ToString("X2"), Name = Name(pid), Unit = pid == 0x0C ? "rpm" : "%",
@@ -221,8 +228,12 @@ namespace J2534Diag
                 if (File.Exists(full)) File.Replace(temp, full, null);
                 else File.Move(temp, full);
                 // A failed save must not acknowledge evidence; observations arriving
-                // after this snapshot remain unexported.
-                lock (_sync) _exportedObservations = exportedObservations;
+                // or events/counters arriving after this snapshot remain unexported.
+                lock (_sync)
+                {
+                    _exportedObservations = exportedObservations;
+                    _exportedRevision = exportedRevision;
+                }
             }
             finally { if (File.Exists(temp)) File.Delete(temp); }
         }

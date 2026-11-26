@@ -20,6 +20,8 @@ internal static class R26Dialogs
     const string ExpectedExe = "e5ba2abf8ee1a2eedc04f088b08d90d44c6ad78b4dbb506e8d825afc95bc3eba";
     const string ExpectedSource = "f0a43d1da720f0fb6261934939bdb1c571c44ef4";
     static string runtime, output; static int checks, currentPid; static Form main, fuel;
+    static readonly List<FileSystemWatcher> fileWatchers = new List<FileSystemWatcher>();
+    static readonly object fileWatchLock = new object();
     static object manager; static Thread ui; static Exception uiError; static Assembly app;
     static readonly List<string> notes = new List<string>();
     delegate bool EnumWindowCallback(IntPtr window, IntPtr parameter);
@@ -214,7 +216,13 @@ internal static class R26Dialogs
         if (edit == null) throw new Exception("File name edit not found; see save-dialog-tree.txt");
         Foreground(dialog); edit.SetFocus();
         var value = (ValuePattern)edit.GetCurrentPattern(ValuePattern.Pattern);
-        value.SetValue(path);
+        // UIA's displayed Value can differ from the common dialog's committed
+        // filename. Drive real text input, commit the edit by leaving focus,
+        // and still require the accessible value to match.
+        SendKeys.SendWait("^a");
+        SendKeys.SendWait(path);
+        SendKeys.SendWait("{TAB}");
+        Thread.Sleep(150);
         Check(Wait(() => value.Current.Value == path, 2000), "Native filename edit reads back the requested absolute path");
         File.AppendAllText(Path.Combine(output, "save-targets.txt"), "Requested=" + path + "; Edit=" + value.Current.Value + Environment.NewLine);
         Screenshot("save-target-" + checks);
@@ -240,6 +248,30 @@ internal static class R26Dialogs
     {
         Check(ui.Join(5000) && uiError == null, "Actual close completed without exception");
     }
+
+    static void WatchExports()
+    {
+        foreach (var folder in new[] { Path.GetDirectoryName(output), Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) }.Distinct())
+        {
+            if (!Directory.Exists(folder)) continue;
+            var watcher = new FileSystemWatcher(folder, "*.csv") { IncludeSubdirectories = true };
+            FileSystemEventHandler record = (sender, e) => {
+                lock (fileWatchLock) File.AppendAllText(Path.Combine(output, "csv-file-events.txt"), e.ChangeType + " | " + e.FullPath + Environment.NewLine);
+            };
+            watcher.Created += record; watcher.Changed += record;
+            watcher.Renamed += (sender, e) => record(sender, e);
+            watcher.EnableRaisingEvents = true; fileWatchers.Add(watcher);
+        }
+    }
+    static void SaveState(string expected)
+    {
+        File.WriteAllLines(Path.Combine(output, "save-state.txt"), new[] {
+            "Expected=" + expected, "Exists=" + File.Exists(expected),
+            "NewObservations=" + NewCount(), "SaveDialogPresent=" + (Window("Save As") != null),
+            "CurrentDirectory=" + Environment.CurrentDirectory
+        }.Concat(Directory.GetFiles(output).Select(p => "DiagnosticFile=" + p)));
+    }
+
     static void Standalone()
     {
         using (var process = Process.Start(new ProcessStartInfo(Path.Combine(runtime, "J2534Diag.exe")) { WorkingDirectory = runtime }))
@@ -261,6 +293,7 @@ internal static class R26Dialogs
         try
         {
             Check(Hash(Path.Combine(runtime, "J2534Diag.exe")) == ExpectedExe, "Preserved R26 EXE SHA256 verified before launch");
+            WatchExports();
             Standalone();
             app = Assembly.LoadFrom(Path.Combine(runtime, "J2534Diag.exe"));
             Check((string)app.GetType("J2534Diag.BuildIdentity").GetField("SourceCommit").GetRawConstantValue() == ExpectedSource, "Loaded R26 source stamp exact");
@@ -285,7 +318,9 @@ internal static class R26Dialogs
             prompt = ClosePrompt(); Keys(prompt, "{ENTER}"); var save = SaveDialog(); Screenshot("04-actual-save-dialog"); Keys(save, "{ESC}"); MainAlive();
             Check(NewCount() > 0, "Cancelled native save does not acknowledge observations");
             ExportButton(); save = SaveDialog(); string first = Path.Combine(output, "actual-export.csv"); FillAndSave(save, first);
-            Check(Wait(() => File.Exists(first) && NewCount() == 0 && Window("Save As") == null, 10000), "Actual Export button/native save acknowledges successful snapshot"); CheckCsv(first);
+            bool firstSaved = Wait(() => File.Exists(first) && NewCount() == 0 && Window("Save As") == null, 10000);
+            SaveState(first);
+            Check(firstSaved, "Actual Export button/native save acknowledges successful snapshot"); CheckCsv(first);
             AssertProvidersClosed("after-export");
             UI(() => { main.BeginInvoke(new Action(() => main.Close())); }); Closed();
             Check(Window("Session report") == null, "Unchanged exported observations do not prompt again");

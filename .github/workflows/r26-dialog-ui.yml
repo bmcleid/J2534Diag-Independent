@@ -1,4 +1,5 @@
 name: R26 exact-binary dialog check
+run-name: Owner-approved R26 dialog lookup verification
 on:
   push:
     branches: ['test/r26-dialog-ui-20261125']

@@ -1,0 +1,80 @@
+name: R27 exact-binary dialog check
+run-name: R27 event-only preservation on unchanged delivered executable
+on:
+  push:
+    branches: ['test/r27-event-dialog-ui-20261126']
+    paths:
+      - 'Tests/ui/**'
+      - '.github/workflows/r27-event-dialog-ui.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  dialogs:
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - name: Download preserved R27 runtime without rebuilding product
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 45732398202
+          name: J2534Diag-baseline-windows
+          path: runtime
+      - name: Verify exact runtime and empty J2534 provider registry
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force diagnostics | Out-Null
+          $exe = (Get-FileHash runtime/J2534Diag.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($exe -ne 'cf5d699d92e7f1d8969b6f1b873c9169b906765eb0aff85222fe218b541755e9') { throw 'Wrong R27 executable' }
+          $manifest = Get-Content runtime/ENGINEERING_PREVIEW_MANIFEST.txt -Raw
+          if (-not $manifest.Contains('SourceCommit=6d8b7541d91f687e28d24cfa91d8f7e4ed7d12db')) { throw 'Wrong R27 source' }
+          foreach ($line in ($manifest -split "`n")) {
+            if ($line.Trim() -match '^([0-9A-F]{64})  (.+)$') {
+              $expected = $Matches[1]; $file = Join-Path runtime $Matches[2]
+              if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ne $expected) { throw "Payload mismatch: $file" }
+            }
+          }
+          $providers = @()
+          foreach ($view in @([Microsoft.Win32.RegistryView]::Registry64, [Microsoft.Win32.RegistryView]::Registry32)) {
+            foreach ($hive in @([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryHive]::CurrentUser)) {
+              $root = [Microsoft.Win32.RegistryKey]::OpenBaseKey($hive, $view)
+              try {
+                foreach ($key in @('SOFTWARE\PassThruSupport.04.04', 'SOFTWARE\PassThruSupport.05.00')) {
+                  $node = $root.OpenSubKey($key)
+                  if ($node) { try { $providers += @($node.GetSubKeyNames() | ForEach-Object { "$hive/$view/$key/$_" }) } finally { $node.Dispose() } }
+                }
+              } finally { $root.Dispose() }
+            }
+          }
+          $providers | Set-Content diagnostics/provider-registry.txt
+          if ($providers.Count -ne 0) { throw 'Refuse UI fixture when any J2534 provider is registered' }
+          'RegisteredProviders=0;NoProductBuild=True;RuntimeRun=45732398202' | Set-Content diagnostics/preflight.txt
+      - name: Compile UI harness only
+        shell: pwsh
+        run: |
+          & msbuild.exe Tests/ui/R27Events.csproj /p:Configuration=Release /verbosity:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Exercise actual R27 dialogs and keyboard without provider
+        shell: pwsh
+        run: |
+          $process = Start-Process Tests/ui/bin/Release/R27Events.exe -ArgumentList @((Join-Path $pwd runtime), (Join-Path $pwd diagnostics)) -PassThru -RedirectStandardOutput diagnostics/ui.log -RedirectStandardError diagnostics/ui-error.log
+          if (-not $process.WaitForExit(180000)) { Stop-Process -Id $process.Id -Force; throw 'UI harness exceeded bounded three-minute wait' }
+          Get-Content diagnostics/ui.log
+          Get-Content diagnostics/ui-error.log
+          if ($process.ExitCode -ne 0) { throw "UI harness failed: $($process.ExitCode)" }
+          if ((Get-FileHash runtime/J2534Diag.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'cf5d699d92e7f1d8969b6f1b873c9169b906765eb0aff85222fe218b541755e9') { throw 'R27 runtime changed' }
+      - name: Preserve scoped evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: R27-exact-binary-dialog-evidence
+          path: diagnostics/**
+          retention-days: 14

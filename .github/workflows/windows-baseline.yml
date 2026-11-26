@@ -50,6 +50,20 @@ jobs:
         run: |
           & ./Tests/bin/Release/CanCaptureCsvTests.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Download exact R27 close-ordering baseline without rebuilding it
+        if: contains(github.event.head_commit.message, '[close-baseline]')
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 45732398202
+          name: J2534Diag-baseline-windows
+          path: Tests/close-baseline/runtime
+      - name: Reproduce R27 final-disconnect report omission offline
+        if: contains(github.event.head_commit.message, '[close-baseline]')
+        shell: pwsh
+        run: |
+          & ./Tests/bin/Release/CanCaptureCsvTests.exe --ci-r27-close-baseline (Resolve-Path 'Tests/close-baseline/runtime/J2534Diag.exe').Path
+          if ($LASTEXITCODE -ne 0) { throw 'R27 close-order baseline did not reproduce as expected' }
       - name: Download identity-checked historical R16 runtime for defect reproduction
         if: contains(github.event.head_commit.message, '[managed-sim]')
         uses: actions/download-artifact@v4

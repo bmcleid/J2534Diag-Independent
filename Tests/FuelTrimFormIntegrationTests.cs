@@ -246,14 +246,17 @@ namespace J2534Diag.Tests
                     Check((bool)Call(form, "ConfirmReportBeforeClose"), "Unchanged event-only export prompted again");
                     Call(report, "Observe", "source", (byte)6, 1.0, 100L, DateTime.UtcNow, 100L);
                     Set(form, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.Cancel));
+                    RetainLogicalConnection(assembly, manager);
                     Set(main, "j2534Manager", manager); Set(main, "fuelTrimForm", form);
                     var cancel = new FormClosingEventArgs(CloseReason.UserClosing, false); Call(main, "OnFormClosing", cancel);
                     Check(cancel.Cancel && unsaved() == 1 && managerType.GetProperty("LastDisconnectOutcome").GetValue(manager) == null,
                         "Parent close bypassed report cancellation or disposed manager");
                     Set(form, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.Yes));
                     var saved = new FormClosingEventArgs(CloseReason.UserClosing, false); Call(main, "OnFormClosing", saved);
-                    Check(!saved.Cancel && unsaved() == 0 && (string)managerType.GetProperty("LastDisconnectOutcome").GetValue(manager) == "Succeeded",
-                        "Parent close did not save then dispose safely");
+                    Check(!saved.Cancel && unsaved() == 0 && (string)managerType.GetProperty("LastDisconnectOutcome").GetValue(manager) == "Succeeded" &&
+                        File.ReadAllText(file).Contains("DisconnectOutcome=Succeeded") && File.ReadAllText(file).Contains("Disconnect") &&
+                        !(bool)report.GetType().GetProperty("HasUnexportedChanges").GetValue(report),
+                        "Parent close failed to capture final disconnect before export");
 
                     var connect = (Button)Get(vehicle, "btnConnect"); var disconnect = (Button)Get(vehicle, "_disconnectButton");
                     var capture = (CheckBox)Get(vehicle, "_captureOnlyCheck"); var width = (ComboBox)Get(vehicle, "_canWidthSelect");
@@ -279,6 +282,112 @@ namespace J2534Diag.Tests
                     Set(manager, "_managedLeaseHeld", false); Set(form, "_ownsReceiveChannel", false); Set(form, "_cts", null);
                     if (File.Exists(file)) File.Delete(file);
                 }
+            }
+        }
+
+        private static void RetainLogicalConnection(Assembly assembly, object manager)
+        {
+            var ownership = assembly.GetType("J2534Diag.J2534ConnectionOwnership", true);
+            Check((bool)ownership.GetMethod("TryAcquire").Invoke(null, new object[] { manager, "Offline close fixture" }),
+                "Logical connection lease not acquired");
+            Set(manager, "_managedLeaseHeld", true);
+        }
+
+        public static int RunCloseBaseline(string executable)
+        {
+            if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true") throw new InvalidOperationException("CI-only baseline");
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+                Check(BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(executable))).Replace("-", "").ToLowerInvariant() ==
+                    "cf5d699d92e7f1d8969b6f1b873c9169b906765eb0aff85222fe218b541755e9", "Wrong R27 baseline EXE");
+            var assembly = Assembly.LoadFrom(Path.GetFullPath(executable)); var type = assembly.GetType("J2534Diag.J2534Manager", true);
+            object manager = FormatterServices.GetUninitializedObject(type);
+            type.GetField("<ReceiveGate>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(manager,
+                Activator.CreateInstance(assembly.GetType("J2534Diag.ReceiveChannelGate", true)));
+            RetainLogicalConnection(assembly, manager); // Logical fixture only: no API/device/channel/provider.
+            string file = Path.Combine(Path.GetFullPath("diagnostics"), "r27-close-baseline.csv");
+            using (var main = (Form)Activator.CreateInstance(assembly.GetType("J2534Diag.MainForm", true)))
+            using (var fuel = (Form)Activator.CreateInstance(assembly.GetType("J2534Diag.FuelTrimForm", true), new object[] { manager }))
+            {
+                object report = Get(fuel, "_sessionReport"); Call(report, "Begin", "offline close baseline", "", DateTime.UtcNow);
+                Set(main, "j2534Manager", manager); Set(main, "fuelTrimForm", fuel);
+                Set(fuel, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.Yes));
+                Set(fuel, "_saveUnsavedReport", (Func<bool>)(() => { Call(fuel, "ExportSessionTo", file); return true; }));
+                var closing = new FormClosingEventArgs(CloseReason.UserClosing, false); Call(main, "OnFormClosing", closing);
+                Check(!closing.Cancel && (string)type.GetProperty("LastDisconnectOutcome").GetValue(manager) == "Succeeded", "R27 fixture did not finish disconnect");
+                string text = File.ReadAllText(file);
+                Check(!text.Contains("\"Disconnect\"") && text.Contains("DisconnectOutcome=Not attempted"), "R27 missing-final-outcome baseline did not reproduce");
+                Check((bool)report.GetType().GetProperty("HasUnexportedChanges").GetValue(report), "R27 later disconnect did not remain unsaved");
+                Check(type.GetProperty("Api").GetValue(manager) == null && type.GetProperty("Device").GetValue(manager) == null &&
+                    type.GetProperty("Channel").GetValue(manager) == null, "Baseline unexpectedly opened provider handles");
+            }
+            Console.WriteLine("PASS: " + _checks + " exact-R27 close-before-disconnect defect reproduction checks; no provider/vehicle.");
+            return 0;
+        }
+
+        private static void AuditCloseOrdering(Assembly assembly, Type type)
+        {
+            object manager = FormatterServices.GetUninitializedObject(type);
+            object gate = Activator.CreateInstance(assembly.GetType("J2534Diag.ReceiveChannelGate", true));
+            type.GetField("<ReceiveGate>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(manager, gate);
+            string file = Path.Combine(Path.GetTempPath(), "J2534Diag-final-close-" + Guid.NewGuid().ToString("N") + ".csv");
+            using (var main = (Form)Activator.CreateInstance(assembly.GetType("J2534Diag.MainForm", true)))
+            using (var fuel = (Form)Activator.CreateInstance(assembly.GetType("J2534Diag.FuelTrimForm", true), new object[] { manager }))
+            {
+                object report = Get(fuel, "_sessionReport");
+                Func<bool> dirty = () => (bool)report.GetType().GetProperty("HasUnexportedChanges").GetValue(report);
+                Set(main, "j2534Manager", manager); Set(main, "fuelTrimForm", fuel);
+                int errors = 0, saves = 0; Set(main, "_reportCloseFailure", (Action<Exception>)(ex => errors++));
+                Action actualClose = (Action)Get(main, "_disconnectForClose");
+                Func<FormClosingEventArgs> close = () => { var e = new FormClosingEventArgs(CloseReason.UserClosing, false); Call(main, "OnFormClosing", e); return e; };
+                Func<bool> save = () => { saves++; try { Call(fuel, "ExportSessionTo", file); return true; } catch (TargetInvocationException) { return false; } };
+                try
+                {
+                    RetainLogicalConnection(assembly, manager);
+                    Check(!dirty(), "Empty logical connection fixture unexpectedly dirty");
+                    Set(fuel, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.Cancel));
+                    Set(fuel, "_saveUnsavedReport", save);
+                    Check(close().Cancel && (bool)Get(manager, "_managedLeaseHeld") && saves == 0, "Cancel disconnected clean retained connection");
+                    Set(fuel, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.Yes));
+                    Set(fuel, "_saveUnsavedReport", (Func<bool>)(() => false));
+                    Check(close().Cancel && (bool)Get(manager, "_managedLeaseHeld") && type.GetProperty("LastDisconnectOutcome").GetValue(manager) == null,
+                        "Cancelled save destination disconnected connection");
+                    Call(report, "Begin", "offline final-close fixture", "", DateTime.UtcNow);
+                    File.WriteAllText(file, "ORIGINAL"); Set(fuel, "_saveUnsavedReport", save);
+                    using (var hold = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                        Check(close().Cancel && !(bool)Get(manager, "_managedLeaseHeld") && dirty() &&
+                            (string)type.GetProperty("LastDisconnectOutcome").GetValue(manager) == "Succeeded", "Post-disconnect save failure lost evidence or retained false connection");
+                    Check(File.ReadAllText(file) == "ORIGINAL", "Failed close save damaged existing file");
+                    Check(!close().Cancel && !dirty(), "Retry did not save retained disconnect events");
+                    string text = File.ReadAllText(file);
+                    Check(text.Contains("DisconnectOutcome=Succeeded") && text.Contains("\"Disconnect\"") && text.Contains("\"Pending\"") && text.Contains("\"Succeeded\""),
+                        "Final close export omitted disconnect outcome/events");
+                    Check(text.Split(new[] { "\"Disconnect\"" }, StringSplitOptions.None).Length == 3,
+                        "Retry duplicated disconnect events after connection already closed");
+                    Set(fuel, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => { throw new Exception("Clean repeated close unexpectedly prompted"); }));
+                    Check(!close().Cancel && !dirty(), "Repeated close dirtied clean disconnected report");
+                    int before = saves; RetainLogicalConnection(assembly, manager);
+                    Set(fuel, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.No));
+                    Check(!close().Cancel && saves == before && dirty() && File.ReadAllText(file) == text, "No failed to disconnect or fabricated export");
+                    RetainLogicalConnection(assembly, manager);
+                    Set(main, "_disconnectForClose", (Action)(() => { Call(report, "Event", "Disconnect", "Failed: injected close", DateTime.UtcNow); throw new IOException("injected disconnect refusal"); }));
+                    Check(close().Cancel && errors == 1 && (bool)Get(manager, "_managedLeaseHeld") && dirty(), "Disconnect refusal escaped parent close or lost retained state");
+                    Set(fuel, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.Yes));
+                    Check(close().Cancel && errors == 1 && (bool)Get(manager, "_managedLeaseHeld") && dirty(),
+                        "Yes-disconnect refusal allowed close or lost retained evidence");
+                    // Failed close hook must not leak into an ordinary manual export.
+                    Call(fuel, "ExportSessionTo", file);
+                    Check(File.ReadAllText(file).Contains("Failed: injected close"), "Manual export could not preserve failed-close evidence");
+                    int attempts = 0; Set(main, "_disconnectForClose", (Action)(() => attempts++));
+                    Check((bool)Call(gate, "TryAcquire", "CLOSE_PENDING_FIXTURE"), "Pending receive fixture not acquired");
+                    Check(close().Cancel && attempts == 0 && errors == 2, "Pending reader reached disconnect/export");
+                    Call(gate, "Release", "CLOSE_PENDING_FIXTURE");
+                    Set(main, "_disconnectForClose", actualClose);
+                    Set(fuel, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.Yes)); Set(fuel, "_saveUnsavedReport", save);
+                    Check(!close().Cancel && !dirty() && errors == 2, "Final retry did not recover from refused/pending close");
+                    if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
+                        File.Copy(file, Path.Combine(Path.GetFullPath("diagnostics"), "r28-final-close.csv"), true);
+                }
+                finally { if ((string)gate.GetType().GetProperty("CurrentOwner").GetValue(gate) == "CLOSE_PENDING_FIXTURE") Call(gate, "Release", "CLOSE_PENDING_FIXTURE"); if ((bool)Get(manager, "_managedLeaseHeld")) Call(manager, "Disconnect"); if (File.Exists(file)) File.Delete(file); }
             }
         }
 
@@ -418,6 +527,7 @@ namespace J2534Diag.Tests
                 Check(ReferenceEquals(originalCancellation, Get(form, "_cts")), "Duplicate Start replaced a running session");
                 using (var main = (Form)Activator.CreateInstance(assembly.GetType("J2534Diag.MainForm", true)))
                 {
+                    RetainLogicalConnection(assembly, manager);
                     Set(main, "j2534Manager", manager); Set(main, "fuelTrimForm", form);
                     var tabs = (TabControl)Get(main, "tabControl1");
                     for (int repeat = 0; repeat < 3; repeat++)
@@ -454,7 +564,7 @@ namespace J2534Diag.Tests
                 Call(form, "ExportSessionTo", normalExport);
                 string exported = File.ReadAllText(normalExport);
                 Check(exported.Contains("DisconnectOutcome=Succeeded") && exported.Contains("SessionStop") &&
-                    exported.Contains("Observation") && exported.Contains("R27") && exported.Contains("TESTVIN1234567890"),
+                    exported.Contains("Observation") && exported.Contains("R28") && exported.Contains("TESTVIN1234567890"),
                     "Actual form export lost identity, observations or stop/disconnect outcome");
                 if (vinBootstrap)
                 {
@@ -534,7 +644,7 @@ namespace J2534Diag.Tests
                 grid1.FirstDisplayedScrollingRowIndex = 9; grid2.FirstDisplayedScrollingRowIndex = 9;
                 Check(grid1.GetRowDisplayRectangle(9, false).Height > 0 && grid2.GetRowDisplayRectangle(9, false).Height > 0,
                     "Bottom history row not accessible through grid scrolling");
-                Check(form.Text.Contains("R27") && ((Button)Get(form, "_exportButton")).Visible,
+                Check(form.Text.Contains("R28") && ((Button)Get(form, "_exportButton")).Visible,
                     "Build identifier or export button not visible");
                 if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
                     using (var bitmap = new System.Drawing.Bitmap(form.Width, form.Height))
@@ -678,6 +788,7 @@ namespace J2534Diag.Tests
             AuditQueueAndIdleExport(assembly, managerType);
             AuditRefusedReconnect(assembly, managerType);
             AuditCloseAndControls(assembly, managerType);
+            AuditCloseOrdering(assembly, managerType);
             Console.WriteLine("PASS: " + _checks + " actual FuelTrimForm integration assertions; synthetic callbacks; NO DRIVER/VEHICLE.");
             return _checks;
         }

@@ -91,7 +91,8 @@ namespace J2534Diag
         public bool NativeCaptureActive => NativeSession != null && NativeSession.IsReceiving;
         public bool HasConnectionOrSelection =>
             NativeModeSelected || NativeSession != null ||
-            Channel != null || Device != null || Api != null || _managedLeaseHeld;
+            Channel != null || Device != null || Api != null || _managedLeaseHeld ||
+            _nativeApi != null || _monitorThread != null || _cts != null;
         public NativeDriverIdentity SelectedNativeDriver => _nativeDriver;
 
         // PREPARE ONLY. The actual native channel is opened immediately

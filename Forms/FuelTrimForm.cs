@@ -61,6 +61,7 @@ namespace J2534Diag
         private Action<string> _disconnectReporter;
         private Func<DialogResult> _chooseUnsavedReportAction;
         private Func<bool> _saveUnsavedReport;
+        private Action _beforeCloseExport;
         private bool _layoutBusy;
         public bool BatchMode { get; private set; } = false;
 
@@ -86,8 +87,8 @@ namespace J2534Diag
             _exportButton.Click += (sender, args) => ExportSession();
             _chooseUnsavedReportAction = () => MessageBox.Show(this,
                 _sessionReport.ObservationsSinceExport + " new observations since the last successful export.\n" +
-                "The report contains unsaved observations, events or counter changes.\n" +
-                "Save the current bounded session report before closing?\nYes: export. No: close without exporting. Cancel: keep the app open.",
+                "The report has unsaved changes or the current connection must close.\n" +
+                "Save the current bounded session report before closing?\nYes: choose a file, disconnect, then save. No: disconnect without saving. Cancel: keep open.",
                 "Session report", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
             _saveUnsavedReport = ExportSession;
             flpActions.Controls.Add(new Label { Text = BuildIdentity.Description, AutoSize = true });
@@ -195,14 +196,25 @@ namespace J2534Diag
         }
         internal bool ConfirmReportBeforeClose()
         {
-            if (!_sessionReport.HasUnexportedChanges) return true;
+            return ConfirmReportForApplicationClose(null, false);
+        }
+        internal bool ConfirmReportForApplicationClose(Action disconnect, bool connectionRetained)
+        {
+            if (!_sessionReport.HasUnexportedChanges && !connectionRetained) return true;
             DialogResult decision = _chooseUnsavedReportAction();
-            if (decision == DialogResult.No) return true;
+            if (decision == DialogResult.No) { disconnect?.Invoke(); return true; }
             if (decision != DialogResult.Yes) return false;
-            return _saveUnsavedReport() && !_sessionReport.HasUnexportedChanges;
+            // The actual Save dialog comes first. Cancel must not disconnect.
+            // ExportSessionTo runs this hook only after a destination is chosen,
+            // before capturing the final disconnect events and metadata.
+            Action previous = _beforeCloseExport;
+            _beforeCloseExport = disconnect;
+            try { return _saveUnsavedReport() && !_sessionReport.HasUnexportedChanges; }
+            finally { _beforeCloseExport = previous; }
         }
         internal void ExportSessionTo(string path)
         {
+            _beforeCloseExport?.Invoke();
             _sessionReport.Refresh(Stopwatch.GetTimestamp(), DateTime.UtcNow);
             _sessionReport.Export(path, BuildIdentity.Description + " / " + BuildIdentity.SourceCommit,
                 BuildIdentity.ExecutableSha256(), j2534Manager.LastDisconnectOutcome);

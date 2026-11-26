@@ -16,10 +16,19 @@ namespace J2534Diag
         private FuelTrimForm fuelTrimForm;
         private CanListenerForm canListenerForm;
         private MisfireForm misfireForm;
+        private Action _disconnectForClose;
+        private Action<Exception> _reportCloseFailure;
 
         public MainForm()
         {
             InitializeComponent();
+            _disconnectForClose = () =>
+            {
+                if (j2534Manager?.HasConnectionOrSelection == true) j2534Manager.Disconnect();
+            };
+            _reportCloseFailure = ex => MessageBox.Show(
+                "The connection could not close safely. The application and report remain open.\n" + ex.Message,
+                "Close incomplete", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             Text = "J2534Diag " + BuildIdentity.Description;
             MinimumSize = new System.Drawing.Size(680, 500);
         }
@@ -153,20 +162,33 @@ namespace J2534Diag
             if (j2534Manager?.ReceiveGate.CurrentOwner != null)
             {
                 e.Cancel = true;
-                MessageBox.Show(
+                _reportCloseFailure(new InvalidOperationException(
                     "The J2534 channel is still owned by " + j2534Manager.ReceiveGate.CurrentOwner +
-                    ". Close the active diagnostic session before exiting.",
-                    "Channel shutdown pending", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    ". Close the active diagnostic session before exiting."));
                 return;
             }
-            if (fuelTrimForm != null && !fuelTrimForm.ConfirmReportBeforeClose())
+            try
+            {
+                if (fuelTrimForm != null)
+                {
+                    if (!fuelTrimForm.ConfirmReportForApplicationClose(_disconnectForClose,
+                        j2534Manager?.HasConnectionOrSelection == true))
+                    {
+                        e.Cancel = true;
+                        return;
+                    }
+                }
+                else _disconnectForClose();
+            }
+            catch (Exception ex)
             {
                 e.Cancel = true;
+                _reportCloseFailure(ex);
                 return;
             }
+            // Cleanup has already completed before any close-time snapshot.
+            // A second Dispose/Disconnect here would create events after saving.
             base.OnFormClosing(e);
-            if (!e.Cancel)
-                j2534Manager?.Dispose();
         }
 
         private void TabControl_SelectingWithCaptureGuard(object sender, TabControlCancelEventArgs e)

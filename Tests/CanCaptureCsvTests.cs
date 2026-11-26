@@ -19,6 +19,8 @@ namespace J2534Diag.Tests
         {
             try
             {
+                if (args.Length == 2 && args[0] == "--ci-r27-close-baseline")
+                    return FuelTrimFormIntegrationTests.RunCloseBaseline(args[1]);
                 if (args.Length == 2 && args[0] == "--ci-vin-baseline")
                     return VinStartupTests.RunBaseline(args[1]);
                 if (args.Length > 0 && (args[0] == "--ci-managed-broken-pipe" || args[0] == "--ci-managed-vin-legacy" || args[0] == "--ci-managed-vin-failure" || args[0] == "--ci-managed-sim" || args[0] == "--ci-managed-vin"))

@@ -24,7 +24,11 @@ namespace J2534Diag
             InitializeComponent();
             _disconnectForClose = () =>
             {
-                if (j2534Manager?.HasConnectionOrSelection == true) j2534Manager.Disconnect();
+                try
+                {
+                    if (j2534Manager?.HasConnectionOrSelection == true) j2534Manager.Disconnect();
+                }
+                finally { vehicleTabForm?.RefreshConnectionControls(); }
             };
             _reportCloseFailure = ex => MessageBox.Show(
                 "The connection could not close safely. The application and report remain open.\n" + ex.Message,

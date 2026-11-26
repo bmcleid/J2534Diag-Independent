@@ -332,10 +332,14 @@ namespace J2534Diag.Tests
             string file = Path.Combine(Path.GetTempPath(), "J2534Diag-final-close-" + Guid.NewGuid().ToString("N") + ".csv");
             using (var main = (Form)Activator.CreateInstance(assembly.GetType("J2534Diag.MainForm", true)))
             using (var fuel = (Form)Activator.CreateInstance(assembly.GetType("J2534Diag.FuelTrimForm", true), new object[] { manager }))
+            using (var vehicle = (Form)Activator.CreateInstance(assembly.GetType("J2534Diag.VehicleTabForm", true), new object[] { main, manager }))
             {
                 object report = Get(fuel, "_sessionReport");
                 Func<bool> dirty = () => (bool)report.GetType().GetProperty("HasUnexportedChanges").GetValue(report);
-                Set(main, "j2534Manager", manager); Set(main, "fuelTrimForm", fuel);
+                Set(main, "j2534Manager", manager); Set(main, "fuelTrimForm", fuel); Set(main, "vehicleTabForm", vehicle);
+                Type devicesType = type.GetProperty("Devices").PropertyType; var devices = (IList)Activator.CreateInstance(devicesType);
+                Type deviceType = devicesType.GetGenericArguments()[0]; devices.Add(deviceType.IsValueType ? Activator.CreateInstance(deviceType) : FormatterServices.GetUninitializedObject(deviceType));
+                type.GetField("<Devices>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(manager, devices);
                 int errors = 0, saves = 0; Set(main, "_reportCloseFailure", (Action<Exception>)(ex => errors++));
                 Action actualClose = (Action)Get(main, "_disconnectForClose");
                 Func<FormClosingEventArgs> close = () => { var e = new FormClosingEventArgs(CloseReason.UserClosing, false); Call(main, "OnFormClosing", e); return e; };
@@ -343,6 +347,7 @@ namespace J2534Diag.Tests
                 try
                 {
                     RetainLogicalConnection(assembly, manager);
+                    Call(vehicle, "RefreshConnectionControls");
                     Check(!dirty(), "Empty logical connection fixture unexpectedly dirty");
                     Set(fuel, "_chooseUnsavedReportAction", (Func<DialogResult>)(() => DialogResult.Cancel));
                     Set(fuel, "_saveUnsavedReport", save);
@@ -357,6 +362,8 @@ namespace J2534Diag.Tests
                         Check(close().Cancel && !(bool)Get(manager, "_managedLeaseHeld") && dirty() &&
                             (string)type.GetProperty("LastDisconnectOutcome").GetValue(manager) == "Succeeded", "Post-disconnect save failure lost evidence or retained false connection");
                     Check(File.ReadAllText(file) == "ORIGINAL", "Failed close save damaged existing file");
+                    Check(((Button)Get(vehicle, "btnConnect")).Enabled && !((Button)Get(vehicle, "_disconnectButton")).Enabled &&
+                        ((CheckBox)Get(vehicle, "_captureOnlyCheck")).Enabled, "Post-disconnect save failure left retained-connection controls locked");
                     Check(!close().Cancel && !dirty(), "Retry did not save retained disconnect events");
                     string text = File.ReadAllText(file);
                     Check(text.Contains("DisconnectOutcome=Succeeded") && text.Contains("\"Disconnect\"") && text.Contains("\"Pending\"") && text.Contains("\"Succeeded\""),

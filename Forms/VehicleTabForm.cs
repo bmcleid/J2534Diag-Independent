@@ -174,7 +174,7 @@ namespace J2534Diag
         //    return false;
         //}
 
-        private void RefreshConnectionControls()
+        internal void RefreshConnectionControls()
         {
             bool retained = j2534Manager.HasConnectionOrSelection;
             _disconnectButton.Enabled = retained;

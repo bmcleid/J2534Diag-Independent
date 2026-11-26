@@ -2,6 +2,7 @@ name: Windows baseline build
 
 on:
   push:
+    branches-ignore: ['test/r28-close-dialog-ui-20261126']
     paths-ignore:
       - 'docs/**'
       - '**/*.md'

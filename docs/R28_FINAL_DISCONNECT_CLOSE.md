@@ -55,3 +55,10 @@ All three Part 3 ending screenshots were inspected and retained unchanged:
 They establish completed R27 twenty-step review, separate authorization for the ten close-time correction steps, and the final UI-refresh correction. The earlier “no new defect / keep R27” statement belongs to the completed R27 review; the subsequently reproduced close-order omission is a separately authorized correction, not a reason to erase that prior acceptance.
 
 **Decision:** an R28 engineering-preview package is warranted for the verified close-time reporting correction. Reuse the exact tested Windows artifact; no rebuild is required. R28 passes the scoped offline release gate. Preserve accepted R27 package `libfile_9c6d9759e9ac819199b187f83eac9a3e` unchanged as known fallback. New R28 owner-PC/physical acceptance remains UNVERIFIED; no owner action or vehicle test is requested. PR #29 was verified open, Draft and unmerged at the tested head; do not merge. Bounded-report/no autosave/crash recovery/evicted-detail reconstruction limits remain.
+
+
+### Preserved delivery receipts
+
+- [J2534Diag-R28-Windows.zip](https://chatgpt.com/library?file_id=libfile_20f867919ea48191b78304d0e3fc6288&account_id=personal): Library create succeeded, 1,883,312 bytes, version 0; backing file `file_00000000ffdc81f5bdbb59ac601fe7d0`. Exact bytes/hashes above.
+- [J2534Diag-R28-Validation-Evidence.zip](https://chatgpt.com/library?file_id=libfile_74ba6aa216fc8191bfecf71af174d2e2&account_id=personal): Library create succeeded, 1,008,085 bytes, version 0; backing file `file_00000000ac2481f5bbe5ff0b77d9dd81`; SHA-256 `dc4743a619b3ead67a8cc777be8c254ef0326c8a429a2ba1823b168b6e4a5a54`. ZIP CRC passed and local identity metadata applied.
+- Canonical registry and coordination updated with guarded current blob SHAs. Shared Index updated with expected version 240 to version 241. Readbacks are required before reporting synchronization.

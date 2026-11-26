@@ -212,8 +212,15 @@ internal static class R26Dialogs
         var edits = dialog.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit)).Cast<AutomationElement>().ToArray();
         var edit = edits.FirstOrDefault(e => e.Current.AutomationId == "1001") ?? edits.FirstOrDefault(e => e.Current.Name.StartsWith("File name", StringComparison.OrdinalIgnoreCase));
         if (edit == null) throw new Exception("File name edit not found; see save-dialog-tree.txt");
-        Foreground(dialog); edit.SetFocus(); ((ValuePattern)edit.GetCurrentPattern(ValuePattern.Pattern)).SetValue(path);
-        SendKeys.SendWait("{ENTER}");
+        Foreground(dialog); edit.SetFocus();
+        var value = (ValuePattern)edit.GetCurrentPattern(ValuePattern.Pattern);
+        value.SetValue(path);
+        Check(Wait(() => value.Current.Value == path, 2000), "Native filename edit reads back the requested absolute path");
+        File.AppendAllText(Path.Combine(output, "save-targets.txt"), "Requested=" + path + "; Edit=" + value.Current.Value + Environment.NewLine);
+        Screenshot("save-target-" + checks);
+        // Activate the dialog's Save command explicitly after the filename
+        // readback, rather than relying on Enter while the edit owns focus.
+        Invoke(Button(dialog, "Save"));
     }
     static void ExportButton()
     {

@@ -1,5 +1,12 @@
 # R29 saved scalar-session review
 
+## November 27, 2026 Eastern — R29 thirty-step readiness review closed
+
+**Current decision:** no routine installed-RLink retest, rebuild or repeated owner launch/sample check is needed to close R29 saved-session review. [Thirty-step evidence reconciliation](R29_RLINK_READINESS_RECONCILIATION_2026-11-27.md) preserves original direct-native Nov2/Nov9 capture/rejection evidence, contextual R21 managed VIN/scalar and owner-confirmed Disconnect acceptance, and scoped R22–R28 virtual/software coverage. R29 connection/capture/native/shutdown files match R28 exactly; new Saved session navigation uses existing stop/guard behavior and starts no diagnostics.
+
+R29 software/owner-PC saved-review acceptance is complete. Exact R29 physical adapter communication and current driver identity remain UNVERIFIED, as do manufacturer RxStatus0x00400000 meaning, bus completeness and scalar/TCM diagnostic accuracy. These are explicit limits, not requests to repeat completed baseline gates. Conditional minimum future capture procedure is recorded only for a material change/new symptom or separately requested exact-binary hardware qualification; no physical test is pending now. R28 working fallback/R27 older fallback retained; PR29 open/Draft/unmerged. No code, build, CI, provider/vehicle operation or merge in this review. This current entry supersedes historical pending recommendations only within its stated scope.
+
+
 Owner: Part 4 - Analyze J2534Diag, bmcleid/J2534Diag-Independent, feature/native-gui-capture-preview. R28 remains the accepted fallback; its close/recovery work is complete.
 
 ## Scope

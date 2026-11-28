@@ -677,3 +677,12 @@ Independent J2534Diag binary backfill complete on **master**, R30 first then R29
 Unmodified tools/preserve_build.py ran literally with --push and exact acceptance hashes for both; hash/copy/checksum/local commit passed. CLI pushes failed for absent Git credentials. Authenticated Git Data API then published identical script-generated blobs/whole trees and preserve messages to master using guarded non-force updates. These remote SHAs are authoritative; local script SHAs differ by metadata. No hash mismatch or gate bypass. [Owner accounting](https://github.com/bmcleid/J2534Diag-Independent/blob/259f413b4359de12922c397ee21b24b5cbc9e5a0/docs/BUILD_PRESERVATION.md).
 
 Fresh remote Git readback verified both ZIP bytes/hashes, checksum text, CRC and exact embedded EXE hashes. Tree holds exactly vR29/vR30 with ZIP+SHA256SUMS.txt. R29 parent is R30; both are already on master and available to future mirror fetches. No external mirror refresh claimed. Zero Actions runs for both preserve SHAs. No rebuilt artifacts, vehicle/provider operations or acceptance repeats. PR29 not merged; scanner functional limits unchanged. Work performed on master, not left only on a feature branch.
+
+
+## November 28, 2026 Eastern — R30 owner-PC visual acceptance confirmed
+
+Owner supplied `Screenshot 2026-11-28 111039.png`, Library `libfile_4c518fabeba88191ae04953e3cef8509`,184662bytes, SHA256 `72837a4e2b6361586f01d4b8015db64ae9f586c0049e63289efb6e0b627f90ac`, and reported “it appears everything is in order.” Original image inspected and retained unchanged.
+
+**CONFIRMED visual scope:** title R30/bb602372a5a1; Misfire Monitor open; experimental GM-reference/SRX-support-unverified/reporting-period warning, blank source selector and Unknown–no Mode06 observations message visible above gauges; all reference gauges show Unknown; footer Disconnected with blank VIN. This confirms owner-PC launch and corrected layout at the supplied screen size. No repeat launch/screenshot/sample check required.
+
+Screenshot does not independently establish running-process EXE hash, physical cable state, actual provider/vehicle communication, supported Mode06 monitors, live accuracy or clean application exit. Those remain distinct scopes; existing software tests retain their acceptance. Reference cylinder7/8 cards are generic slots, not a claim about this six-cylinder vehicle. No new scan or driver change requested. Accepted R30/R29 ZIP preservation on master remains unchanged (876923c/af83c01); keep R29/R28/R27 fallbacks and PR29 Draft/unmerged.

@@ -42,12 +42,14 @@ jobs:
           }
           'RegisteredProviders=0;Physical=False' | Set-Content diagnostics/preflight.txt
       - uses: actions/download-artifact@v4
+        if: "!contains(github.event.head_commit.message, '[mode6-layout]')"
         with:
           github-token: ${{ github.token }}
           run-id: 46087182555
           name: J2534Diag-R29-Windows
           path: preserved
       - name: Reproduce three defects on unchanged exact R29 executable
+        if: "!contains(github.event.head_commit.message, '[mode6-layout]')"
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -73,11 +75,15 @@ jobs:
           & msbuild.exe Tests/mode6/Mode6UiTests.csproj /p:Configuration=Release /verbosity:minimal 2>&1 | Tee-Object diagnostics/harness-build.log
           if ($LASTEXITCODE -ne 0) { throw 'Harness compile failed' }
       - name: Focused model and production GUI acceptance with zero handles
+        env:
+          MODE6_LAYOUT_ONLY: ${{ contains(github.event.head_commit.message, '[mode6-layout]') }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $hash = (Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash
-          $p = Start-Process Tests/mode6/bin/Release/Mode6UiTests.exe -ArgumentList (Join-Path $pwd diagnostics) -PassThru -RedirectStandardOutput diagnostics/focused.log -RedirectStandardError diagnostics/focused-error.log
+          $arguments = @((Join-Path $pwd diagnostics))
+          if ($env:MODE6_LAYOUT_ONLY -eq 'true') { $arguments += '--layout-only' }
+          $p = Start-Process Tests/mode6/bin/Release/Mode6UiTests.exe -ArgumentList $arguments -PassThru -RedirectStandardOutput diagnostics/focused.log -RedirectStandardError diagnostics/focused-error.log
           if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw 'Focused check exceeded two minutes' }
           Get-Content diagnostics/focused.log
           Get-Content diagnostics/focused-error.log

@@ -49,7 +49,15 @@ namespace J2534Diag
             bar.Controls.Add(new Label { AutoSize = true,
                 Text = "Experimental Mode06 • GM reference labels; SRX support unverified. Results are not live counters." });
             bar.Controls.Add(_sourceSelect); bar.Controls.Add(_status);
-            Controls.Add(bar); bar.BringToFront();
+            // Put the toolbar in its own measured row; a sibling Fill panel can
+            // otherwise consume the entire embedded form and hide docked controls.
+            tlpRight.Controls.Remove(flpMisfires);
+            tlpRight.RowCount = 2; tlpRight.RowStyles.Clear();
+            tlpRight.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            tlpRight.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            bar.Dock = DockStyle.Fill; bar.Margin = Padding.Empty;
+            tlpRight.Controls.Add(bar, 0, 0);
+            tlpRight.Controls.Add(flpMisfires, 0, 1);
             _sourceSelect.SelectedIndexChanged += (sender, e) => RefreshObservedValues();
             _sourceSelect.Format += (sender, e) => { if (e.ListItem is uint) e.Value = "Source 0x" + ((uint)e.ListItem).ToString("X"); };
             _sourceSelect.FormattingEnabled = true;

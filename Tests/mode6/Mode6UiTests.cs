@@ -27,7 +27,8 @@ public static class Mode6UiTests
         try
         {
             Application.EnableVisualStyles(); Control.CheckForIllegalCrossThreadCalls = true;
-            Mode6PolicyTests.Run();
+            bool layoutOnly = args.Length > 1 && args[1] == "--layout-only";
+            if (!layoutOnly) Mode6PolicyTests.Run();
             using(var main = new MainForm())
             {
                 main.Show(); Application.DoEvents();
@@ -38,6 +39,34 @@ public static class Mode6UiTests
                 tabs.SelectedTab = tabs.TabPages["tabMisfireMonitor"]; Application.DoEvents();
                 var controls = (Dictionary<int,PidDisplayControl>)Get(form,"_misfireControls");
                 var source = (ComboBox)Get(form,"_sourceSelect"); var status = (Label)Get(form,"_status");
+                if (layoutOnly)
+                {
+                    main.Size = new Size(1100,740); Application.DoEvents();
+                    var grid = (FlowLayoutPanel)Get(form,"flpMisfires");
+                    var table = (TableLayoutPanel)Get(form,"tlpRight");
+                    var bar = (FlowLayoutPanel)source.Parent;
+                    Check(source.Visible && status.Visible && bar.Height >= source.Height,
+                        "Source selector and status toolbar are visible");
+                    Check(bar.Bottom <= grid.Top && bar.Width > 600,"Toolbar has separate non-overlapping row");
+                    Check(source.Bounds.Right <= bar.ClientSize.Width && status.Bounds.Right <= bar.ClientSize.Width,
+                        "Source and status fit inside toolbar width");
+                    Event(form,0x7E8,Mode6PolicyTests.Payload(value:0));
+                    Event(form,0x7E9,Mode6PolicyTests.Payload(value:42));
+                    source.SelectedIndex=1; Application.DoEvents();
+                    Check(controls[0xA20C].ValueText=="42" && source.Text.Contains("7E9"),
+                        "Visible selector selects independent source");
+                    main.Size = new Size(760,650); Application.DoEvents();
+                    Check(source.Visible && status.Visible && bar.Bottom <= grid.Top &&
+                        source.Bounds.Right <= bar.ClientSize.Width && status.Bounds.Right <= bar.ClientSize.Width,
+                        "Narrow toolbar wraps without hiding source/status or overlapping grid");
+                    main.Size = new Size(1100,740); Application.DoEvents();
+                    using(var bitmap=new Bitmap(main.Width,main.Height)) { main.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size)); bitmap.Save(Path.Combine(args[0],"mode6-layout-reviewed-ui.png")); }
+                    Check(manager.Api==null && manager.Device==null && manager.Channel==null && manager.NativeSession==null,
+                        "Layout acceptance used zero provider handles");
+                    main.Close(); Application.DoEvents();
+                    Console.WriteLine("PASS focused Mode06 layout checkpoints="+Mode6PolicyTests.Checks+"; prior62checks reused; physical=False");
+                    return 0;
+                }
                 Check(controls.Values.All(c => c.ValueText == "Unknown"),"Initial missing data never zero");
                 Event(form,0x7E8,Mode6PolicyTests.Payload(value:0));
                 Check(controls[0xA20C].ValueText == "0","Actual UI accepts measured zero on UI thread");

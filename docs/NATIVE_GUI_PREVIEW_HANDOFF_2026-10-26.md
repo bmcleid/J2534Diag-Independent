@@ -1,5 +1,14 @@
 # J2534Diag native CAN Listener GUI preview — October 26, 2026
 
+## November 28, 2026 Eastern — R31 discovery software milestone complete
+
+Current scoped offline product **R31/251ea31474de339e754f9057c070e8fe375e365e**: [thirty-step acceptance, exact bytes and remaining limits](R31_MODE06_DISCOVERY_2026-11-28.md). One focused Windows gate46170048742/job141056183223 passed102 model/production UI checks with zero provider handles. Availability pages/continuation and result requests are isolated by responder; only advertised implemented enabled monitors queried; one bounded snapshot per start. Negative/missing/malformed support is not a zero. Actual rendered UI inspected. Earlier R30/R29/R28 results reused, no vehicle/owner repeat.
+
+Exact ZIP1912701bytes SHA2563331300ff707b3c64e27f5edc662486c15c5f92827d94693f4b59a8f2ebfb267, EXE1e88570626de244c7ae1154c4f8c591c4497b35b4807e4a20ffe1bb41c7b5841. Delivered/preserved Library libfile_1700d663efc481918307fd3e66d4cb71; evidence libfile_f3b49917ca988191b55fe8f5c6b5f8f6. Git preservation **already on master acc2413b9191753e37fa92d831433d3ab9d3eb16**, exact script tree and remote ZIP/EXE verified. Tree holds R30/R31; R29 remains in history. R31 source remains on feature/native-gui-capture-preview, PR29 open/Draft/unmerged; no merge.
+
+**R30 remains the owner-PC accepted fallback** at bb602372a5a1; original owner screenshot111039, libfile_4c518fabeba88191ae04953e3cef8509, confirms visible toolbar/Unknown/no observations/Disconnected/blankVIN and is preserved. No new owner install/scan/reconnect is required. R31 acceptance is offline software only; installed-SRX monitor support, TID/scaling/cylinder/calibration meaning and sustained scalar accuracy remain unverified. Generic eight-cylinder slots are not vehicle configuration proof. Earlier historical 'pending' notes do not reopen completed gates.
+
+
 ## November 27, 2026 Eastern — R30 Mode06 correctness review complete
 
 **Current product:** R30 engineering preview at `bb602372a5a1e9832b892fadf2cf45279d7f145a`. [Complete thirty-step review, exact evidence and limitations](R30_MODE06_CORRECTNESS_REVIEW_2026-11-27.md). Unchanged exact R29 reproduced three defects: valid UI-thread value not assigned, unknown control null dereference, and truncated eight-byte record accepted. R30 enforces complete records, reference units/unknown states, source-isolated display, visible errors, bounded polling, peer cancellation and retained cleanup ownership. Generic GM references are corroborated; installed-SRX monitor support is not.

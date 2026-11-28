@@ -1,5 +1,14 @@
 # J2534Diag native CAN Listener GUI preview — October 26, 2026
 
+## Current continuation checkpoint — November 27, 2026 Eastern
+
+This is Part 4 - Analyze J2534Diag. Owner branch remains feature/native-gui-capture-preview; PR #29 is Draft/unmerged. Historical sections below preserve the work chronology and do not override this checkpoint.
+
+**R28 is the current delivered fallback:** close-time final-disconnect reporting, native dialogs, file-write failure/retry, refusal/manual export and retained-reader recovery are complete offline. Owner-PC visual launch is confirmed. See [R28 current record](R28_FINAL_DISCONNECT_CLOSE.md), [normal dialog acceptance](R28_NATIVE_DIALOG_COMPLETION_2026-11-26.md), and [failure/recovery acceptance](R28_FAILURE_DIALOG_COMPLETION_2026-11-27.md). Do not rerun those plans or follow superseded pending/blocked notes. Physical adapter acceptance remains separate and unverified beyond the vehicle evidence specifically recorded for older releases.
+
+**R29 is in progress:** a read-only Saved session tab for this app's own 16-column scalar CSV reports. [R29 scope and usage](R29_SAVED_SESSION_REVIEW.md). Existing CAN import remains a raw-CAN path; this work is independent of OneApp saved PID, GDT ELM review, Vgate and GM ECU Simulator. One new scoped build/parser/production-GUI gate is planned, reusing preserved R28 report files. No provider/vehicle action, historical controls, completed close-dialog suites or PR merge.
+
+
 **Owner** `bmcleid/J2534Diag-Independent`, branch `feature/native-gui-capture-preview` stacked on PR #28. Target use: owner's TOPDON RLink X3 with a 2012 Cadillac SRX Performance AWD 3.6L, no programming or diagnostic requests.
 
 ## User workflow (Windows GUI)

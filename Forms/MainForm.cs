@@ -16,6 +16,7 @@ namespace J2534Diag
         private FuelTrimForm fuelTrimForm;
         private CanListenerForm canListenerForm;
         private MisfireForm misfireForm;
+        private SavedSessionReviewForm _savedSessionReview;
         private Action _disconnectForClose;
         private Action<Exception> _reportCloseFailure;
 
@@ -35,6 +36,12 @@ namespace J2534Diag
                 "Close incomplete", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             Text = "J2534Diag " + BuildIdentity.Description;
             MinimumSize = new System.Drawing.Size(680, 500);
+            var savedTab = new TabPage("Saved session") { Name = "tabSavedSession" };
+            tabControl1.TabPages.Add(savedTab);
+            _savedSessionReview = new SavedSessionReviewForm { TopLevel = false, Dock = DockStyle.Fill,
+                FormBorderStyle = FormBorderStyle.None };
+            savedTab.Controls.Add(_savedSessionReview);
+            _savedSessionReview.Show();
         }
 
         public void UpdateSelectedVehicle(bool connected, string vin)

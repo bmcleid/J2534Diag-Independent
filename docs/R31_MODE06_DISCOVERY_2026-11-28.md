@@ -79,3 +79,7 @@ Installed-ECU advertisement, TID/calibration meaning and physical transport rema
 | 30 | Software milestone closed with exact remaining qualification boundary; no physical test or merge performed. |
 
 **Overall scanner objective remains open:** installed-ECU Mode06 support/TID/calibration interpretation, sustained live scalar freshness/accuracy, and any later separately authorized exact-final-build physical qualification. These are not failed offline gates and do not justify repeating the completed R27/R28/R29/R30 checks. No owner action is needed to close this R31 software milestone.
+
+## Synchronization receipts
+
+Owner record/handoff read back at `98023bcae0121d9d1653e3e281de8d29535c9bc6`. Canonical SRX main registry commit `78f792f81b1dd03a275222e5540a5cf891ec9cf2` and cross-track commit `e452f1270b8f8b25b69411dc4eb06e252e126724` each read back with the exact new R31 entry. Shared Index same Library identity `libfile_e6eb5452640c8191baf62dbcbb1cc5ed` guarded replacement v281→v282 succeeded, local identity applied, new R31 acceptance/preservation/R30 continuity text read back. Current PR29 head/status rechecked open/Draft/unmerged. No blanket claim of automatic cross-chat synchronization.

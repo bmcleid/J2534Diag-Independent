@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build:
-    if: "!contains(github.event.head_commit.message, '[saved-review]')"
+    if: "!contains(github.event.head_commit.message, '[saved-review]') && !contains(github.event.head_commit.message, '[mode6-review]')"
     runs-on: windows-2022
     timeout-minutes: 20
     steps:

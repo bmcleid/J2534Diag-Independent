@@ -68,6 +68,7 @@
     <Compile Include="Models\IseTpFrameType.cs" />
     <Compile Include="Models\IsoTpFrameEventArgs.cs" />
     <Compile Include="Services\IsoTpParser.cs" />
+    <Compile Include="Services\Mode6Response.cs" />
     <Compile Include="Forms\MisfireForm.cs">
       <SubType>Form</SubType>
     </Compile>

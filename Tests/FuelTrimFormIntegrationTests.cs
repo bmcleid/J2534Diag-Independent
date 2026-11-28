@@ -571,7 +571,7 @@ namespace J2534Diag.Tests
                 Call(form, "ExportSessionTo", normalExport);
                 string exported = File.ReadAllText(normalExport);
                 Check(exported.Contains("DisconnectOutcome=Succeeded") && exported.Contains("SessionStop") &&
-                    exported.Contains("Observation") && exported.Contains("R29") && exported.Contains("TESTVIN1234567890"),
+                    exported.Contains("Observation") && exported.Contains("R30") && exported.Contains("TESTVIN1234567890"),
                     "Actual form export lost identity, observations or stop/disconnect outcome");
                 if (vinBootstrap)
                 {
@@ -651,7 +651,7 @@ namespace J2534Diag.Tests
                 grid1.FirstDisplayedScrollingRowIndex = 9; grid2.FirstDisplayedScrollingRowIndex = 9;
                 Check(grid1.GetRowDisplayRectangle(9, false).Height > 0 && grid2.GetRowDisplayRectangle(9, false).Height > 0,
                     "Bottom history row not accessible through grid scrolling");
-                Check(form.Text.Contains("R29") && ((Button)Get(form, "_exportButton")).Visible,
+                Check(form.Text.Contains("R30") && ((Button)Get(form, "_exportButton")).Visible,
                     "Build identifier or export button not visible");
                 if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
                     using (var bitmap = new System.Drawing.Bitmap(form.Width, form.Height))

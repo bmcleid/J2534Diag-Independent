@@ -1,5 +1,16 @@
 # J2534Diag native CAN Listener GUI preview — October 26, 2026
 
+## November 27, 2026 Eastern — R30 Mode06 correctness review complete
+
+**Current product:** R30 engineering preview at `bb602372a5a1e9832b892fadf2cf45279d7f145a`. [Complete thirty-step review, exact evidence and limitations](R30_MODE06_CORRECTNESS_REVIEW_2026-11-27.md). Unchanged exact R29 reproduced three defects: valid UI-thread value not assigned, unknown control null dereference, and truncated eight-byte record accepted. R30 enforces complete records, reference units/unknown states, source-isolated display, visible errors, bounded polling, peer cancellation and retained cleanup ownership. Generic GM references are corroborated; installed-SRX monitor support is not.
+
+First Windows46092164755/job140815335851 at ec8c35d passed62 checks and the three witnesses, but screenshot inspection found a hidden toolbar. That first package is superseded, not accepted for delivery. Corrected Windows46092433553/job140816188544 SUCCESS passed only seven layout/source-selector/zero-handle checks; earlier model/witness/lifecycle results reused. Corrected screenshot inspected. Two product compiles across distinct source artifacts, no identical-SHA retry or repeated full/historical/R28/R29 suites.
+
+Final ZIP1,901,701bytes SHA256fb0f81ff5549ddab9796643e5e45fabb53f02de17af3ff1c72d3fca64a6ec015; EXEc3a9fe6c3f58e1b35b636538d58e5fa2e55170d16cc5240283cc75932877d30b. All8 payload hashes/source/run and ZIP CRC verified. Preserve accepted R29 saved-review and R28/R27 fallbacks.
+
+The thirty-step software review is complete; complete scanner objective remains open for supported-monitor discovery/installed-calibration Mode06 qualification, sustained live scalar validation and exact-final-build physical qualification. No new physical test is requested. Mode06 detail remains in memory/tooltips, not scalar CSV export. PR29 Draft/unmerged; no provider/vehicle connection/transmission, clear/programming/actuation or merge occurred. Historical pending notes below do not reopen completed gates.
+
+
 ## November 27, 2026 Eastern — R29 thirty-step readiness review closed
 
 **Current decision:** no routine installed-RLink retest, rebuild or repeated owner launch/sample check is needed to close R29 saved-session review. [Thirty-step evidence reconciliation](R29_RLINK_READINESS_RECONCILIATION_2026-11-27.md) preserves original direct-native Nov2/Nov9 capture/rejection evidence, contextual R21 managed VIN/scalar and owner-confirmed Disconnect acceptance, and scoped R22–R28 virtual/software coverage. R29 connection/capture/native/shutdown files match R28 exactly; new Saved session navigation uses existing stop/guard behavior and starts no diagnostics.

@@ -85,9 +85,7 @@ jobs:
               Write-Output ('REVIEW_IMAGE=' + $name + ':' + [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $pwd "diagnostics/$name"))))
             }
           }
-      - name: Package verified runtime and preserve durable draft release
-        env:
-          GH_${{ github.token }}: ${{ github.token }}
+      - name: Package verified runtime
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -126,10 +124,6 @@ jobs:
           "PackageSHA256=$((Get-FileHash $zip -Algorithm SHA256).Hash)" | Tee-Object diagnostics/package-verification.txt -Append
           "ExecutableSHA256=$((Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash)" | Tee-Object diagnostics/package-verification.txt -Append
           Copy-Item bin/Release/ENGINEERING_PREVIEW_MANIFEST.txt diagnostics/runtime-manifest.txt
-          $tag = "j2534diag-r29-$($env:GITHUB_SHA.Substring(0,12))"
-          gh release create $tag $zip --repo $env:GITHUB_REPOSITORY --draft --target $env:GITHUB_SHA --title 'J2534Diag R29 saved-session review' --notes-file docs/R29_SAVED_SESSION_REVIEW.md
-          if ($LASTEXITCODE -ne 0) { throw 'Durable draft release preservation failed; do not rebuild' }
-          gh release view $tag --repo $env:GITHUB_REPOSITORY --json url,tagName,isDraft,assets | Set-Content diagnostics/draft-release.json
       - name: Upload validated Windows package
         if: success()
         uses: actions/upload-artifact@v4
@@ -137,6 +131,16 @@ jobs:
           name: J2534Diag-R29-Windows
           path: deliverables/J2534Diag-R29-Windows.zip
           retention-days: 90
+      - name: Preserve durable draft release after package upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = "j2534diag-r29-$($env:GITHUB_SHA.Substring(0,12))"
+          gh release create $tag deliverables/J2534Diag-R29-Windows.zip --repo $env:GITHUB_REPOSITORY --draft --target $env:GITHUB_SHA --title 'J2534Diag R29 saved-session review' --notes-file docs/R29_SAVED_SESSION_REVIEW.md
+          if ($LASTEXITCODE -ne 0) { throw 'Durable draft release preservation failed; do not rebuild' }
+          gh release view $tag --repo $env:GITHUB_REPOSITORY --json url,tagName,isDraft,assets | Set-Content diagnostics/draft-release.json
       - name: Preserve acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -1,0 +1,102 @@
+name: R29 package-only recovery
+on:
+  push:
+    branches: ['test/r29-package-recovery-20261127']
+    paths: ['.github/workflows/r29-package-recovery.yml']
+  workflow_dispatch:
+concurrency:
+  group: R29-package-recovery
+  cancel-in-progress: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249
+      - uses: microsoft/setup-msbuild@v2
+      - uses: NuGet/setup-nuget@v2
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 46086955097
+          name: J2534Diag-R29-saved-review-evidence
+          path: accepted-evidence
+      - name: Rebuild pinned source only and require identical accepted executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force diagnostics,deliverables | Out-Null
+          $source = '2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249'
+          if ((git rev-parse HEAD) -ne $source) { throw 'Wrong recovery source' }
+          $accepted = Get-Content accepted-evidence/verification.txt -Raw
+          if (-not $accepted.Contains('Acceptance=PASS') -or -not $accepted.Contains("Source=$source")) { throw 'Missing accepted-source evidence' }
+          & nuget restore J2534Diag.sln -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned dependency restore failed' }
+          $identity = Get-Content Services/BuildIdentity.cs -Raw
+          $identity = $identity.Replace('SourceCommit = "workspace"', ('SourceCommit = "' + $source + '"'))
+          Set-Content Services/BuildIdentity.cs $identity -Encoding UTF8
+          & msbuild.exe J2534Diag.sln '/p:Configuration=Release' '/p:Platform=Any CPU' '/verbosity:minimal' 2>&1 | Tee-Object diagnostics/recovery-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned product rebuild failed' }
+          $expected = 'C4A9B9CF8602D9D3DFCDA0CADB29792302E21EA4B62C9F2A7362FFF3F126AD0F'
+          if ((Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash -ne $expected) { throw 'Recovered EXE differs from exact accepted executable; do not release' }
+          Copy-Item accepted-evidence/generated/roundtrip.csv bin/Release/Example-Synthetic-Session.csv
+          @(
+            'J2534Diag R29 - Saved session review',
+            'Extract in a separate folder and keep R28 as fallback.',
+            'Run J2534Diag.exe; choose Saved session; choose Open saved session.',
+            'Example-Synthetic-Session.csv is synthetic test data, not a vehicle recording.',
+            'Review is offline and makes no ECU requests. No adapter connection is needed.',
+            'Only this app scalar Schema=2 report CSVs are supported; see owner R29 record.',
+            'Physical R29 adapter/vehicle acceptance remains unverified.',
+            "SourceCommit=$source"
+          ) | Set-Content bin/Release/R29_README.txt -Encoding UTF8
+          Copy-Item accepted-evidence/runtime-manifest.txt bin/Release/ENGINEERING_PREVIEW_MANIFEST.txt
+          $manifest = Get-Content accepted-evidence/runtime-manifest.txt -Raw
+          $verified = 0
+          foreach ($line in ($manifest -split [Environment]::NewLine)) {
+            if ($line -match '^([A-F0-9]{64})  (.+)$') {
+              if ((Get-FileHash (Join-Path bin/Release $Matches[2]) -Algorithm SHA256).Hash -ne $Matches[1]) { throw "Recovered payload differs: $($Matches[2])" }
+              $verified++
+            }
+          }
+          if ($verified -ne 9) { throw "Expected nine original payload hashes, saw $verified" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = Join-Path $pwd deliverables/J2534Diag-R29-Windows.zip
+          [IO.Compression.ZipFile]::CreateFromDirectory((Join-Path $pwd bin/Release),$zip)
+          $archive = [IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+            foreach ($entry in $archive.Entries) {
+              $stream = $entry.Open()
+              try { $sha = [Security.Cryptography.SHA256]::Create(); $digest = [Convert]::ToHexString($sha.ComputeHash($stream)); $sha.Dispose() } finally { $stream.Dispose() }
+              if ($digest -ne (Get-FileHash (Join-Path bin/Release $entry.FullName) -Algorithm SHA256).Hash) { throw 'ZIP entry mismatch' }
+            }
+          } finally { $archive.Dispose() }
+          @("SourceCommit=$source","AcceptedRun=46086955097","RecoveryRun=$env:GITHUB_RUN_ID","ExecutableSHA256=$expected","PayloadHashesVerified=$verified","PackageBytes=$((Get-Item $zip).Length)","PackageSHA256=$((Get-FileHash $zip -Algorithm SHA256).Hash)",'AcceptanceRetested=False') | Tee-Object diagnostics/package-recovery-verification.txt
+      - name: Upload exact accepted package before external release action
+        uses: actions/upload-artifact@v4
+        with:
+          name: J2534Diag-R29-Windows
+          path: deliverables/J2534Diag-R29-Windows.zip
+          retention-days: 90
+      - name: Preserve durable draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'j2534diag-r29-2aa3d43a0c5e'
+          gh release create $tag deliverables/J2534Diag-R29-Windows.zip --repo $env:GITHUB_REPOSITORY --draft --target '2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249' --title 'J2534Diag R29 saved-session review' --notes-file docs/R29_SAVED_SESSION_REVIEW.md
+          if ($LASTEXITCODE -ne 0) { throw 'Draft preservation failed; uploaded package remains available' }
+          gh release view $tag --repo $env:GITHUB_REPOSITORY --json url,tagName,isDraft,assets | Tee-Object diagnostics/draft-release.json
+      - name: Preserve recovery diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: J2534Diag-R29-package-recovery-evidence
+          path: diagnostics/**
+          retention-days: 30

@@ -9,6 +9,7 @@
     <RootNamespace>J2534Diag</RootNamespace>
     <AssemblyName>J2534Diag</AssemblyName>
     <TargetFrameworkVersion>v4.8.1</TargetFrameworkVersion>
+    <Prefer32Bit>false</Prefer32Bit>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
@@ -42,8 +43,10 @@
     <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>packages\Newtonsoft.Json.13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
+    <Reference Include="Microsoft.VisualBasic" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.IO.Compression" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -65,6 +68,8 @@
     <Compile Include="Models\IseTpFrameType.cs" />
     <Compile Include="Models\IsoTpFrameEventArgs.cs" />
     <Compile Include="Services\IsoTpParser.cs" />
+    <Compile Include="Services\Mode6Response.cs" />
+    <Compile Include="Services\Mode6DiscoverySession.cs" />
     <Compile Include="Forms\MisfireForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -102,6 +107,7 @@
     <Compile Include="Services\NativeOwnedCanSession.cs" />
     <Compile Include="Services\J2534ConnectionOwnership.cs" />
     <Compile Include="Services\NativeJ2534StdCallApi.cs" />
+    <Compile Include="Services\NativeJ2534DriverCheck.cs" />
     <Compile Include="Services\ReceiveChannelGate.cs" />
     <Compile Include="Services\ChannelLifecyclePolicy.cs" />
     <Compile Include="Services\DiagnosticTransmitPolicy.cs" />
@@ -126,6 +132,12 @@
     <Compile Include="Controls\SelectedVehicleControl.Designer.cs">
       <DependentUpon>SelectedVehicleControl.cs</DependentUpon>
     </Compile>
+    <Compile Include="Services\CaptureEvidencePackage.cs" />
+    <Compile Include="Services\FuelTrimSampleState.cs" />
+    <Compile Include="Services\FuelTrimSessionReport.cs" />
+    <Compile Include="Services\SavedSessionReport.cs" />
+    <Compile Include="Forms\SavedSessionReviewForm.cs"><SubType>Form</SubType></Compile>
+    <Compile Include="Services\BuildIdentity.cs" />
     <Compile Include="Services\VinDecoder.cs" />
     <EmbeddedResource Include="Forms\CanListenerForm.resx">
       <DependentUpon>CanListenerForm.cs</DependentUpon>

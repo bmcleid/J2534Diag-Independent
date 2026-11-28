@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -7,11 +7,8 @@ namespace J2534Diag
     partial class FuelTrimForm
     {
         private System.ComponentModel.IContainer components = null;
-        private TableLayoutPanel tlpMain;
         private FlowLayoutPanel flpPids;
         private FlowLayoutPanel flpActions;
-        private Panel pnlBottom;
-        private TableLayoutPanel tlpRight;
         private Panel pnlGrids;
         private DataGridView dgvTrimGridBank1;
         private DataGridView dgvTrimGridBank2;
@@ -20,9 +17,12 @@ namespace J2534Diag
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                DiscardPendingSamples(FuelTrimEvidenceCounter.UnavailableUiDiscarded);
+                if (j2534Manager != null && _disconnectReporter != null)
+                    j2534Manager.DisconnectOutcomeChanged -= _disconnectReporter;
+                components?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -35,28 +35,16 @@ namespace J2534Diag
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.Text = "J2534 OBD-II Scan Tool";
 
-            // Main TableLayoutPanel
-            this.tlpMain = new TableLayoutPanel();
-            this.tlpMain.ColumnCount = 2;
-            this.tlpMain.RowCount = 2;
-            this.tlpMain.Dock = DockStyle.Fill;
-            this.tlpMain.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));  // Right panel fills rest
-            this.tlpMain.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));        // Main area
-            this.tlpMain.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));        // Bottom panel height
-
             // PID Panel (right, top)
             this.flpPids = new FlowLayoutPanel();
-            this.flpPids.Dock = DockStyle.Fill;
+            this.flpPids.Dock = DockStyle.None;
             this.flpPids.AutoScroll = true;
             this.flpPids.WrapContents = true;
-
-            // Bottom Panel (spans both columns)
-            this.pnlBottom = new Panel();
-            this.pnlBottom.Dock = DockStyle.Fill;
+            this.flpPids.Padding = new Padding(4);
 
             // --- Grids Panel (right, bottom) ---
             this.pnlGrids = new Panel();
-            this.pnlGrids.Dock = DockStyle.Fill;
+            this.pnlGrids.Dock = DockStyle.None;
             this.pnlGrids.AutoScroll = true;
 
             this.lblBank1 = new Label
@@ -128,8 +116,10 @@ namespace J2534Diag
 
             // Add a FlowLayoutPanel for action buttons in pnlBottom
             flpActions = new FlowLayoutPanel();
-            flpActions.Dock = DockStyle.Fill; // Or DockStyle.Fill for center/left alignment
-            flpActions.AutoSize = true;
+            flpActions.Dock = DockStyle.None;
+            flpActions.AutoSize = false;
+            flpActions.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            flpActions.WrapContents = true;
             flpActions.FlowDirection = FlowDirection.LeftToRight;
             //flpActions.Padding = new Padding(10, 10, 10, 10);
 
@@ -147,25 +137,15 @@ namespace J2534Diag
             this.pnlGrids.Controls.Add(this.lblBank2);
             this.pnlGrids.Controls.Add(this.dgvTrimGridBank2);
 
-            // --- Right TableLayoutPanel to stack flpPids and pnlGrids ---
-            this.tlpRight = new TableLayoutPanel();
-            this.tlpRight.ColumnCount = 1;
-            this.tlpRight.RowCount = 2;
-            this.tlpRight.Dock = DockStyle.Fill;
-            this.tlpRight.RowStyles.Add(new RowStyle(SizeType.Absolute, 140F)); // Height for PID controls
-            this.tlpRight.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F)); // Height for PID controls
-            this.tlpRight.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));  // Grids fill the rest
-            this.tlpRight.Controls.Add(this.flpPids, 0, 0);
-            this.tlpRight.Controls.Add(this.flpActions, 0, 1);
-            this.tlpRight.Controls.Add(this.pnlGrids, 0, 2);
-
-            // Add panels to TableLayoutPanel
-            this.tlpMain.Controls.Add(this.tlpRight, 0, 0);
-
-            // Add TableLayoutPanel to Form
-            this.Controls.Add(this.tlpMain);
+            // Size these three regions from the actual client viewport.
+            // Avoid nested preferred-size tables feeding back the grid's old size.
+            this.Controls.Add(this.flpPids);
+            this.Controls.Add(this.flpActions);
+            this.Controls.Add(this.pnlGrids);
         }
 
         #endregion
     }
 }
+
+

@@ -72,7 +72,12 @@ namespace J2534Diag.Tests
                 }
             }
 
-            var invalid = new CanReceivedFrame { Data=new byte[]{0x1},TimestampRaw=1,RxStatusRaw=0 };
+            var invalid = new CanReceivedFrame
+            {
+                Data = new byte[] { 0x1 }, TimestampRaw = 1, RxStatusRaw = 0,
+                NativeProtocolId = 5, NativeTxFlags = 0, NativeDataSize = 1,
+                NativeExtraDataIndex = 1
+            };
             var reject = new CanCapturePump(new NativeCanReadBoundary(new Fake {
                 Result = new NativeCanReadResult(0x12,2,new[]{invalid,Frame(0x61,601)})
             }),10,() => new DateTime(2026,10,25,18,0,0,DateTimeKind.Utc),null);
@@ -81,6 +86,13 @@ namespace J2534Diag.Tests
             catch (CanReceiveBufferOverflowException) { }
             Check(rows.Count == 1 && reject.LastSummary.InvalidFrames == 1,
                 "Malformed partial frame accepted");
+            var evidence = reject.LastSummary.RejectionEvidence[0];
+            Check(evidence.BatchOrdinal == 1 && evidence.SlotIndex == 0 &&
+                evidence.Reason == CanFrameRejectionKind.MissingOrShortHeader &&
+                evidence.Frame.NativeProtocolId == 5 && evidence.Frame.NativeDataSize == 1 &&
+                evidence.Frame.NativeExtraDataIndex == 1 && evidence.Frame.NativeTxFlags == 0 &&
+                evidence.Frame.ReadResult == "BUFFER_OVERFLOW" && evidence.Frame.Data[0] == 1,
+                "Rejected native overflow record lost metadata or bytes");
 
             var unknown = new NativeCanReadBoundary(new Fake {
                 Result=new NativeCanReadResult(0x99,1,new[]{Frame(1,1)}) });

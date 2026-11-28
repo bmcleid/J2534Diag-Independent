@@ -15,6 +15,7 @@ namespace J2534Diag.Tests
 
         public static int RunAll()
         {
+            DescribeDiskWritesSeparatelyFromRecordExclusions();
             CleanFlushStillDoesNotProveBusLosslessness();
             DroppedQueueAndWriterErrorAreVisible();
             ReceiveErrorsAndMalformedRowsMakeItIncomplete();
@@ -42,6 +43,24 @@ namespace J2534Diag.Tests
         private static CanDiskLogStatus Clean()
         {
             return new CanDiskLogStatus { Accepted = 300, Written = 300, Closed = true };
+        }
+
+        private static void DescribeDiskWritesSeparatelyFromRecordExclusions()
+        {
+            var status = new CanDiskLogStatus { Accepted = 57467, Written = 57467, Closed = true };
+            string clean = CanCaptureIntegrityReport.DescribeDiskOutcome(status, 0);
+            Check(clean.Contains("accepted CAN frames were saved") && !clean.Contains("excluded"),
+                "Clean writes should report saved frames alone");
+            string excluded = CanCaptureIntegrityReport.DescribeDiskOutcome(status, 33);
+            Check(excluded.Contains("accepted CAN frames were saved") && excluded.Contains("excluded from CAN data: 33"),
+                "Rejected records hid successful accepted-frame writes");
+            status.WriterError = "Disk full";
+            string failed = CanCaptureIntegrityReport.DescribeDiskOutcome(status, 33);
+            Check(failed.Contains("Disk full") && failed.Contains("excluded from CAN data: 33") &&
+                !failed.Contains("were saved"), "Disk failure appeared successful");
+            string memoryOnly = CanCaptureIntegrityReport.DescribeDiskOutcome(null, 33);
+            Check(memoryOnly.Contains("excluded from CAN data: 33") && !memoryOnly.Contains("were saved"),
+                "Memory-only capture incorrectly claimed disk writes");
         }
 
         private static void CleanFlushStillDoesNotProveBusLosslessness()

@@ -183,7 +183,11 @@ namespace J2534Diag
                 {
                     Data = raw,
                     TimestampRaw = item.Timestamp,
-                    RxStatusRaw = item.RxStatus
+                    RxStatusRaw = item.RxStatus,
+                    NativeProtocolId = item.ProtocolID,
+                    NativeTxFlags = item.TxFlags,
+                    NativeDataSize = item.DataSize,
+                    NativeExtraDataIndex = item.ExtraDataIndex
                 });
             }
             return new NativeCanReadResult(result, nativeCount, frames);

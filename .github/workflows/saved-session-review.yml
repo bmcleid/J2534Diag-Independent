@@ -1,0 +1,150 @@
+name: R29 saved session review
+run-name: R29 build and offline saved-session acceptance
+on:
+  push:
+    paths:
+      - 'Services/SavedSessionReport.cs'
+      - 'Forms/SavedSessionReviewForm.cs'
+      - 'Tests/review/**'
+      - '.github/workflows/saved-session-review.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  review:
+    if: "contains(github.event.head_commit.message, '[saved-review]') || github.event_name == 'workflow_dispatch'"
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - uses: NuGet/setup-nuget@v2
+      - name: Restore existing pinned product dependencies
+        run: nuget restore J2534Diag.sln -NonInteractive
+      - name: Retrieve preserved R28 failure reports
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 46040117261
+          name: R28-exact-binary-failure-dialog-evidence
+          path: fixtures
+      - name: Retrieve preserved R28 normal and continuity reports
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 45904637124
+          name: J2534Diag-build-diagnostics
+          path: fixtures
+      - name: Require empty provider inventory and stamp source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force diagnostics | Out-Null
+          $providers = @()
+          foreach ($view in @([Microsoft.Win32.RegistryView]::Registry64, [Microsoft.Win32.RegistryView]::Registry32)) {
+            foreach ($hive in @([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryHive]::CurrentUser)) {
+              $root = [Microsoft.Win32.RegistryKey]::OpenBaseKey($hive, $view)
+              try {
+                foreach ($key in @('SOFTWARE\PassThruSupport.04.04','SOFTWARE\PassThruSupport.05.00')) {
+                  $node = $root.OpenSubKey($key)
+                  if ($node) { try { $providers += @($node.GetSubKeyNames()) } finally { $node.Dispose() } }
+                }
+              } finally { $root.Dispose() }
+            }
+          }
+          if ($providers.Count -ne 0) { throw 'Refuse offline acceptance with registered providers' }
+          'RegisteredProviders=0;ProviderHandles=0;Vehicle=False' | Set-Content diagnostics/preflight.txt
+          $identity = Get-Content Services/BuildIdentity.cs -Raw
+          $identity = $identity.Replace('SourceCommit = "workspace"', ('SourceCommit = "' + $env:GITHUB_SHA + '"'))
+          if (-not $identity.Contains($env:GITHUB_SHA)) { throw 'Missing source stamp' }
+          Set-Content Services/BuildIdentity.cs $identity -Encoding UTF8
+      - name: Build new R29 product once
+        shell: pwsh
+        run: |
+          & msbuild.exe J2534Diag.sln '/p:Configuration=Release' '/p:Platform=Any CPU' '/verbosity:minimal' 2>&1 | Tee-Object diagnostics/build.log
+          if ($LASTEXITCODE -ne 0) { throw 'R29 product compilation failed' }
+          & msbuild.exe Tests/review/SavedSessionReviewTests.csproj '/p:Configuration=Release' '/verbosity:minimal' 2>&1 | Tee-Object diagnostics/test-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Saved-review harness compilation failed' }
+      - name: Validate parser and production offline GUI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exeHash = (Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash
+          $process = Start-Process Tests/review/bin/Release/SavedSessionReviewTests.exe -ArgumentList @((Join-Path $pwd bin/Release),(Join-Path $pwd diagnostics),(Join-Path $pwd fixtures)) -PassThru -RedirectStandardOutput diagnostics/review.log -RedirectStandardError diagnostics/review-error.log
+          if (-not $process.WaitForExit(240000)) { Stop-Process -Id $process.Id -Force; throw 'Saved review exceeded four-minute bounded wait' }
+          Get-Content diagnostics/review.log
+          Get-Content diagnostics/review-error.log
+          if ($process.ExitCode -ne 0) { throw "Saved review failed: $($process.ExitCode)" }
+          if ((Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash -ne $exeHash) { throw 'Product changed during acceptance' }
+          foreach ($name in @('saved-report-complete.png','saved-report-failure-filter.png')) {
+            if (Test-Path "diagnostics/$name") {
+              Write-Output ('REVIEW_IMAGE=' + $name + ':' + [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $pwd "diagnostics/$name"))))
+            }
+          }
+      - name: Package verified runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Copy-Item diagnostics/generated/roundtrip.csv bin/Release/Example-Synthetic-Session.csv
+          @(
+            'J2534Diag R29 - Saved session review',
+            'Extract in a separate folder and keep R28 as fallback.',
+            'Run J2534Diag.exe; choose Saved session; choose Open saved session.',
+            'Example-Synthetic-Session.csv is synthetic test data, not a vehicle recording.',
+            'Review is offline and makes no ECU requests. No adapter connection is needed.',
+            'Only this app scalar Schema=2 report CSVs are supported; see owner R29 record.',
+            'Physical R29 adapter/vehicle acceptance remains unverified.',
+            "SourceCommit=$env:GITHUB_SHA"
+          ) | Set-Content bin/Release/R29_README.txt -Encoding UTF8
+          $out = (Resolve-Path bin/Release).Path
+          $hashes = Get-ChildItem $out -File | Sort-Object Name | ForEach-Object { (Get-FileHash $_.FullName -Algorithm SHA256).Hash + '  ' + $_.Name }
+          @("Release=R29","SourceCommit=$env:GITHUB_SHA","WorkflowRun=$env:GITHUB_RUN_ID",'OfflineSavedReview=PASS','Vehicle=UNVERIFIED','PayloadSHA256:') + $hashes | Set-Content bin/Release/ENGINEERING_PREVIEW_MANIFEST.txt -Encoding UTF8
+          foreach ($line in $hashes) {
+            if ($line -match '^([A-F0-9]{64})  (.+)$') {
+              if ((Get-FileHash (Join-Path $out $Matches[2]) -Algorithm SHA256).Hash -ne $Matches[1]) { throw 'Package payload hash mismatch' }
+            }
+          }
+          New-Item -ItemType Directory -Force deliverables | Out-Null
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [IO.Compression.ZipFile]::CreateFromDirectory($out,(Join-Path $pwd deliverables/J2534Diag-R29-Windows.zip))
+          $zip = Join-Path $pwd deliverables/J2534Diag-R29-Windows.zip
+          $readback = [IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+            foreach ($entry in $readback.Entries) {
+              $stream = $entry.Open()
+              try { $sha = [Security.Cryptography.SHA256]::Create(); $digest = [Convert]::ToHexString($sha.ComputeHash($stream)); $sha.Dispose() } finally { $stream.Dispose() }
+              if ($digest -ne (Get-FileHash (Join-Path $out $entry.FullName) -Algorithm SHA256).Hash) { throw 'ZIP entry mismatch' }
+            }
+          } finally { $readback.Dispose() }
+          "PackageBytes=$((Get-Item $zip).Length)" | Tee-Object diagnostics/package-verification.txt
+          "PackageSHA256=$((Get-FileHash $zip -Algorithm SHA256).Hash)" | Tee-Object diagnostics/package-verification.txt -Append
+          "ExecutableSHA256=$((Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash)" | Tee-Object diagnostics/package-verification.txt -Append
+          Copy-Item bin/Release/ENGINEERING_PREVIEW_MANIFEST.txt diagnostics/runtime-manifest.txt
+      - name: Upload validated Windows package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: J2534Diag-R29-Windows
+          path: deliverables/J2534Diag-R29-Windows.zip
+          retention-days: 90
+      - name: Preserve durable draft release after package upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = "j2534diag-r29-$($env:GITHUB_SHA.Substring(0,12))"
+          gh release create $tag deliverables/J2534Diag-R29-Windows.zip --repo $env:GITHUB_REPOSITORY --draft --target $env:GITHUB_SHA --title 'J2534Diag R29 saved-session review' --notes-file docs/R29_SAVED_SESSION_REVIEW.md
+          if ($LASTEXITCODE -ne 0) { throw 'Durable draft release preservation failed; do not rebuild' }
+          gh release view $tag --repo $env:GITHUB_REPOSITORY --json url,tagName,isDraft,assets | Set-Content diagnostics/draft-release.json
+      - name: Preserve acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: J2534Diag-R29-saved-review-evidence
+          path: diagnostics/**
+          retention-days: 30

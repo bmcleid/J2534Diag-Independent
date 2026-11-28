@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using SAE.J2534;
 
@@ -13,6 +14,13 @@ namespace J2534Diag
 {
     public partial class CanListenerForm : Form
     {
+        private bool _packageInProgress;
+        private readonly Button _packageButton = new Button
+        {
+            Text = "Save capture package",
+            Size = new System.Drawing.Size(170, 24),
+            Location = new System.Drawing.Point(10, 10)
+        };
         private const int MAX_RECORDS = 10000;
         private Thread _listenThread;
         private CancellationTokenSource _cts;
@@ -36,6 +44,9 @@ namespace J2534Diag
         private CanDiskCaptureLogger _diskLogger;
         private string _diskLogPath;
         private bool _nativeSixColumnLoaded;
+        private bool _activeNativeCapture;
+        private bool _lastCaptureNative;
+        private string _captureDriverSha256;
         private PendingIntegritySidecar _pendingIntegrityReport;
         private readonly Button _retryReportButton = new Button
         {
@@ -110,6 +121,11 @@ namespace J2534Diag
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
             });
 
+            // Reserve a toolbar row above the grid; do not overlay data rows.
+            dataGridViewMessages.Top += 32;
+            dataGridViewMessages.Height -= 32;
+            Controls.Add(_packageButton);
+            _packageButton.Click += SaveCapturePackage_Click;
             Controls.Add(_diskLogOption);
             Controls.Add(_retryReportButton);
             _retryReportButton.BringToFront();
@@ -150,7 +166,9 @@ namespace J2534Diag
         // Do not infer TOPDON firmware queue depth or native CAN time from them.
         private void ApplyCaptureStartupTiming(CanCaptureSummary summary)
         {
-            if (summary == null) return;
+            if (summary == null || _lastCaptureNative) return;
+            // Native filter is installed in the native session, not by the
+            // managed channel. Do not reuse stale managed startup timestamps.
             long opened = j2534Manager.CaptureOnlyChannelOpenedHostTicks;
             long beforeFilter = _captureFilterBeginHostTicks;
             long afterFilter = _captureFilterDoneHostTicks;
@@ -169,11 +187,20 @@ namespace J2534Diag
             CanCapturePump pump = null;
             try
             {
+                // Both receivers feed the SAME pump, disk writer, preview,
+                // and integrity code. Native is opened only immediately before
+                // the receive thread starts and uses the independently tested
+                // 100-frame/250ms native read strategy.
+                ICanFrameBatchSource frameSource = _activeNativeCapture
+                    ? (ICanFrameBatchSource)new NativeCanReadBoundary(j2534Manager.NativeSession)
+                    : new J2534CanFrameSource(channel);
                 pump = new CanCapturePump(
-                    new J2534CanFrameSource(channel),
+                    frameSource,
                     _diskLogger != null ? int.MaxValue : MAX_RECORDS,
                     () => DateTime.UtcNow,
-                    id => GmCanId11Bit.KnownCanIds.TryGetValue(id, out var description) ? description : "");
+                    id => GmCanId11Bit.KnownCanIds.TryGetValue(id, out var description) ? description : "",
+                    _activeNativeCapture ? 100 : 200,
+                    _activeNativeCapture ? 250 : 5);
 
                 var summary = pump.Run(
                     _cts.Token,
@@ -235,6 +262,61 @@ namespace J2534Diag
             }
         }
 
+
+        private async void SaveCapturePackage_Click(object sender, EventArgs e)
+        {
+            if (_packageInProgress) return;
+            if (_isListening || _pendingIntegrityReport != null)
+            {
+                MessageBox.Show("Stop capture and recover any pending integrity report before packaging.",
+                    "Capture package", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            using (var source = new OpenFileDialog
+            {
+                Filter = "Saved CAN recordings (*.csv)|*.csv",
+                Title = "Select the original saved CAN recording",
+                FileName = _diskLogPath ?? ""
+            })
+            {
+                if (source.ShowDialog() != DialogResult.OK) return;
+                using (var target = new SaveFileDialog
+                {
+                    Filter = "Capture packages (*.zip)|*.zip",
+                    FileName = Path.GetFileNameWithoutExtension(source.FileName) + ".capture.zip",
+                    OverwritePrompt = false
+                })
+                {
+                    if (target.ShowDialog() != DialogResult.OK) return;
+                    _packageInProgress = true;
+                    _packageButton.Enabled = false;
+                    btnStart.Enabled = false;
+                    try
+                    {
+                        string csv = source.FileName;
+                        string output = target.FileName;
+                        await Task.Run(() => CaptureEvidencePackage.Create(csv, output));
+                        MessageBox.Show("Capture package saved and checksums verified:\n" + output +
+                            "\nIncludes original CSV bytes and any available companion integrity report. " +
+                            "See README.txt for report availability and evidence limits.",
+                            "Capture package saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Package could not be saved: " + ex.Message +
+                            "\nOriginal evidence files were not changed.",
+                            "Capture package", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                    finally
+                    {
+                        _packageInProgress = false;
+                        _packageButton.Enabled = true;
+                        btnStart.Enabled = true;
+                    }
+                }
+            }
+        }
+
         private void btnExportCsv_Click(object sender, EventArgs e)
         {
             if (_isListening)
@@ -291,7 +373,52 @@ namespace J2534Diag
 
         private void CanListenerForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            StopListening();
+            if (!PrepareToClose()) e.Cancel = true;
+        }
+
+
+        // MainForm must consult this separately from receive ownership: a
+        // stopped receiver can still have unsaved finalized evidence.
+        public bool PrepareToClose()
+        {
+            if (_packageInProgress)
+            {
+                MessageBox.Show("Wait for the capture package to finish before closing.",
+                    "Package in progress", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return false;
+            }
+            if (!StopListening()) return false;
+            if (_pendingIntegrityReport == null) return true;
+            if (MessageBox.Show(
+                "The finalized integrity report has not been saved. Save a recovery copy before closing?\n" +
+                "Choose No to keep the application open and use Retry integrity.",
+                "Unsaved integrity report", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                return false;
+            using (var dialog = new SaveFileDialog
+            {
+                Filter = "Recovery reports (*.txt)|*.txt",
+                FileName = Path.GetFileName(_pendingIntegrityReport.SidecarPath) + ".recovery.txt",
+                OverwritePrompt = false
+            })
+            {
+                if (dialog.ShowDialog() != DialogResult.OK) return false;
+                try
+                {
+                    _pendingIntegrityReport.SaveRecoveryCopy(dialog.FileName);
+                    if (!_pendingIntegrityReport.IsPreserved) return false;
+                    _pendingIntegrityReport = null;
+                    _retryReportButton.Visible = false;
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Recovery copy could not be saved: " + ex.Message +
+                        "\nThe application will remain open with the report retained.",
+                        "Integrity report pending", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return false;
+                }
+            }
         }
 
         private void btnStart_Click(object sender, EventArgs e)
@@ -306,7 +433,7 @@ namespace J2534Diag
 
         public void StartListening()
         {
-            if (_isListening) return;
+            if (_isListening || _packageInProgress) return;
             if (_pendingIntegrityReport != null)
             {
                 MessageBox.Show("An earlier integrity report still needs recovery. Use Retry integrity before starting a new capture.",
@@ -332,7 +459,8 @@ namespace J2534Diag
                     }
                 }
             }
-            if (j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed)
+            if (!j2534Manager.NativeModeSelected &&
+                (j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed))
             {
                 MessageBox.Show("Connect a J2534 interface first.", "CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
@@ -356,27 +484,39 @@ namespace J2534Diag
                 _diskLogPath = null;
                 _diskLogger = null;
                 _nativeSixColumnLoaded = false;
+                _activeNativeCapture = j2534Manager.NativeModeSelected;
+                _lastCaptureNative = _activeNativeCapture;
+                _captureDriverSha256 = _activeNativeCapture
+                    ? j2534Manager.SelectedNativeDriver.Sha256 : "";
                 Interlocked.Exchange(ref _uiRefreshPending, 0);
                 _cts = new CancellationTokenSource();
 
-                var filter = new MessageFilter
+                _captureFilterBeginHostTicks = 0;
+                _captureFilterDoneHostTicks = 0;
+                _listenerFilterId = null;
+                if (!_activeNativeCapture)
                 {
-                    FilterType = Filter.PASS_FILTER,
-                    Mask = new byte[] { 0, 0, 0, 0 },
-                    Pattern = new byte[] { 0, 0, 0, 0 },
-                    FlowControl = new byte[] { 0, 0, 0, 0 },
-                    TxFlags = j2534Manager.BitMode == BitType.BITS_11 ? TxFlag.NONE : TxFlag.CAN_29BIT_ID
-                };
-                // Do not clear other owners' filters/buffers. Remove only ours on stop.
-                _captureFilterBeginHostTicks = Stopwatch.GetTimestamp();
-                _listenerFilterId = j2534Manager.Channel.StartMsgFilter(filter);
-                _captureFilterDoneHostTicks = Stopwatch.GetTimestamp();
+                    var filter = new MessageFilter
+                    {
+                        FilterType = Filter.PASS_FILTER,
+                        Mask = new byte[] { 0, 0, 0, 0 },
+                        Pattern = new byte[] { 0, 0, 0, 0 },
+                        FlowControl = new byte[] { 0, 0, 0, 0 },
+                        TxFlags = j2534Manager.BitMode == BitType.BITS_11
+                            ? TxFlag.NONE : TxFlag.CAN_29BIT_ID
+                    };
+                    _captureFilterBeginHostTicks = Stopwatch.GetTimestamp();
+                    _listenerFilterId = j2534Manager.Channel.StartMsgFilter(filter);
+                    _captureFilterDoneHostTicks = Stopwatch.GetTimestamp();
+                }
                 if (selectedDiskPath != null)
                 {
                     // CreateNew prevents accidental replacement of historical logs.
                     _diskLogger = new CanDiskCaptureLogger(selectedDiskPath, 4096);
                     _diskLogPath = _diskLogger.FilePath;
                 }
+                if (_activeNativeCapture)
+                    j2534Manager.StartNativeCapture();
                 _isListening = true;
                 _listenThread = new Thread(ListenLoop) { IsBackground = true, Name = "J2534 CAN capture" };
                 _listenThread.Start();
@@ -408,7 +548,17 @@ namespace J2534Diag
                     }
                 }
 
-                if (!receiverStopped || !writerStopped || !filterStopped)
+                bool nativeStopped = true;
+                if (_activeNativeCapture && receiverStopped && writerStopped && filterStopped)
+                {
+                    try { j2534Manager.StopNativeCapture(); }
+                    catch (Exception cleanupError)
+                    {
+                        nativeStopped = false;
+                        Debug.WriteLine("Native connection cleanup failed during startup: " + cleanupError);
+                    }
+                }
+                if (!receiverStopped || !writerStopped || !filterStopped || !nativeStopped)
                 {
                     // StopListening can be retried after a blocking driver call
                     // or disk operation finally returns. Lease remains held.
@@ -465,6 +615,11 @@ namespace J2534Diag
                         j2534Manager.Channel.StopMsgFilter(_listenerFilterId.Value);
                     _listenerFilterId = null;
                 }
+                // Native filter is owned by NativeOwnedCanSession, not by
+                // this form. Close device/channel only after worker and
+                // writer have stopped; errors preserve ReceiveGate ownership.
+                if (_activeNativeCapture)
+                    j2534Manager.StopNativeCapture();
                 j2534Manager.ReceiveGate.Release(ReceiveOwner);
             }
             catch (Exception ex)
@@ -483,6 +638,7 @@ namespace J2534Diag
             }
 
             _isListening = false;
+            _activeNativeCapture = false;
             _listenThread = null;
             _cts.Dispose();
             _cts = null;
@@ -499,22 +655,22 @@ namespace J2534Diag
                     _lastCaptureSummary.DriverBufferOverflowEvents > 0)) ||
                 integrityFailure != null)
             {
-                string message = (_limitReached ? "Capture reached its configured frame limit; later frames are not recorded.\n" : "") +
-                    (_invalidFrames > 0 ? $"Malformed J2534 records ignored: {_invalidFrames}.\n" : "") +
+                string message = CanCaptureIntegrityReport.DescribeDiskOutcome(diskStatus, _invalidFrames) +
+                    (_limitReached ? "Capture reached its configured frame limit; later frames are not recorded.\n" : "") +
                     (_excessReturnedFrames > 0 ? $"Frames returned beyond requested limit: {_excessReturnedFrames}.\n" : "") +
                     (_lastCaptureSummary?.DriverBufferOverflowEvents > 0
                         ? $"J2534 reported receive-buffer overflow {_lastCaptureSummary.DriverBufferOverflowEvents} time(s). Some frames may be irrecoverably lost.\n" : "") +
                     (_lastCaptureSummary?.OtherStatusReadCalls > 0 || _lastCaptureSummary?.ReadCallsWithoutStatus > 0
                         ? "J2534 returned unrecognized/unavailable read status. Review the integrity report.\n" : "") +
                     (_listenerFailure != null ? "Capture stopped with driver error: " + _listenerFailure + "\n" : "") +
-                    (diskStatus != null && !diskStatus.ApplicationWriteComplete
-                        ? $"Disk integrity warning: enqueued={diskStatus.Accepted}, written={diskStatus.Written}, queue drops={diskStatus.QueueFullDrops}, unwritten={diskStatus.AcceptedNotWritten}, writer error={diskStatus.WriterError ?? "none"}.\n" : "") +
                     (integrityFailure != null ? "Could not write capture integrity report: " + integrityFailure : "");
-                MessageBox.Show(message + (diskStatus != null ? "\nFile: " + _diskLogPath : ""), "Incomplete CAN capture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(message + (diskStatus != null ? "\nCSV: " + _diskLogPath : "") +
+                    (diskStatus != null && integrityFailure == null ? "\nIntegrity report: " + _diskLogPath + ".integrity.txt" : ""),
+                    "CAN capture warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             else if (diskStatus != null)
             {
-                MessageBox.Show("Disk capture closed and application-level writes accounted for.\nCSV: " + _diskLogPath + "\nIntegrity report: " + _diskLogPath + ".integrity.txt" +
+                MessageBox.Show(CanCaptureIntegrityReport.DescribeDiskOutcome(diskStatus, 0) + "CSV: " + _diskLogPath + "\nIntegrity report: " + _diskLogPath + ".integrity.txt" +
                     (_lastCaptureSummary?.IgnoredIndicationRecords > 0
                         ? "\nJ2534 control/indication records excluded from CAN data: " +
                           _lastCaptureSummary.IgnoredIndicationRecords : "") +
@@ -533,6 +689,11 @@ namespace J2534Diag
                 buffer, _diskLogPath, status, Interlocked.Read(ref _messageIndex),
                 _invalidFrames, _excessReturnedFrames, _limitReached,
                 _listenerFailure, DateTime.UtcNow, _lastCaptureSummary);
+            buffer.WriteLine("CaptureReceiver=" +
+                (_lastCaptureNative ? "DirectNativeJ2534" : "ManagedJ2534Sharp"));
+            buffer.WriteLine("NativeDriverSHA256=" + (_captureDriverSha256 ?? ""));
+            buffer.WriteLine("NativeReadMaximum=" + (_lastCaptureNative ? "100" : "200"));
+            buffer.WriteLine("NativeReadTimeoutMs=" + (_lastCaptureNative ? "250" : "5"));
             _pendingIntegrityReport = new PendingIntegritySidecar(
                 _diskLogPath, outputPath, buffer.ToString());
             try

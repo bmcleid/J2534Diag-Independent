@@ -11,9 +11,11 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
+    if: "!contains(github.event.head_commit.message, '[saved-review]') && !contains(github.event.head_commit.message, '[mode6-review]') && !contains(github.event.head_commit.message, '[mode6-discovery]')"
     runs-on: windows-2022
     timeout-minutes: 20
     steps:
@@ -29,6 +31,10 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path diagnostics | Out-Null
+          $identity = Get-Content Services/BuildIdentity.cs -Raw
+          $identity = $identity.Replace('SourceCommit = "workspace"', "SourceCommit = `"$env:GITHUB_SHA`"")
+          Set-Content Services/BuildIdentity.cs $identity -Encoding UTF8
+          if (-not $identity.Contains($env:GITHUB_SHA)) { throw 'Build identity stamp missing' }
           & msbuild.exe J2534Diag.sln '/p:Configuration=Release' '/p:Platform=Any CPU' '/verbosity:diagnostic' '/flp:logfile=diagnostics/msbuild.log;verbosity=diagnostic' '/bl:diagnostics/msbuild.binlog'
           if ($LASTEXITCODE -ne 0) {
             Write-Host '=== Compilation errors and final log entries ==='
@@ -45,6 +51,34 @@ jobs:
         run: |
           & ./Tests/bin/Release/CanCaptureCsvTests.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Download exact R27 close-ordering baseline without rebuilding it
+        if: contains(github.event.head_commit.message, '[close-baseline]')
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 45732398202
+          name: J2534Diag-baseline-windows
+          path: Tests/close-baseline/runtime
+      - name: Reproduce R27 final-disconnect report omission offline
+        if: contains(github.event.head_commit.message, '[close-baseline]')
+        shell: pwsh
+        run: |
+          & ./Tests/bin/Release/CanCaptureCsvTests.exe --ci-r27-close-baseline (Resolve-Path 'Tests/close-baseline/runtime/J2534Diag.exe').Path
+          if ($LASTEXITCODE -ne 0) { throw 'R27 close-order baseline did not reproduce as expected' }
+      - name: Download identity-checked historical R16 runtime for defect reproduction
+        if: contains(github.event.head_commit.message, '[managed-sim]')
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 45236838539
+          name: J2534Diag-baseline-windows
+          path: Tests/baseline/runtime
+      - name: Reproduce historical VIN defects without a driver
+        if: contains(github.event.head_commit.message, '[managed-sim]')
+        shell: pwsh
+        run: |
+          & ./Tests/bin/Release/CanCaptureCsvTests.exe --ci-vin-baseline (Resolve-Path 'Tests/baseline/runtime/J2534Diag.exe').Path
+          if ($LASTEXITCODE -ne 0) { throw 'Historical VIN reproduction mismatch' }
       - name: Initialize MSVC x64 for isolated synthetic DLL
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -58,6 +92,60 @@ jobs:
           $nativeDll = (Resolve-Path './mock-j2534.dll').Path
           & ./Tests/bin/Release/CanCaptureCsvTests.exe --ci-native-sim $nativeDll
           if ($LASTEXITCODE -ne 0) { throw "Synthetic native J2534 interop failed" }
+
+      - name: Checkout pinned virtual driver for managed integration
+        if: contains(github.event.head_commit.message, '[managed-sim]')
+        uses: actions/checkout@v4
+        with:
+          repository: hjtrbo/GM-ECU-Simulator
+          ref: 5436835a4475a979a95680e5030f17acdd7f2069
+          path: Tests/managed-sim/upstream
+          persist-credentials: false
+      - name: Setup .NET 9 for disposable virtual host
+        if: contains(github.event.head_commit.message, '[managed-sim]')
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Build and exercise actual managed virtual driver and FuelTrims
+        if: contains(github.event.head_commit.message, '[managed-sim]')
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pin = git -C Tests/managed-sim/upstream rev-parse HEAD
+          if ($pin -ne '5436835a4475a979a95680e5030f17acdd7f2069') { throw 'Wrong virtual source pin' }
+          & msbuild Tests/managed-sim/upstream/PassThruShim/PassThruShim.vcxproj /m /p:Configuration=Release /p:Platform=x64
+          if ($LASTEXITCODE -ne 0) { throw 'Virtual native DLL build failed' }
+          & dotnet build Tests/managed-sim/Host.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Virtual host build failed' }
+          $dll = (Resolve-Path 'Tests/managed-sim/upstream/PassThruShim/x64/Release/PassThruShim64.dll').Path
+          $hostExe = (Get-ChildItem Tests/managed-sim/bin -Recurse -Filter Host.exe | Select-Object -First 1).FullName
+          if (-not $hostExe) { throw 'Virtual host executable missing' }
+          $env:SRX_MANAGED_SIM_CI = 'ALLOW'
+          $env:SRX_MANAGED_SIM_DLL_SHA256 = (Get-FileHash $dll -Algorithm SHA256).Hash
+          $env:SRX_BASELINE_APP = (Resolve-Path 'Tests/baseline/runtime/J2534Diag.exe').Path
+          foreach ($case in @('legacy','missing','partial','normal','brokenpipe')) {
+            $env:SRX_MANAGED_PROFILE = switch ($case) { 'normal' { 'normal' } 'partial' { 'partial' } 'brokenpipe' { 'brokenpipe' } default { 'silent' } }
+            $env:SRX_MANAGED_SILENCE_FILE = Join-Path $PWD "diagnostics/managed-$case-silence.flag"
+            $env:SRX_MANAGED_BREAK_FILE = Join-Path $PWD "diagnostics/managed-$case-break.flag"
+            Remove-Item $env:SRX_MANAGED_SILENCE_FILE,$env:SRX_MANAGED_BREAK_FILE -ErrorAction SilentlyContinue
+            $hostProcess = $null
+            try {
+              $hostProcess = Start-Process $hostExe -PassThru -WindowStyle Hidden -RedirectStandardOutput "diagnostics/managed-$case-host.log" -RedirectStandardError "diagnostics/managed-$case-host.err"
+              $ready = $false
+              for ($i=0; $i -lt 100; $i++) {
+                if ($hostProcess.HasExited) { throw 'Virtual host exited before readiness' }
+                if ((Test-Path "diagnostics/managed-$case-host.log") -and ((Get-Content "diagnostics/managed-$case-host.log" -Raw) -match 'MANAGED_VIRTUAL_PIPE_READY')) { $ready = $true; break }
+                Start-Sleep -Milliseconds 100
+              }
+              if (-not $ready) { throw 'Virtual pipe readiness timeout' }
+              $mode = switch ($case) { 'legacy' { '--ci-managed-vin-legacy' } 'missing' { '--ci-managed-vin-failure' } 'partial' { '--ci-managed-vin-failure' } 'normal' { '--ci-managed-vin' } 'brokenpipe' { '--ci-managed-broken-pipe' } }
+              & ./Tests/bin/Release/CanCaptureCsvTests.exe $mode $dll 2>&1 | Tee-Object "diagnostics/managed-$case-client.log"
+              if ($LASTEXITCODE -ne 0) { throw "Managed $case failed; preserve logs, no blind retry" }
+            } finally {
+              if ($hostProcess -and -not $hostProcess.HasExited) { Stop-Process $hostProcess.Id -Force; $hostProcess.WaitForExit(5000) | Out-Null }
+            }
+          }
+          Remove-Item Env:SRX_MANAGED_SIM_CI,Env:SRX_MANAGED_SIM_DLL_SHA256,Env:SRX_MANAGED_SILENCE_FILE,Env:SRX_MANAGED_PROFILE,Env:SRX_BASELINE_APP,Env:SRX_MANAGED_BREAK_FILE -ErrorAction SilentlyContinue
       - name: Generate engineering preview manifest
         shell: pwsh
         run: |
@@ -106,3 +194,6 @@ jobs:
           name: J2534Diag-baseline-windows
           path: bin/Release/**
           if-no-files-found: error
+
+
+

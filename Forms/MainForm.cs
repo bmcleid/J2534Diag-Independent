@@ -16,10 +16,32 @@ namespace J2534Diag
         private FuelTrimForm fuelTrimForm;
         private CanListenerForm canListenerForm;
         private MisfireForm misfireForm;
+        private SavedSessionReviewForm _savedSessionReview;
+        private Action _disconnectForClose;
+        private Action<Exception> _reportCloseFailure;
 
         public MainForm()
         {
             InitializeComponent();
+            _disconnectForClose = () =>
+            {
+                try
+                {
+                    if (j2534Manager?.HasConnectionOrSelection == true) j2534Manager.Disconnect();
+                }
+                finally { vehicleTabForm?.RefreshConnectionControls(); }
+            };
+            _reportCloseFailure = ex => MessageBox.Show(
+                "The connection could not close safely. The application and report remain open.\n" + ex.Message,
+                "Close incomplete", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Text = "J2534Diag " + BuildIdentity.Description;
+            MinimumSize = new System.Drawing.Size(680, 500);
+            var savedTab = new TabPage("Saved session") { Name = "tabSavedSession" };
+            tabControl1.TabPages.Add(savedTab);
+            _savedSessionReview = new SavedSessionReviewForm { TopLevel = false, Dock = DockStyle.Fill,
+                FormBorderStyle = FormBorderStyle.None };
+            savedTab.Controls.Add(_savedSessionReview);
+            _savedSessionReview.Show();
         }
 
         public void UpdateSelectedVehicle(bool connected, string vin)
@@ -141,21 +163,43 @@ namespace J2534Diag
             // Stop in-process readers before disposing the shared J2534 channel.
             // A blocked driver read retains ownership; keep the application open
             // rather than unloading the driver beneath an active worker.
-            canListenerForm?.StopListening();
+            if (canListenerForm != null && !canListenerForm.PrepareToClose())
+            {
+                e.Cancel = true;
+                return;
+            }
             fuelTrimForm?.StopListening();
             misfireForm?.StopListening();
             if (j2534Manager?.ReceiveGate.CurrentOwner != null)
             {
                 e.Cancel = true;
-                MessageBox.Show(
+                _reportCloseFailure(new InvalidOperationException(
                     "The J2534 channel is still owned by " + j2534Manager.ReceiveGate.CurrentOwner +
-                    ". Close the active diagnostic session before exiting.",
-                    "Channel shutdown pending", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    ". Close the active diagnostic session before exiting."));
                 return;
             }
+            try
+            {
+                if (fuelTrimForm != null)
+                {
+                    if (!fuelTrimForm.ConfirmReportForApplicationClose(_disconnectForClose,
+                        j2534Manager?.HasConnectionOrSelection == true))
+                    {
+                        e.Cancel = true;
+                        return;
+                    }
+                }
+                else _disconnectForClose();
+            }
+            catch (Exception ex)
+            {
+                e.Cancel = true;
+                _reportCloseFailure(ex);
+                return;
+            }
+            // Cleanup has already completed before any close-time snapshot.
+            // A second Dispose/Disconnect here would create events after saving.
             base.OnFormClosing(e);
-            if (!e.Cancel)
-                j2534Manager?.Dispose();
         }
 
         private void TabControl_SelectingWithCaptureGuard(object sender, TabControlCancelEventArgs e)

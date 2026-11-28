@@ -1,0 +1,116 @@
+name: Focused Mode06 review
+on:
+  push:
+    paths:
+      - 'Forms/MisfireForm.cs'
+      - 'Services/Mode6Response.cs'
+      - 'Maps/Mode6TidMap.cs'
+      - 'Models/Mode6Test.cs'
+      - 'Tests/mode6/**'
+      - '.github/workflows/mode6-review.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  focused:
+    if: "contains(github.event.head_commit.message, '[mode6-review]') || github.event_name == 'workflow_dispatch'"
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - uses: NuGet/setup-nuget@v2
+      - name: Offline provider preflight
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force diagnostics | Out-Null
+          foreach ($view in @([Microsoft.Win32.RegistryView]::Registry64,[Microsoft.Win32.RegistryView]::Registry32)) {
+            foreach ($hive in @([Microsoft.Win32.RegistryHive]::LocalMachine,[Microsoft.Win32.RegistryHive]::CurrentUser)) {
+              $root = [Microsoft.Win32.RegistryKey]::OpenBaseKey($hive,$view)
+              try {
+                foreach ($name in @('SOFTWARE\PassThruSupport.04.04','SOFTWARE\PassThruSupport.05.00')) {
+                  $key = $root.OpenSubKey($name)
+                  if ($key) { try { if ($key.GetSubKeyNames().Count -ne 0) { throw 'Registered provider found' } } finally { $key.Dispose() } }
+                }
+              } finally { $root.Dispose() }
+            }
+          }
+          'RegisteredProviders=0;Physical=False' | Set-Content diagnostics/preflight.txt
+      - uses: actions/download-artifact@v4
+        if: "!contains(github.event.head_commit.message, '[mode6-layout]')"
+        with:
+          github-token: ${{ github.token }}
+          run-id: 46087182555
+          name: J2534Diag-R29-Windows
+          path: preserved
+      - name: Reproduce three defects on unchanged exact R29 executable
+        if: "!contains(github.event.head_commit.message, '[mode6-layout]')"
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Expand-Archive preserved/J2534Diag-R29-Windows.zip baseline
+          $hash = (Get-FileHash baseline/J2534Diag.exe -Algorithm SHA256).Hash
+          if ($hash -ne 'c4a9b9cf8602d9d3dfcda0cadb29792302e21ea4b62c9f2a7362fff3f126ad0f') { throw 'Wrong historical executable' }
+          $csc = Join-Path (Split-Path (Get-Command msbuild.exe).Source) 'Roslyn/csc.exe'
+          & $csc /nologo /out:diagnostics/LegacyWitness.exe /r:System.Windows.Forms.dll /r:System.Core.dll Tests/mode6/LegacyWitness.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Witness compile failed' }
+          & diagnostics/LegacyWitness.exe (Resolve-Path baseline).Path 2>&1 | Tee-Object diagnostics/legacy-witness.log
+          if ($LASTEXITCODE -ne 0) { throw 'Historical defect witnesses failed' }
+          if ((Get-FileHash baseline/J2534Diag.exe -Algorithm SHA256).Hash -ne $hash) { throw 'Baseline mutated' }
+      - name: Build new R30 product and focused harness once
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          nuget restore J2534Diag.sln -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw 'Restore failed' }
+          $identity = Get-Content Services/BuildIdentity.cs -Raw
+          $identity.Replace('SourceCommit = "workspace"',('SourceCommit = "'+$env:GITHUB_SHA+'"')) | Set-Content Services/BuildIdentity.cs -Encoding UTF8
+          & msbuild.exe J2534Diag.sln /p:Configuration=Release '/p:Platform=Any CPU' /verbosity:minimal 2>&1 | Tee-Object diagnostics/build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Product compile failed' }
+          & msbuild.exe Tests/mode6/Mode6UiTests.csproj /p:Configuration=Release /verbosity:minimal 2>&1 | Tee-Object diagnostics/harness-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Harness compile failed' }
+      - name: Focused model and production GUI acceptance with zero handles
+        env:
+          MODE6_LAYOUT_ONLY: ${{ contains(github.event.head_commit.message, '[mode6-layout]') }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $hash = (Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash
+          $arguments = @((Join-Path $pwd diagnostics))
+          if ($env:MODE6_LAYOUT_ONLY -eq 'true') { $arguments += '--layout-only' }
+          $p = Start-Process Tests/mode6/bin/Release/Mode6UiTests.exe -ArgumentList $arguments -PassThru -RedirectStandardOutput diagnostics/focused.log -RedirectStandardError diagnostics/focused-error.log
+          if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw 'Focused check exceeded two minutes' }
+          Get-Content diagnostics/focused.log
+          Get-Content diagnostics/focused-error.log
+          if ($p.ExitCode -ne 0) { throw "Focused acceptance failed $($p.ExitCode)" }
+          if ((Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash -ne $hash) { throw 'Tested product mutated' }
+      - name: Package scoped engineering preview
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @('J2534Diag R30 - focused Mode06 correctness preview','Keep R29 and R28 unchanged in separate folders.','GM reference labels do not establish SRX monitor support.','No physical R30 acceptance; no owner vehicle test requested.',"SourceCommit=$env:GITHUB_SHA") | Set-Content bin/Release/R30_README.txt
+          $out = (Resolve-Path bin/Release).Path
+          $hashes = Get-ChildItem $out -File | Sort-Object Name | ForEach-Object { (Get-FileHash $_.FullName -Algorithm SHA256).Hash+'  '+$_.Name }
+          @('Release=R30',"SourceCommit=$env:GITHUB_SHA","WorkflowRun=$env:GITHUB_RUN_ID",'FocusedMode06=PASS','Vehicle=UNVERIFIED','PayloadSHA256:') + $hashes | Set-Content bin/Release/ENGINEERING_PREVIEW_MANIFEST.txt
+          New-Item -ItemType Directory -Force deliverables | Out-Null
+          Compress-Archive bin/Release/* deliverables/J2534Diag-R30-Windows.zip
+          "ExecutableSHA256=$((Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash)" | Set-Content diagnostics/package.txt
+          "PackageSHA256=$((Get-FileHash deliverables/J2534Diag-R30-Windows.zip -Algorithm SHA256).Hash)" | Add-Content diagnostics/package.txt
+          Copy-Item bin/Release/ENGINEERING_PREVIEW_MANIFEST.txt diagnostics/runtime-manifest.txt
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: J2534Diag-R30-Windows
+          path: deliverables/J2534Diag-R30-Windows.zip
+          retention-days: 90
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: J2534Diag-R30-mode6-evidence
+          path: diagnostics/**
+          retention-days: 30

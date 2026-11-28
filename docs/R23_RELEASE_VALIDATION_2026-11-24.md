@@ -1,0 +1,21 @@
+# R23 release validation — November 24, 2026 Eastern
+
+CONFIRMED software result: R23 source `40f54929c90d4495d58fb0f84cd3948bf1cc73f9`, branch `feature/native-gui-capture-preview`, draft PR29, passed Windows run [45537798681](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/45537798681), job138948592603. No merge.
+
+Changes: visible session health; scalar queue acceptance/coalescing/discard accounting; report-lifetime per-PID totals; source and Clear Charts events; distinct unanswered/driver/cleanup outcomes; retired-generation rejection before poll acknowledgement; schema2 CSV with existing16columns, monotonic freshness and explicit event-order/UTC semantics.
+
+Validation: 6,670 regression assertions including39report,28VIN and35actual-form assertions;5historical identity/defect checks;29isolated real-DLL StdCall assertions; managed historical VIN-leak reproduction;7silent and7partial VIN-cleanup checks;34normal managed driver/form/tab/restart/export/reconnect checks;19broken-driver cancellation/retained-ownership/export checks. Main compilation4warnings/0errors; virtual native build0/0; host2/0. Warnings were existing unused fields/variables, unreachable test code and two upstream virtual-host timer non-nullable-property warnings; no claim of a warning-free build.
+
+Both wide1360x640 and narrow800x600 actual-form layout gates passed. Hosted screenshot remains a limited desktop rendering; owner R22 screenshot already established actual full-wide UI acceptance. R23 narrow screenshot visually inspected, health label and export visible, stacked second bank reachable by scrolling.
+
+Attempt history: first source`f20e8827865a814980029cd75a9661742c678c12`, run45536848215/job138945451983 FAILED at an older literal-source cancellation assertion after main/test compile and39report/28VIN/34form checks passed. Guard now includes an accounting block. Corrected the assertion and added actual cancelled-callback rejection; one corrected run passed. No identical rerun. Failed diagnostics retained: artifact14987640731,327708bytes,SHA256`fd9aef4eaec6554dbc5c768ad79602c7706a3006f9e7e5fade3fc430f8c2ff5b`.
+
+Runtime artifact14988121226:1,880,720bytes; ZIP SHA256`0966f97acbe1240744f1d8a907c78855e7c9b8202b4489cb1c10c23355dba92d`; EXE SHA256`995d2990a648192649ff5afd416afbf94419908e46351524ddc4ecff29814d33`. Diagnostics artifact14988191165:338099bytes; SHA256`47029e8d793b1114189e3a1d0dc79c1d12a4ddb190c7ec4a6f754cee89c43003`. Download sizes, ZIP CRC, GitHub artifact digests, manifest source/run and every listed payload SHA verified locally.
+
+CSV readback: normal111data rows=metadata+104retained+6PID summaries,10accepted observations,zeroqueue/report rejection counters,zeroeviction; final Unanswered requests with DisconnectOutcome=Succeeded. Fault41data rows=metadata+34retained+6summaries,6accepted observations,zeroqueue/report rejection counters; final Driver error; cleanup pending with failed disconnect/retained lease. These are two short synthetic sessions, not performance or bus-loss benchmarks. Coalescing of5callbacks into1accepted observation with4replacements is separately verified by the actual-form fixture. Locked-save failure retained original target and memory; retry passed. Clock jumps did not change monotonic expiry; eviction retained summary totals.
+
+CONFIRMED prior acceptance: R21 physical SRX correct VIN/six scalar values and owner-confirmed no Disconnect error; R22 full-wide disconnected GUI owner acceptance. R23 physical RLink/vehicle behavior UNVERIFIED. No repeat owner screenshot, vehicle scan, driver registration, DTC clear, security access, programming, Android work or sibling implementation occurred. No local C# execution was claimed; local checks were structural, executable checks used the Windows job.
+
+Next owner action: optional offline use of delivered R23 and Export session when useful. No required new physical test. Preserve R21/R22 acceptance records and both R23 attempts.
+
+Delivered runtime: Library `libfile_cf0f183749088191b52f6f89545621ee`. Preserved validation/source checkpoint: Library `libfile_37f74134bba08191acd0c4ac9f4cce59`; contains both attempt diagnostics, focused source and logs, not a full-history repository bundle.

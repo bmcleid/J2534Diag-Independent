@@ -51,6 +51,7 @@ namespace J2534Diag
             WriteField(writer, "SourceOverReturnedFrames", sourceOverReturnedFrames);
             WriteField(writer, "CaptureLimitReached", captureLimitReached);
             WriteField(writer, "ReceiveError", receiveError);
+            WriteField(writer, "AcceptedDiskWritesComplete", status.ApplicationWriteComplete);
             WriteField(writer, "ApplicationWriteComplete", applicationComplete);
             WriteField(writer, "VehicleBusLossless", "UNVERIFIED");
             WriteField(writer, "TimestampClock", "J2534NativeUnverified;HostUTCSeparate");
@@ -85,7 +86,52 @@ namespace J2534Diag
             WriteField(writer, "InvalidOversizeClassicalCanRecords", readSummary?.RejectedOversizeRecords);
             WriteField(writer, "InvalidArbitrationIdRecords", readSummary?.RejectedArbitrationIds);
             WriteField(writer, "J2534IndicationMeaning", "CONTROL_NOT_BUS_FRAME");
-            WriteField(writer, "RejectedRecordContentsRetained", "NO");
+            var evidence = readSummary?.RejectionEvidence;
+            int retained = evidence?.Count ?? 0;
+            long observed = invalidFrames + (readSummary?.IgnoredIndicationRecords ?? 0);
+            bool missingContents = false;
+            if (evidence != null)
+                foreach (var record in evidence)
+                {
+                    var frame = record.Frame;
+                    if (frame?.Data == null || (frame.NativeDataSize.HasValue &&
+                        frame.NativeDataSize.Value != frame.Data.Length))
+                        missingContents = true;
+                }
+            WriteField(writer, "RejectedRecordContentsRetained",
+                retained == 0 ? "NO" : retained == observed && !missingContents ? "YES" : "PARTIAL");
+            WriteField(writer, "RejectedRecordEvidenceLimit", CanCaptureSummary.RejectionEvidenceLimit);
+            WriteField(writer, "RejectedRecordEvidenceCount", retained);
+            WriteField(writer, "RejectedRecordEvidenceOmitted", Math.Max(
+                readSummary?.RejectionEvidenceOmitted ?? 0, observed - retained));
+            for (int i = 0; i < retained; i++)
+            {
+                var record = evidence[i];
+                var frame = record.Frame;
+                string prefix = "RejectedRecord" + (i + 1).ToString(CultureInfo.InvariantCulture) + ".";
+                WriteField(writer, prefix + "BatchOrdinal", record.BatchOrdinal);
+                WriteField(writer, prefix + "SlotIndex", record.SlotIndex);
+                WriteField(writer, prefix + "Reason", record.Reason);
+                WriteField(writer, prefix + "ReadResult", frame?.ReadResult);
+                WriteField(writer, prefix + "TimestampRaw", frame?.TimestampRaw);
+                WriteField(writer, prefix + "RxStatusRaw", frame?.RxStatusRaw);
+                WriteField(writer, prefix + "NativeProtocolId", frame?.NativeProtocolId);
+                WriteField(writer, prefix + "NativeTxFlags", frame?.NativeTxFlags);
+                WriteField(writer, prefix + "NativeDataSize", frame?.NativeDataSize);
+                WriteField(writer, prefix + "NativeExtraDataIndex", frame?.NativeExtraDataIndex);
+                WriteField(writer, prefix + "CopiedDataLength", frame?.Data?.Length);
+                WriteField(writer, prefix + "DataHex", frame?.Data == null ? null : BitConverter.ToString(frame.Data));
+            }
+        }
+
+        public static string DescribeDiskOutcome(CanDiskLogStatus status, long excludedRecords)
+        {
+            string disk = status == null ? "" : status.ApplicationWriteComplete
+                ? $"All {status.Written:N0} accepted CAN frames were saved.\n"
+                : $"Disk integrity warning: enqueued={status.Accepted}, written={status.Written}, queue drops={status.QueueFullDrops}, unwritten={status.AcceptedNotWritten}, writer error={status.WriterError ?? "none"}.\n";
+            return disk + (excludedRecords > 0
+                ? $"J2534 records excluded from CAN data: {excludedRecords:N0}.\n"
+                : "");
         }
 
         private static void WriteField(TextWriter writer, string key, object value)

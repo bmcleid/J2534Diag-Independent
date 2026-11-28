@@ -20,6 +20,10 @@ namespace J2534Diag
         public uint? RxStatusRaw { get; set; }
         // Unmodified GetMessages ResultCode enum name, if supplied.
         public string ReadResult { get; set; }
+        public uint? NativeProtocolId { get; set; }
+        public uint? NativeTxFlags { get; set; }
+        public uint? NativeDataSize { get; set; }
+        public uint? NativeExtraDataIndex { get; set; }
     }
 
     public interface ICanFrameBatchSource
@@ -62,8 +66,19 @@ namespace J2534Diag
         }
     }
 
+    public sealed class CanRejectedRecord
+    {
+        public long BatchOrdinal { get; internal set; }
+        public int SlotIndex { get; internal set; }
+        public CanFrameRejectionKind Reason { get; internal set; }
+        public CanReceivedFrame Frame { get; internal set; }
+    }
+
     public sealed class CanCaptureSummary
     {
+        public const int RejectionEvidenceLimit = 64;
+        internal readonly List<CanRejectedRecord> RejectionEvidence = new List<CanRejectedRecord>();
+        public long RejectionEvidenceOmitted { get; internal set; }
         public int StoredFrames { get; internal set; }
         public int InvalidFrames { get; internal set; }
         // J2534 indication/status records are not malformed bus frames.
@@ -105,6 +120,8 @@ namespace J2534Diag
         private readonly int _maximumFrames;
         private readonly Func<DateTime> _clockUtc;
         private readonly Func<uint, string> _describe;
+        private readonly int _readMaximum;
+        private readonly int _readTimeoutMilliseconds;
         // Retained even when a reader, callback or disk writer throws.
         public CanCaptureSummary LastSummary { get; private set; }
 
@@ -112,9 +129,17 @@ namespace J2534Diag
             ICanFrameBatchSource source,
             int maximumFrames,
             Func<DateTime> clockUtc,
-            Func<uint, string> describe)
+            Func<uint, string> describe,
+            int readMaximum = 200,
+            int readTimeoutMilliseconds = 5)
         {
             _source = source ?? throw new ArgumentNullException(nameof(source));
+            if (readMaximum < 1 || readMaximum > 200)
+                throw new ArgumentOutOfRangeException(nameof(readMaximum));
+            if (readTimeoutMilliseconds < 0)
+                throw new ArgumentOutOfRangeException(nameof(readTimeoutMilliseconds));
+            _readMaximum = readMaximum;
+            _readTimeoutMilliseconds = readTimeoutMilliseconds;
             if (maximumFrames < 1) throw new ArgumentOutOfRangeException(nameof(maximumFrames));
             _maximumFrames = maximumFrames;
             _clockUtc = clockUtc ?? throw new ArgumentNullException(nameof(clockUtc));
@@ -138,9 +163,10 @@ namespace J2534Diag
             LastSummary = summary;
             summary.TimingFrequency = Stopwatch.Frequency;
 
+            long batchOrdinal = 0;
             while (!cancellation.IsCancellationRequested && summary.StoredFrames < _maximumFrames)
             {
-                int requested = Math.Min(200, _maximumFrames - summary.StoredFrames);
+                int requested = Math.Min(_readMaximum, _maximumFrames - summary.StoredFrames);
                 IReadOnlyList<CanReceivedFrame> batch;
                 CanReceiveBufferOverflowException reportedOverflow = null;
                 long readBegin = Stopwatch.GetTimestamp();
@@ -148,11 +174,10 @@ namespace J2534Diag
                     summary.FirstReadStartedHostTicks = readBegin;
                 try
                 {
-                    batch = _source.ReadBatch(requested, 5);
+                    batch = _source.ReadBatch(requested, _readTimeoutMilliseconds);
                 }
                 catch (CanReceiveBufferOverflowException ex)
                 {
-                    AccumulateReadElapsed(summary, Stopwatch.GetTimestamp() - readBegin);
                     summary.DriverBufferOverflowEvents++;
                     summary.DriverReadErrors++;
                     reportedOverflow = ex;
@@ -169,12 +194,16 @@ namespace J2534Diag
                 }
                 catch (Exception)
                 {
-                    AccumulateReadElapsed(summary, Stopwatch.GetTimestamp() - readBegin);
                     summary.DriverReadErrors++;
                     throw;
                 }
+                finally
+                {
+                    // Every attempted native read contributes exactly once,
+                    // including overflow responses and other exceptions.
+                    AccumulateReadElapsed(summary, Stopwatch.GetTimestamp() - readBegin);
+                }
 
-                AccumulateReadElapsed(summary, Stopwatch.GetTimestamp() - readBegin);
                 long processingBegin = Stopwatch.GetTimestamp();
                 // Empty reads still matter: they do not create frame rows,
                 // so preserve per-call status in the independent summary.
@@ -206,8 +235,10 @@ namespace J2534Diag
 
                 // Do not abort part-way through a batch on cancellation; those
                 // frames have already been removed from the device-side queue.
-                foreach (var frame in batch)
+                batchOrdinal++;
+                for (int slotIndex = 0; slotIndex < batch.Count; slotIndex++)
                 {
+                    var frame = batch[slotIndex];
                     if (summary.StoredFrames >= _maximumFrames)
                     {
                         summary.ExcessReturnedFrames++;
@@ -220,6 +251,17 @@ namespace J2534Diag
                     if (!CanFrameClassifier.TryValidate(frame, out uint id,
                         out CanFrameRejectionKind rejection))
                     {
+                        if (summary.RejectionEvidence.Count < CanCaptureSummary.RejectionEvidenceLimit)
+                            summary.RejectionEvidence.Add(new CanRejectedRecord
+                            {
+                                BatchOrdinal = batchOrdinal,
+                                SlotIndex = slotIndex,
+                                Reason = rejection,
+                                Frame = frame
+                            });
+                        else
+                            summary.RejectionEvidenceOmitted++;
+
                         switch (rejection)
                         {
                             case CanFrameRejectionKind.J2534Indication:

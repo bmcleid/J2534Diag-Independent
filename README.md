@@ -1,18 +1,20 @@
-﻿# J2534Diag Drivability Scanner
+# J2534Diag Drivability Scanner
 
 **J2534Diag** is an open source drivability scanner for Windows, designed to interface with a J2534 pass-thru device ("J2534 Box") and communicate with OBDII vehicles using Mode 1 and Mode 6. The application provides advanced diagnostics, including fuel trim mapping, misfire monitoring, and CAN network message analysis.
 
 ---
 
-## Features
+## Verified scope and limits
 
-- **J2534 Pass-Thru Support:** Communicates with most SAE J2534-compliant devices.
-- **OBDII Mode 1 & Mode 6:** Reads standard and manufacturer-specific PIDs, including live data and on-board monitoring results.
-- **Fuel Trim Mapping:** Visualizes short- and long-term fuel trims across RPM and throttle bins.
-- **Misfire Analysis:** Displays misfire counts and related Mode 6 data.
-- **CAN Network Listener:** Captures and displays raw CAN messages for advanced diagnostics and reverse engineering.
-- **VIN Decoding:** Integrates with the NHTSA API to decode VINs and display vehicle information.
-- **Multi-Manufacturer Support:** Primarily tested on GM vehicles (2008–2023, including Global A and Vehicle Intelligence Platform), with limited testing on Audi and Toyota.
+This independent project is an engineering preview for the owner's 2012 Cadillac SRX Performance AWD 3.6L and TOPDON RLink X3. It is separate from OneApp, Vgate, GenericDiagnosticTool and GM ECU Simulator.
+
+- Direct-native historical capture and rejection retention are evidenced by the November2/9 recordings. This does not establish lossless vehicle-bus capture or the exact latest executable on hardware.
+- Managed VIN and six Mode01 scalar displays were observed in the R21-context owner session; error-free Disconnect was owner-confirmed. Sustained freshness, supported-PID discovery and live accuracy remain unverified beyond recorded evidence.
+- Bounded scalar report export, close/disconnect failure recovery, and read-only reopening of this application's Schema2 reports have scoped software acceptance. R29 sample opening was visually accepted on the owner PC.
+- The Misfire Monitor is experimental. Its GM reference MID/TID/UASID labels do not establish installed-ECU support or current cylinder misfire activity. Mode06 results describe monitor reporting periods, not instantaneous live counts. R30's focused software checks and corrected UI acceptance passed; see the owner record for scopes and the superseded first package.
+- Broader device/manufacturer compatibility, proprietary TCM/TFP decoding and arbitrary Mode06/UDS coverage are not established. Do not treat the original upstream claims as verified SRX capabilities.
+
+See [current owner handoff](docs/NATIVE_GUI_PREVIEW_HANDOFF_2026-10-26.md) and [Mode06 review](docs/R30_MODE06_CORRECTNESS_REVIEW_2026-11-27.md). Keep accepted R29/R28/R27 packages; PR29 remains Draft/unmerged. No new vehicle operation is requested.
 
 ---
 
@@ -38,9 +40,9 @@
 ## Usage
 
 - Select your J2534 device from the dropdown and click **Connect**.
-- Navigate between tabs to view fuel trims, misfire data, and CAN messages.
+- Review the connection mode before changing tabs: active Fuel Trims and experimental Misfire Monitor can issue diagnostic requests; capture-only prevents those pollers.
 - VIN decoding is automatic upon connection.
-- For best results, use with GM vehicles from 2008–2023.
+- Use only capabilities and configurations supported by the owner evidence; broad model-year coverage is unverified.
 
 ---
 

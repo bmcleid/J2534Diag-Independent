@@ -16,6 +16,8 @@ namespace J2534Diag.Tests
 
         public static int RunAll()
         {
+            BoundedFuelPollingHandlesReplySilenceAndCancellation();
+            CoupledFailureCancelsPeerAndRetainsLeaseUntilJoined();
             MustNotDisconnectWhileCaptureOwnsChannel();
             WaitsForCooperatingMonitorBeforeDisconnect();
             RetainsRunningMonitorAfterTimeout();
@@ -23,6 +25,153 @@ namespace J2534Diag.Tests
             SourceUsesSameGuardForCloseAndReconnect();
             TabNavigationRespectsPendingCaptureShutdown();
             return _checks;
+        }
+
+
+
+        private static void BoundedFuelPollingHandlesReplySilenceAndCancellation()
+        {
+            using (var gate = new FuelTrimPollingGate(5, 1, 3))
+            using (var cts = new CancellationTokenSource())
+            {
+                int sent = 0;
+                gate.Run(() => new byte[] { 6, 7 }, pid => sent++, cts.Token);
+                Check(sent == 3, "Silence did not stop at configured miss limit");
+                Check(!gate.Observe(6), "Completed request remained pending");
+            }
+            using (var gate = new FuelTrimPollingGate(5, 1, 3))
+            using (var cts = new CancellationTokenSource())
+            {
+                int sent = 0;
+                gate.Run(() => new byte[] { 6 }, pid =>
+                {
+                    sent++;
+                    if (sent == 2) Check(gate.Observe(pid), "Synchronous reply lost before wait");
+                    if (sent == 5) cts.Cancel();
+                }, cts.Token);
+                Check(sent == 5, "Valid reply did not reset consecutive miss count");
+            }
+            using (var gate = new FuelTrimPollingGate(5, 1, 2))
+            using (var cts = new CancellationTokenSource())
+            {
+                int sent = 0;
+                gate.Run(() => new byte[] { 6 }, pid =>
+                {
+                    sent++;
+                    Check(!gate.Observe(7), "Wrong PID completed pending request");
+                }, cts.Token);
+                Check(sent == 2, "Wrong-PID replies prevented quiet stop");
+            }
+            using (var gate = new FuelTrimPollingGate(5, 1, 2))
+            using (var cts = new CancellationTokenSource())
+            {
+                cts.Cancel();
+                int sent = 0;
+                gate.Run(() => new byte[] { 6 }, pid => sent++, cts.Token);
+                Check(sent == 0, "Already-cancelled session transmitted");
+            }
+            using (var gate = new FuelTrimPollingGate(5, 1, 2))
+            using (var cts = new CancellationTokenSource())
+            {
+                int sent = 0;
+                gate.Run(() => new byte[0], pid => sent++, cts.Token);
+                Check(sent == 0, "No enabled channels still transmitted");
+                var injected = new InvalidOperationException("send failure");
+                Exception caught = null;
+                try { gate.Run(() => new byte[] { 6 }, pid => { throw injected; }, cts.Token); }
+                catch (Exception ex) { caught = ex; }
+                Check(ReferenceEquals(caught, injected), "Send failure identity lost");
+                Check(!gate.Observe(6), "Failed send retained pending request");
+            }
+            using (var gate = new FuelTrimPollingGate(2000, 1, 2))
+            using (var cts = new CancellationTokenSource())
+            using (var sentEvent = new ManualResetEventSlim(false))
+            {
+                int sent = 0;
+                var worker = new Thread(() => gate.Run(() => new byte[] { 6 }, pid =>
+                {
+                    Interlocked.Increment(ref sent); sentEvent.Set();
+                }, cts.Token)) { IsBackground = true };
+                worker.Start();
+                try
+                {
+                    Check(sentEvent.Wait(2000), "Cancellable waiter never sent");
+                    cts.Cancel();
+                    Check(worker.Join(1000), "Cancellation did not interrupt response wait");
+                    Check(sent == 1, "Cancellation permitted another request");
+                }
+                finally { cts.Cancel(); if (!worker.Join(3000)) throw new Exception("Waiter cleanup failed"); }
+            }
+            string root = Path.GetFullPath(Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
+            string form = File.ReadAllText(Path.Combine(root, "Forms", "FuelTrimForm.cs"));
+            Check(form.Contains("sessionPollGate.Run(") &&
+                !form.Contains("Thread.Sleep(2);"), "Form bypasses bounded poll gate");
+            Check(form.Contains("if (input.Protocol == \"Mode01\") _pollReplyGate?.Observe(input.Pid);"),
+                "Poller wakeup not gated to validated Mode01 scalar");
+            Check(form.IndexOf("_pollReplyGate?.Dispose();", StringComparison.Ordinal) >
+                form.IndexOf("bool monitorStopped =", StringComparison.Ordinal),
+                "Reply gate disposed before worker join");
+        }
+
+        private static void CoupledFailureCancelsPeerAndRetainsLeaseUntilJoined()
+        {
+            using (var cts = new CancellationTokenSource())
+            using (var entered = new ManualResetEventSlim(false))
+            using (var sawCancellation = new ManualResetEventSlim(false))
+            using (var release = new ManualResetEventSlim(false))
+            {
+                var gate = new ReceiveChannelGate();
+                Check(gate.TryAcquire("FUEL_TRIM"), "Test lease unavailable");
+                var peer = new Thread(() => ChannelLifecyclePolicy.RunCoupledWorker(cts, () =>
+                {
+                    entered.Set();
+                    cts.Token.WaitHandle.WaitOne();
+                    sawCancellation.Set();
+                    release.Wait();
+                }, null)) { IsBackground = true };
+                peer.Start();
+                try
+                {
+                    Check(entered.Wait(2000), "Peer did not start");
+                    var injected = new InvalidOperationException("injected read failure");
+                    Exception reported = null;
+                    ChannelLifecyclePolicy.RunCoupledWorker(cts, () => { throw injected; },
+                        ex => reported = ex);
+                    Check(ReferenceEquals(reported, injected), "Original failure not preserved");
+                    Check(cts.IsCancellationRequested, "Failed reader did not cancel session");
+                    Check(sawCancellation.Wait(2000), "Polling peer did not observe cancellation");
+                    Check(!ChannelLifecyclePolicy.RequestStopAndWait(peer, cts, 10),
+                        "Blocked peer was declared stopped");
+                    Check(gate.CurrentOwner == "FUEL_TRIM", "Lease released before peer stopped");
+                    using (var replacement = new CancellationTokenSource())
+                    {
+                        Check(!replacement.IsCancellationRequested, "New session inherited cancellation");
+                        ChannelLifecyclePolicy.RunCoupledWorker(replacement, () => { }, null);
+                        Check(replacement.IsCancellationRequested, "Normal terminal exit did not cancel peer");
+                    }
+                }
+                finally
+                {
+                    cts.Cancel();
+                    release.Set();
+                    if (!peer.Join(2000)) throw new Exception("Test peer failed cleanup");
+                }
+                Check(ChannelLifecyclePolicy.RequestStopAndWait(peer, cts, 2000),
+                    "Stopped peer could not be retired");
+                gate.Release("FUEL_TRIM");
+                Check(gate.CurrentOwner == null, "Lease not releasable after join");
+            }
+            string root = Path.GetFullPath(Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
+            string form = File.ReadAllText(Path.Combine(root, "Forms", "FuelTrimForm.cs"));
+            Check(form.Split(new[] { "RunCoupledWorker(sessionCancellation" },
+                StringSplitOptions.None).Length == 3, "Both form workers must share cancellation wrapper");
+            Check(form.Contains("if (_ownsReceiveChannel) return;") &&
+                form.Contains("StopListening();"), "Restart does not retain pending session");
+            Check(form.Contains("_cts == null || _cts.IsCancellationRequested)") &&
+                form.Contains("FuelTrimEvidenceCounter.InactiveOrGenerationDiscarded"),
+                "Cancelled session still applies queued samples");
         }
 
         private static void MustNotDisconnectWhileCaptureOwnsChannel()
@@ -163,3 +312,4 @@ namespace J2534Diag.Tests
         }
     }
 }
+

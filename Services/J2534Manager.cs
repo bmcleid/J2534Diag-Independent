@@ -84,6 +84,77 @@ namespace J2534Diag
             _managedLeaseHeld = false;
         }
 
+        private NativeJ2534StdCallApi _nativeApi;
+        private NativeDriverIdentity _nativeDriver;
+        public NativeOwnedCanSession NativeSession { get; private set; }
+        public bool NativeModeSelected => _nativeDriver != null;
+        public bool NativeCaptureActive => NativeSession != null && NativeSession.IsReceiving;
+        public bool HasConnectionOrSelection =>
+            NativeModeSelected || NativeSession != null ||
+            Channel != null || Device != null || Api != null || _managedLeaseHeld ||
+            _nativeApi != null || _monitorThread != null || _cts != null;
+        public NativeDriverIdentity SelectedNativeDriver => _nativeDriver;
+
+        // PREPARE ONLY. The actual native channel is opened immediately
+        // before CAN Listener starts reading, not minutes earlier on Connect.
+        // Prevents pre-capture driver receive-queue accumulation.
+        public NativeDriverIdentity PrepareNativeCaptureOnly(string registeredDriverPath)
+        {
+            if (HasConnectionOrSelection || ReceiveGate.CurrentOwner != null)
+                throw new InvalidOperationException(
+                    "Disconnect and fully stop the current J2534 connection before selecting a new receiver.");
+            var identity = NativeJ2534DriverCheck.Inspect(registeredDriverPath);
+            _nativeDriver = identity;
+            CaptureOnlyMode = true;
+            BitMode = BitType.BITS_11;
+            return identity;
+        }
+
+        public void StartNativeCapture()
+        {
+            if (_nativeDriver == null)
+                throw new InvalidOperationException("Choose native receiver and a verified DLL first.");
+            if (ReceiveGate.CurrentOwner != "CAN_CAPTURE")
+                throw new InvalidOperationException("Native start requires the CAN Listener receive lease.");
+            if (NativeSession != null || _nativeApi != null)
+                throw new InvalidOperationException("Prior native channel needs cleanup before restart.");
+            // Verify that same *bytes* selected earlier still exist immediately
+            // before opening a device. Not an OS/driver signature guarantee.
+            var identity = NativeJ2534DriverCheck.Inspect(_nativeDriver.FullPath);
+            if (!string.Equals(identity.Sha256, _nativeDriver.Sha256, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "J2534 driver file changed since selection. Disconnect and reselect.");
+            _nativeApi = new NativeJ2534StdCallApi(identity.FullPath);
+            NativeSession = new NativeOwnedCanSession(_nativeApi,
+                () => Channel == null && Device == null && Api == null && _monitorThread == null);
+            try
+            {
+                NativeSession.Start(true);
+            }
+            catch
+            {
+                // Start() handles partial channel cleanup; never hide a failed
+                // close by discarding a still-owned session.
+                StopNativeCapture();
+                throw;
+            }
+        }
+
+        public void StopNativeCapture()
+        {
+            if (NativeSession != null)
+            {
+                NativeSession.Stop();    // Throws and retains ownership on unsafe cleanup.
+                NativeSession.Dispose();
+                NativeSession = null;
+            }
+            if (_nativeApi != null)
+            {
+                _nativeApi.Dispose();   // Does not unload while handles may remain.
+                _nativeApi = null;
+            }
+        }
+
         private void StopVinMonitorSafely()
         {
             ChannelLifecyclePolicy.RequireUnowned(ReceiveGate);
@@ -93,18 +164,45 @@ namespace J2534Diag
             _monitorThread = null;
             _cts?.Dispose();
             _cts = null;
+            _isoTpParser?.Reset();
         }
 
         /// <summary>
         /// Close an idle J2534 connection. Refuses if any application capture
         /// or diagnostic reader still holds its receive lease.
         /// </summary>
+        public string LastDisconnectOutcome { get; private set; } = "Not attempted";
+        public event Action<string> DisconnectOutcomeChanged;
+        private void ReportDisconnect(string outcome)
+        {
+            LastDisconnectOutcome = outcome;
+            // An evidence/UI subscriber must never change driver cleanup behavior.
+            var handlers = DisconnectOutcomeChanged;
+            if (handlers != null) foreach (Action<string> handler in handlers.GetInvocationList())
+                try { handler(outcome); } catch (Exception ex) { Debug.WriteLine(ex); }
+        }
         public void Disconnect()
         {
+            ReportDisconnect("Pending");
+            try
+            {
             StopVinMonitorSafely();
+            if (NativeModeSelected || NativeSession != null || _nativeApi != null)
+            {
+                StopNativeCapture();    // Refuses to discard handles on failure.
+                _nativeDriver = null;
+                CaptureOnlyMode = false;
+            }
             CloseChannelAndDevice();
             ReleaseManagedLeaseIfClosed();
             _mainForm?.UpdateSelectedVehicle(false, null);
+                ReportDisconnect("Succeeded");
+            }
+            catch (Exception ex)
+            {
+                ReportDisconnect("Failed: " + ex.GetType().Name + ": " + ex.Message);
+                throw;
+            }
         }
 
         private void CloseChannelAndDevice()
@@ -128,6 +226,9 @@ namespace J2534Diag
             try
             {
             StopVinMonitorSafely();
+            CloseChannelAndDevice();
+            // A refused reconnect still belongs to the retained old connection.
+            LastDisconnectOutcome = "Not attempted for current connection";
             CaptureOnlyMode = false;
             Vin = null;
 
@@ -144,33 +245,22 @@ namespace J2534Diag
                 VinMode = attempt.VinMode;
                 InitializeChannel(dllFileName);
 
-                if (Vin == null)
-                {
-                    Debug.WriteLine($"VIN not received for {VinMode} on {BitMode}.");
-                    continue;
-                }
-                else if (Vin.Length == 17)
-                {
-                    Debug.WriteLine($"VIN: {Vin} (Time: {DateTime.Now:HH:mm:ss.fff}) via {VinMode} on {BitMode}.");
-                    return;
-                }
-                else
-                {
-                    Debug.WriteLine($"VIN Incomplete: {Vin} (Time: {DateTime.Now:HH:mm:ss.fff}) via {VinMode} on {BitMode}, trying again.");
-                    // Only allow 1 retry here
-                    InitializeChannel(dllFileName);
-                }
-                if(!string.IsNullOrEmpty(Vin))
-                {
-                    return;
-                }
+                if (Vin != null && Vin.Length == 17) return;
             }
+            throw new InvalidOperationException("No complete VIN received. Active connection was closed; use capture-only explicitly if identification is unavailable.");
             }
-            catch
+            catch (Exception startup)
             {
-                // Only release after a failed startup when every resource
-                // has been disposed and any VIN worker has stopped.
-                ReleaseManagedLeaseIfClosed();
+                try
+                {
+                    StopVinMonitorSafely();
+                    CloseChannelAndDevice();
+                }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException("VIN startup and cleanup failed; connection ownership retained.", startup, cleanup);
+                }
+                finally { ReleaseManagedLeaseIfClosed(); }
                 throw;
             }
         }
@@ -190,12 +280,13 @@ namespace J2534Diag
                 throw new ArgumentException("Select an installed J2534 DLL.", nameof(dllFileName));
             if (bitMode != BitType.BITS_11 && bitMode != BitType.BITS_29)
                 throw new ArgumentOutOfRangeException(nameof(bitMode));
-            RequireManagedConnectionLease(); // No native overlap during reconnect.
+            RequireManagedConnectionLease();
             try
             {
                 // Keep the same owner across a managed reconnect.
                 StopVinMonitorSafely();
                 CloseChannelAndDevice();
+                LastDisconnectOutcome = "Not attempted for current connection";
                 // Register each acquired handle immediately so that any
                 // failed next step can be safely retried on cleanup.
                 Api = APIFactory.GetAPI(dllFileName);
@@ -232,9 +323,13 @@ namespace J2534Diag
         private void InitializeChannel(string dllFileName)
         {
             StopVinMonitorSafely();
-            CloseChannelAndDevice();
-            Api = APIFactory.GetAPI(dllFileName);
-            Device = Api.GetDevice();
+            // One API/device lifetime covers the bounded VIN attempts. Only the
+            // channel changes between address modes; no driver unload/reopen race.
+            Channel?.Dispose();
+            Channel = null;
+            Vin = null;
+            if (Api == null) Api = APIFactory.GetAPI(dllFileName);
+            if (Device == null) Device = Api.GetDevice();
 
             EcmRxId = GetRequestCanId();
             Channel = Device.GetChannel(Protocol.CAN, Baud.CAN_500000, BitMode == BitType.BITS_11 ? ConnectFlag.NONE : ConnectFlag.CAN_29BIT_ID);
@@ -274,7 +369,7 @@ namespace J2534Diag
                         foreach (var msg in resp.Messages)
                         {
                             // Process immediately
-                            _isoTpParser.ProcessMessage(msg.Data);
+                            ProcessVinMessage(msg.Data);
                         }
                     }
                     catch (Exception ex)
@@ -369,75 +464,54 @@ namespace J2534Diag
             //Debug.WriteLine($"Flow Control sent: {BitConverter.ToString(fc)} (Time: {DateTime.Now:HH:mm:ss.fff})");
         }
 
-        private void IsoTpParser_FrameReceived(object sender, IsoTpFrameEventArgs e)
+        private bool IsVinResponseId(byte[] canId)
         {
-            switch (e.FrameType)
-            {
-                case IsoTpFrameType.SingleFrame:
-                    // Handle single frame (e.Payload)
-                    break;
-
-                case IsoTpFrameType.FirstFrame:
-                    // Insert a small delay to ensure timing is right for flow control
-                    Thread.Sleep(2);
-
-                    // Always send FC to the sender of the First Frame
-                    SendFlowControl(
-                        BitMode == BitType.BITS_11
-                            ? Build11BitFlowControlId(e.CanId)
-                            : BuildUdsFlowControlId(e.CanId),
-                        blockSize: 0,
-                        separationTime: 2
-                    );
-                    Thread.Sleep(2);
-
-                    // Print partial VIN for debugging
-                    Vin = ExtractPartialVin(e.Payload);
-                    Debug.WriteLine($"VIN (partial): {Vin} (Time: {DateTime.Now:HH:mm:ss.fff})");
-
-                    break;
-
-                case IsoTpFrameType.ConsecutiveFrame:
-                    string newPartialVin = ExtractPartialVin(e.Payload);
-                    if (!string.IsNullOrEmpty(newPartialVin) && newPartialVin.Length > 16)
-                    {
-                        Vin = newPartialVin;
-                        //mainForm.UpdateSelectedVehicle(newPartialVin, "", "");
-                    }
-                    break;
-
-            }
+            if (canId == null || canId.Length != 4) return false;
+            if (BitMode == BitType.BITS_29)
+                return canId[0] == 0x18 && canId[1] == 0xDA && canId[2] == 0xF1;
+            return canId[0] == 0 && canId[1] == 0 && canId[2] == 7 &&
+                (VinMode == VinRequestMode.ObdMode09 ? canId[3] == 0xE8 :
+                    canId[3] >= 0xE8 && canId[3] <= 0xEF);
         }
 
-        string ExtractPartialVin(byte[] payload)
+        private bool HasVinPrefix(byte[] payload)
         {
-            // Handle OBD2 VIN
-            if (payload.Length >= 2 && payload[0] == 0x49 && payload[1] == 0x02)
+            return payload != null && payload.Length >= 3 &&
+                (VinMode == VinRequestMode.ObdMode09 ?
+                    payload[0] == 0x49 && payload[1] == 0x02 && payload[2] == 0x01 :
+                    payload[0] == 0x62 && payload[1] == 0xF1 && payload[2] == 0x90);
+        }
+
+        private void ProcessVinMessage(byte[] data)
+        {
+            if (data == null || data.Length < 5 || data.Length > 12 ||
+                !IsVinResponseId(data.Take(4).ToArray())) return;
+            if ((data[4] >> 4) == 1)
             {
-                int vinStart = 3;
-                if (payload.Length > vinStart)
+                // VIN prefix plus seventeen characters: unrelated FFs never trigger FC.
+                if (data.Length != 12 || (((data[4] & 15) << 8) | data[5]) != 20 ||
+                    !HasVinPrefix(data.Skip(6).ToArray()))
                 {
-                    int vinLen = Math.Min(17, payload.Length - vinStart);
-                    if (vinLen > 0)
-                    {
-                        return System.Text.Encoding.ASCII.GetString(payload, vinStart, vinLen);
-                    }
+                    _isoTpParser.Reset();
+                    return;
                 }
             }
-            // Handle UDS VIN
-            else if (payload.Length >= 3 && payload[0] == 0x62 && payload[1] == 0xF1 && payload[2] == 0x90)
+            _isoTpParser.ProcessMessage(data);
+        }
+
+        private void IsoTpParser_FrameReceived(object sender, IsoTpFrameEventArgs e)
+        {
+            if (!IsVinResponseId(e.CanId) || !HasVinPrefix(e.Payload)) return;
+            if (e.FrameType == IsoTpFrameType.FirstFrame)
             {
-                int vinStart = 3;
-                if (payload.Length > vinStart)
-                {
-                    int vinLen = Math.Min(17, payload.Length - vinStart);
-                    if (vinLen > 0)
-                    {
-                        return System.Text.Encoding.ASCII.GetString(payload, vinStart, vinLen);
-                    }
-                }
+                SendFlowControl(BitMode == BitType.BITS_11 ? Build11BitFlowControlId(e.CanId) :
+                    BuildUdsFlowControlId(e.CanId), blockSize: 0, separationTime: 2);
+                return;
             }
-            return string.Empty;
+            if (!e.IsComplete || e.Payload.Length != 20 || Vin != null) return;
+            byte[] characters = e.Payload.Skip(3).ToArray();
+            if (characters.Any(c => !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z')))) return;
+            Vin = System.Text.Encoding.ASCII.GetString(characters);
         }
 
         private byte[] GetRequestCanId()

@@ -50,6 +50,42 @@ namespace J2534Diag.Tests
                 if (File.ReadAllText(target2) != "RETRIED=TRUE")
                     throw new Exception("Retry content incorrect");
                 checks++;
+
+                // Failed publication must not permit evidence to be discarded.
+                string csv4 = Path.Combine(dir, "session4.csv");
+                string sidecar4 = csv4 + ".integrity.txt";
+                File.WriteAllText(csv4, "recovery-source");
+                var recovery = new PendingIntegritySidecar(csv4, sidecar4, "EXACT FINALIZED TEXT");
+                File.WriteAllText(sidecar4, "existing evidence");
+                try { recovery.Publish(); throw new Exception("Collision accepted"); }
+                catch (IOException) { checks++; }
+                if (recovery.IsPreserved) throw new Exception("Failed publish marked preserved");
+                checks++;
+                string copy = Path.Combine(dir, "recovered.txt");
+                File.WriteAllText(copy, "existing copy");
+                try { recovery.SaveRecoveryCopy(copy); throw new Exception("Recovery overwrote evidence"); }
+                catch (IOException) { checks++; }
+                if (recovery.IsPreserved || File.ReadAllText(copy) != "existing copy")
+                    throw new Exception("Failed recovery changed preservation state or evidence");
+                checks++;
+                try { recovery.SaveRecoveryCopy(sidecar4); throw new Exception("Recovery used original sidecar"); }
+                catch (IOException) { checks++; }
+                try { recovery.SaveRecoveryCopy(csv4); throw new Exception("Recovery used original CSV"); }
+                catch (IOException) { checks++; }
+                File.Delete(csv4);
+                File.Delete(copy);
+                recovery.SaveRecoveryCopy(copy);
+                string recovered = File.ReadAllText(copy);
+                if (!recovery.IsPreserved || !recovered.EndsWith("EXACT FINALIZED TEXT") ||
+                    !recovered.Contains("does not validate the current CSV") ||
+                    !recovered.Contains("OriginalCaptureSHA256="))
+                    throw new Exception("Missing-source recovery lost provenance or text");
+                checks++;
+                if (File.ReadAllText(sidecar4) != "existing evidence")
+                    throw new Exception("Recovery changed original sidecar");
+                checks++;
+                if (!pending.IsPreserved) throw new Exception("Successful publish not marked preserved");
+                checks++;
                 // Same-length edit with restored timestamp must still fail SHA-256.
                 string csv3 = Path.Combine(dir, "session3.csv");
                 File.WriteAllText(csv3, "abcdefgh");

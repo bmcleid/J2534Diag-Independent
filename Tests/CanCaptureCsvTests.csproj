@@ -13,10 +13,27 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="Microsoft.VisualBasic" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="J2534-Sharp, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\J2534-Sharp.1.0.0-CI00036\lib\net48\J2534-Sharp.dll</HintPath>
     </Reference>
     <Compile Include="CanCaptureCsvTests.cs" />
+    <Compile Include="FuelTrimSessionReportTests.cs" />
+    <Compile Include="..\Services\FuelTrimSessionReport.cs"><Link>FuelTrimSessionReport.cs</Link></Compile>
+    <Compile Include="VinStartupTests.cs" />
+    <Compile Include="baseline\LegacyIsoTpParser.cs" />
+    <Compile Include="..\Services\IsoTpParser.cs"><Link>IsoTpParser.cs</Link></Compile>
+    <Compile Include="..\Models\IsoTpFrameEventArgs.cs"><Link>IsoTpFrameEventArgs.cs</Link></Compile>
+    <Compile Include="..\Models\IseTpFrameType.cs"><Link>IseTpFrameType.cs</Link></Compile>
+    <Compile Include="FuelTrimSampleStateTests.cs" />
+    <Compile Include="FuelTrimFormIntegrationTests.cs" />
+    <Compile Include="..\Services\FuelTrimSampleState.cs"><Link>FuelTrimSampleState.cs</Link></Compile>
+    <Compile Include="CaptureEvidencePackageTests.cs" />
+    <Compile Include="..\Services\CaptureEvidencePackage.cs"><Link>CaptureEvidencePackage.cs</Link></Compile>
     <Compile Include="CaptureOnlySafetyTests.cs" />
     <Compile Include="ChannelLifecyclePolicyTests.cs" />
     <Compile Include="..\Services\ChannelLifecyclePolicy.cs"><Link>ChannelLifecyclePolicy.cs</Link></Compile>
@@ -43,6 +60,8 @@
     <Compile Include="..\Services\J2534ConnectionOwnership.cs"><Link>J2534ConnectionOwnership.cs</Link></Compile>
     <Compile Include="NativeJ2534AbiTests.cs" />
     <Compile Include="NativeJ2534InteropSmoke.cs" />
+    <Compile Include="NativeGuiPreviewTests.cs" />
+    <Compile Include="..\Services\NativeJ2534DriverCheck.cs"><Link>NativeJ2534DriverCheck.cs</Link></Compile>
     <Compile Include="..\Services\NativeOwnedCanSession.cs"><Link>NativeOwnedCanSession.cs</Link></Compile>
     <Compile Include="..\Services\NativeJ2534StdCallApi.cs"><Link>NativeJ2534StdCallApi.cs</Link></Compile>
     <Compile Include="..\Services\NativeCanReadBoundary.cs"><Link>NativeCanReadBoundary.cs</Link></Compile>
@@ -55,3 +74,5 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
+
+

@@ -13,6 +13,7 @@ namespace J2534Diag
         public string CapturePath { get; }
         public string SidecarPath { get; }
         public string Contents { get; }
+        public bool IsPreserved { get; private set; }
 
         public PendingIntegritySidecar(string capturePath, string sidecarPath, string contents)
         {
@@ -39,6 +40,27 @@ namespace J2534Diag
                     _sourceSha256, StringComparison.Ordinal))
                 throw new IOException("Capture CSV has been removed or changed since report finalization; report retry refused.");
             AtomicIntegritySidecar.Write(SidecarPath, writer => writer.Write(Contents));
+            IsPreserved = true;
+        }
+        // A recovery copy preserves the historical report even if its CSV is
+        // missing/changed. It must never masquerade as the original sidecar.
+        public void SaveRecoveryCopy(string path)
+        {
+            string destination = Path.GetFullPath(path);
+            if (string.Equals(destination, Path.GetFullPath(CapturePath), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(destination, Path.GetFullPath(SidecarPath), StringComparison.OrdinalIgnoreCase))
+                throw new IOException("Choose a separate recovery report filename.");
+            AtomicIntegritySidecar.Write(destination, writer =>
+            {
+                writer.WriteLine("RECOVERY COPY OF FINALIZED REPORT");
+                writer.WriteLine("This preserves historical report text; it does not validate the current CSV.");
+                writer.WriteLine("OriginalCaptureSHA256=" + _sourceSha256);
+                writer.WriteLine("OriginalCaptureLength=" + _sourceLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                writer.WriteLine("OriginalSidecarPath=" + SidecarPath);
+                writer.WriteLine("--- Original finalized report follows unchanged ---");
+                writer.Write(Contents);
+            });
+            IsPreserved = true;
         }
     }
 }

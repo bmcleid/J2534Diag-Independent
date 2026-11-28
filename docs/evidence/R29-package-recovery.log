@@ -1,0 +1,334 @@
+﻿2026-11-28T00:18:33.4816344Z Current runner version: '2.338.2'
+2026-11-28T00:18:33.4835177Z ##[group]Runner Image Provisioner
+2026-11-28T00:18:33.4835896Z Hosted Compute Agent
+2026-11-28T00:18:33.4836384Z Version: 20261111.635
+2026-11-28T00:18:33.4836878Z Commit: b8a594ea514ff44cadb5342986c68b1eac6e22ed
+2026-11-28T00:18:33.4837454Z Build Date: 2026-11-11T01:49:01Z
+2026-11-28T00:18:33.4837991Z Worker ID: {beab6342-4dfa-4028-9680-fcfa961de382}
+2026-11-28T00:18:33.4838544Z Region: centralus
+2026-11-28T00:18:33.4838970Z Cloud: Azure
+2026-11-28T00:18:33.4839384Z ##[endgroup]
+2026-11-28T00:18:33.4840351Z ##[group]Operating System
+2026-11-28T00:18:33.4840876Z Microsoft Windows Server 2022
+2026-11-28T00:18:33.4841389Z 10.0.20348
+2026-11-28T00:18:33.4841785Z Datacenter
+2026-11-28T00:18:33.4842177Z ##[endgroup]
+2026-11-28T00:18:33.4842578Z ##[group]Runner Image
+2026-11-28T00:18:33.4843039Z Image: windows-2022
+2026-11-28T00:18:33.4843473Z Version: 20261123.376.1
+2026-11-28T00:18:33.4844649Z Included Software: https://github.com/actions/runner-images/blob/win22/20261123.376/images/windows/Windows2022-Readme.md
+2026-11-28T00:18:33.4845903Z Image Release: https://github.com/actions/runner-images/releases/tag/win22%2F20261123.376
+2026-11-28T00:18:33.4846678Z ##[endgroup]
+2026-11-28T00:18:33.4847638Z ##[group]GITHUB_TOKEN Permissions
+2026-11-28T00:18:33.4849230Z Actions: read
+2026-11-28T00:18:33.4849662Z Contents: write
+2026-11-28T00:18:33.4850075Z Metadata: read
+2026-11-28T00:18:33.4850496Z ##[endgroup]
+2026-11-28T00:18:33.4852124Z Secret source: Actions
+2026-11-28T00:18:33.4852858Z Cache mode: write
+2026-11-28T00:18:33.4853394Z Prepare workflow directory
+2026-11-28T00:18:33.5118131Z Prepare all required actions
+2026-11-28T00:18:33.5157925Z Getting action download info
+2026-11-28T00:18:33.8028908Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-28T00:18:33.8902614Z Download action repository 'microsoft/setup-msbuild@v2' (SHA:6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce)
+2026-11-28T00:18:34.2072410Z Download action repository 'NuGet/setup-nuget@v2' (SHA:d105a947828025cd7a980103c35ba2bfae586d0f)
+2026-11-28T00:18:34.4948752Z Download action repository 'actions/download-artifact@v4' (SHA:d3f86a106a0bac45b974a628896c90dbdf5c8093)
+2026-11-28T00:18:34.8716725Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-28T00:18:35.1260426Z Complete job name: package
+2026-11-28T00:18:35.2849539Z ##[group]Run actions/checkout@v4
+2026-11-28T00:18:35.2850961Z with:
+2026-11-28T00:18:35.2851507Z   ref: 2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249
+2026-11-28T00:18:35.2852129Z   repository: bmcleid/J2534Diag-Independent
+2026-11-28T00:18:35.2855944Z   token: ***
+2026-11-28T00:18:35.2856372Z   ssh-strict: true
+2026-11-28T00:18:35.2856823Z   ssh-user: git
+2026-11-28T00:18:35.2857283Z   persist-credentials: true
+2026-11-28T00:18:35.2857767Z   clean: true
+2026-11-28T00:18:35.2858237Z   sparse-checkout-cone-mode: true
+2026-11-28T00:18:35.2858833Z   fetch-depth: 1
+2026-11-28T00:18:35.2859292Z   fetch-tags: false
+2026-11-28T00:18:35.2859828Z   show-progress: true
+2026-11-28T00:18:35.2860274Z   lfs: false
+2026-11-28T00:18:35.2860754Z   submodules: false
+2026-11-28T00:18:35.2861195Z   set-safe-directory: true
+2026-11-28T00:18:35.2861690Z   allow-unsafe-pr-checkout: false
+2026-11-28T00:18:35.2862425Z ##[endgroup]
+2026-11-28T00:18:35.4178567Z Syncing repository: bmcleid/J2534Diag-Independent
+2026-11-28T00:18:35.4180270Z ##[group]Getting Git version info
+2026-11-28T00:18:35.4181021Z Working directory is 'D:\a\J2534Diag-Independent\J2534Diag-Independent'
+2026-11-28T00:18:35.4903072Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-28T00:18:35.8251546Z git version 2.56.1.windows.1
+2026-11-28T00:18:35.8291970Z ##[endgroup]
+2026-11-28T00:18:35.8308763Z Temporarily overriding HOME='D:\a\_temp\c4cd6e70-fad0-4036-af11-93d501d4dbed' before making global git config changes
+2026-11-28T00:18:35.8310109Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-28T00:18:35.8319598Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\J2534Diag-Independent\J2534Diag-Independent
+2026-11-28T00:18:35.8921888Z Deleting the contents of 'D:\a\J2534Diag-Independent\J2534Diag-Independent'
+2026-11-28T00:18:35.8926714Z ##[group]Initializing the repository
+2026-11-28T00:18:35.8934647Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\J2534Diag-Independent\J2534Diag-Independent
+2026-11-28T00:18:35.9538322Z Initialized empty Git repository in D:/a/J2534Diag-Independent/J2534Diag-Independent/.git/
+2026-11-28T00:18:35.9573001Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/bmcleid/J2534Diag-Independent
+2026-11-28T00:18:36.0121210Z ##[endgroup]
+2026-11-28T00:18:36.0122272Z ##[group]Disabling automatic garbage collection
+2026-11-28T00:18:36.0128746Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-28T00:18:36.0415839Z ##[endgroup]
+2026-11-28T00:18:36.0416744Z ##[group]Setting up auth
+2026-11-28T00:18:36.0426504Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-28T00:18:36.0688984Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-28T00:18:37.3767244Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-28T00:18:37.4031208Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-28T00:18:37.8402826Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-28T00:18:37.8672009Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-28T00:18:38.3112252Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-11-28T00:18:38.3385629Z ##[endgroup]
+2026-11-28T00:18:38.3386547Z ##[group]Fetching the repository
+2026-11-28T00:18:38.3399974Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin 2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249
+2026-11-28T00:18:39.4824795Z From https://github.com/bmcleid/J2534Diag-Independent
+2026-11-28T00:18:39.4825772Z  * branch            2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249 -> FETCH_HEAD
+2026-11-28T00:18:39.4855843Z ##[endgroup]
+2026-11-28T00:18:39.4856543Z ##[group]Determining the checkout info
+2026-11-28T00:18:39.4857492Z ##[endgroup]
+2026-11-28T00:18:39.4867809Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-28T00:18:39.5315055Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-28T00:18:39.5580505Z ##[group]Checking out the ref
+2026-11-28T00:18:39.5586934Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force 2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249
+2026-11-28T00:18:39.6394897Z Note: switching to '2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249'.
+2026-11-28T00:18:39.6395751Z 
+2026-11-28T00:18:39.6396195Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-28T00:18:39.6396904Z changes and commit them, and you can discard any commits you make in this
+2026-11-28T00:18:39.6397657Z state without impacting any branches by switching back to a branch.
+2026-11-28T00:18:39.6398148Z 
+2026-11-28T00:18:39.6398538Z If you want to create a new branch to retain commits you create, you may
+2026-11-28T00:18:39.6399308Z do so (now or later) by using -c with the switch command. Example:
+2026-11-28T00:18:39.6400855Z 
+2026-11-28T00:18:39.6401047Z   git switch -c <new-branch-name>
+2026-11-28T00:18:39.6401358Z 
+2026-11-28T00:18:39.6401595Z Or undo this operation with:
+2026-11-28T00:18:39.6401910Z 
+2026-11-28T00:18:39.6402111Z   git switch -
+2026-11-28T00:18:39.6402351Z 
+2026-11-28T00:18:39.6402768Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-28T00:18:39.6403182Z 
+2026-11-28T00:18:39.6403697Z HEAD is now at 2aa3d43 Add R29 read-only saved scalar-session review and focused acceptance [saved-review]
+2026-11-28T00:18:39.6493200Z ##[endgroup]
+2026-11-28T00:18:39.6858490Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-28T00:18:39.7096908Z 2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249
+2026-11-28T00:18:39.7448232Z ##[group]Run microsoft/setup-msbuild@v2
+2026-11-28T00:18:39.7448713Z with:
+2026-11-28T00:18:39.7449006Z   msbuild-architecture: x86
+2026-11-28T00:18:39.7449307Z ##[endgroup]
+2026-11-28T00:18:39.8621476Z [command]C:\ProgramData\Chocolatey\bin\vswhere.exe -products * -requires Microsoft.Component.MSBuild -property installationPath -latest
+2026-11-28T00:18:40.3691477Z C:\Program Files\Microsoft Visual Studio\2022\Enterprise
+2026-11-28T00:18:40.3988862Z ##[group]Run NuGet/setup-nuget@v2
+2026-11-28T00:18:40.3989252Z with:
+2026-11-28T00:18:40.3989604Z   nuget-version: latest
+2026-11-28T00:18:40.3989902Z ##[endgroup]
+2026-11-28T00:18:40.5074602Z (node:7936) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-28T00:18:40.5075694Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-28T00:18:40.8963954Z Installed nuget.exe version 8.0.0
+2026-11-28T00:18:40.9230107Z ##[group]Run actions/download-artifact@v4
+2026-11-28T00:18:40.9230482Z with:
+2026-11-28T00:18:40.9232795Z   github-token: ***
+2026-11-28T00:18:40.9233098Z   run-id: 46086955097
+2026-11-28T00:18:40.9233391Z   name: J2534Diag-R29-saved-review-evidence
+2026-11-28T00:18:40.9233695Z   path: accepted-evidence
+2026-11-28T00:18:40.9233942Z   merge-multiple: false
+2026-11-28T00:18:40.9234229Z   repository: bmcleid/J2534Diag-Independent
+2026-11-28T00:18:40.9234497Z env:
+2026-11-28T00:18:40.9234774Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:18:40.9235133Z ##[endgroup]
+2026-11-28T00:18:41.0747855Z Downloading single artifact
+2026-11-28T00:18:41.0828549Z (node:2784) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-28T00:18:41.0829316Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-28T00:18:41.1496159Z (node:2784) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-28T00:18:41.3952715Z Preparing to download the following artifacts:
+2026-11-28T00:18:41.3953967Z - J2534Diag-R29-saved-review-evidence (ID: 15239267830, Size: 181270, Expected Digest: sha256:a479d322b2f26bb498c601d1e93f8c8d55951045d905c1ab5e0241c8dade9920)
+2026-11-28T00:18:41.3987176Z Downloading artifact '15239267830' from 'bmcleid/J2534Diag-Independent'
+2026-11-28T00:18:41.7567747Z Redirecting to blob download url: https://productionresultssa15.blob.core.windows.net/actions-results/6c1c5020-6cfb-80a6-a5c1-645b8eca6b03/workflow-job-run-fc3a6062-b076-5967-a8f4-cf8bb9251426/artifacts/3e999b0c390f25946a12bcb5faedaad0811e5adf3e79181e4065a340c39f9e18.zip
+2026-11-28T00:18:41.7569076Z Starting download of artifact to: D:\a\J2534Diag-Independent\J2534Diag-Independent\accepted-evidence
+2026-11-28T00:18:41.9103307Z (node:2784) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-28T00:18:42.0049254Z SHA256 digest of downloaded artifact is a479d322b2f26bb498c601d1e93f8c8d55951045d905c1ab5e0241c8dade9920
+2026-11-28T00:18:42.0050030Z Artifact download completed successfully.
+2026-11-28T00:18:42.0050889Z Total of 1 artifact(s) downloaded
+2026-11-28T00:18:42.0058643Z Download artifact has finished successfully
+2026-11-28T00:18:42.0320270Z ##[group]Run $ErrorActionPreference = 'Stop'
+2026-11-28T00:18:42.0320904Z [36;1m$ErrorActionPreference = 'Stop'[0m
+2026-11-28T00:18:42.0321373Z [36;1mNew-Item -ItemType Directory -Force diagnostics,deliverables | Out-Null[0m
+2026-11-28T00:18:42.0321831Z [36;1m$source = '2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249'[0m
+2026-11-28T00:18:42.0322285Z [36;1mif ((git rev-parse HEAD) -ne $source) { throw 'Wrong recovery source' }[0m
+2026-11-28T00:18:42.0322745Z [36;1m$accepted = Get-Content accepted-evidence/verification.txt -Raw[0m
+2026-11-28T00:18:42.0323372Z [36;1mif (-not $accepted.Contains('Acceptance=PASS') -or -not $accepted.Contains("Source=$source")) { throw 'Missing accepted-source evidence' }[0m
+2026-11-28T00:18:42.0324031Z [36;1m& nuget restore J2534Diag.sln -NonInteractive[0m
+2026-11-28T00:18:42.0324438Z [36;1mif ($LASTEXITCODE -ne 0) { throw 'Pinned dependency restore failed' }[0m
+2026-11-28T00:18:42.0324979Z [36;1m$identity = Get-Content Services/BuildIdentity.cs -Raw[0m
+2026-11-28T00:18:42.0325455Z [36;1m$identity = $identity.Replace('SourceCommit = "workspace"', ('SourceCommit = "' + $source + '"'))[0m
+2026-11-28T00:18:42.0325986Z [36;1mSet-Content Services/BuildIdentity.cs $identity -Encoding UTF8[0m
+2026-11-28T00:18:42.0326631Z [36;1m& msbuild.exe J2534Diag.sln '/p:Configuration=Release' '/p:Platform=Any CPU' '/verbosity:minimal' 2>&1 | Tee-Object diagnostics/recovery-build.log[0m
+2026-11-28T00:18:42.0327269Z [36;1mif ($LASTEXITCODE -ne 0) { throw 'Pinned product rebuild failed' }[0m
+2026-11-28T00:18:42.0327766Z [36;1m$expected = 'C4A9B9CF8602D9D3DFCDA0CADB29792302E21EA4B62C9F2A7362FFF3F126AD0F'[0m
+2026-11-28T00:18:42.0328554Z [36;1mif ((Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash -ne $expected) { throw 'Recovered EXE differs from exact accepted executable; do not release' }[0m
+2026-11-28T00:18:42.0329384Z [36;1mCopy-Item accepted-evidence/generated/roundtrip.csv bin/Release/Example-Synthetic-Session.csv[0m
+2026-11-28T00:18:42.0329843Z [36;1m@([0m
+2026-11-28T00:18:42.0330089Z [36;1m  'J2534Diag R29 - Saved session review',[0m
+2026-11-28T00:18:42.0330466Z [36;1m  'Extract in a separate folder and keep R28 as fallback.',[0m
+2026-11-28T00:18:42.0330929Z [36;1m  'Run J2534Diag.exe; choose Saved session; choose Open saved session.',[0m
+2026-11-28T00:18:42.0331548Z [36;1m  'Example-Synthetic-Session.csv is synthetic test data, not a vehicle recording.',[0m
+2026-11-28T00:18:42.0332083Z [36;1m  'Review is offline and makes no ECU requests. No adapter connection is needed.',[0m
+2026-11-28T00:18:42.0332578Z [36;1m  'Only this app scalar Schema=2 report CSVs are supported; see owner R29 record.',[0m
+2026-11-28T00:18:42.0333064Z [36;1m  'Physical R29 adapter/vehicle acceptance remains unverified.',[0m
+2026-11-28T00:18:42.0333436Z [36;1m  "SourceCommit=$source"[0m
+2026-11-28T00:18:42.0333764Z [36;1m) | Set-Content bin/Release/R29_README.txt -Encoding UTF8[0m
+2026-11-28T00:18:42.0334303Z [36;1mCopy-Item accepted-evidence/runtime-manifest.txt bin/Release/ENGINEERING_PREVIEW_MANIFEST.txt[0m
+2026-11-28T00:18:42.0334954Z [36;1m$manifest = Get-Content accepted-evidence/runtime-manifest.txt -Raw[0m
+2026-11-28T00:18:42.0335370Z [36;1m$verified = 0[0m
+2026-11-28T00:18:42.0335707Z [36;1mforeach ($line in ($manifest -split [Environment]::NewLine)) {[0m
+2026-11-28T00:18:42.0336184Z [36;1m  if ($line -match '^([A-F0-9]{64})  (.+)$') {[0m
+2026-11-28T00:18:42.0336784Z [36;1m    if ((Get-FileHash (Join-Path bin/Release $Matches[2]) -Algorithm SHA256).Hash -ne $Matches[1]) { throw "Recovered payload differs: $($Matches[2])" }[0m
+2026-11-28T00:18:42.0337627Z [36;1m    $verified++[0m
+2026-11-28T00:18:42.0337920Z [36;1m  }[0m
+2026-11-28T00:18:42.0338179Z [36;1m}[0m
+2026-11-28T00:18:42.0338545Z [36;1mif ($verified -ne 9) { throw "Expected nine original payload hashes, saw $verified" }[0m
+2026-11-28T00:18:42.0339023Z [36;1mAdd-Type -AssemblyName System.IO.Compression.FileSystem[0m
+2026-11-28T00:18:42.0340711Z [36;1m$zip = Join-Path $pwd deliverables/J2534Diag-R29-Windows.zip[0m
+2026-11-28T00:18:42.0341244Z [36;1m[IO.Compression.ZipFile]::CreateFromDirectory((Join-Path $pwd bin/Release),$zip)[0m
+2026-11-28T00:18:42.0341757Z [36;1m$archive = [IO.Compression.ZipFile]::OpenRead($zip)[0m
+2026-11-28T00:18:42.0342090Z [36;1mtry {[0m
+2026-11-28T00:18:42.0342355Z [36;1m  foreach ($entry in $archive.Entries) {[0m
+2026-11-28T00:18:42.0342668Z [36;1m    $stream = $entry.Open()[0m
+2026-11-28T00:18:42.0343277Z [36;1m    try { $sha = [Security.Cryptography.SHA256]::Create(); $digest = [Convert]::ToHexString($sha.ComputeHash($stream)); $sha.Dispose() } finally { $stream.Dispose() }[0m
+2026-11-28T00:18:42.0344105Z [36;1m    if ($digest -ne (Get-FileHash (Join-Path bin/Release $entry.FullName) -Algorithm SHA256).Hash) { throw 'ZIP entry mismatch' }[0m
+2026-11-28T00:18:42.0344647Z [36;1m  }[0m
+2026-11-28T00:18:42.0344883Z [36;1m} finally { $archive.Dispose() }[0m
+2026-11-28T00:18:42.0345990Z [36;1m@("SourceCommit=$source","AcceptedRun=46086955097","RecoveryRun=$env:GITHUB_RUN_ID","ExecutableSHA256=$expected","PayloadHashesVerified=$verified","PackageBytes=$((Get-Item $zip).Length)","PackageSHA256=$((Get-FileHash $zip -Algorithm SHA256).Hash)",'AcceptanceRetested=False') | Tee-Object diagnostics/package-recovery-verification.txt[0m
+2026-11-28T00:18:42.0812489Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-28T00:18:42.0812890Z env:
+2026-11-28T00:18:42.0813217Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:18:42.0813585Z ##[endgroup]
+2026-11-28T00:18:43.9697583Z MSBuild auto-detection: using msbuild version '17.14.60.43110' from 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin'.
+2026-11-28T00:18:53.2636537Z Restoring NuGet package Newtonsoft.Json.13.0.3.
+2026-11-28T00:18:53.2637186Z Restoring NuGet package J2534-Sharp.1.0.0-CI00036.
+2026-11-28T00:18:53.9881703Z   GET https://api.nuget.org/v3-flatcontainer/j2534-sharp/1.0.0-ci00036/j2534-sharp.1.0.0-ci00036.nupkg
+2026-11-28T00:18:53.9883258Z   GET https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg
+2026-11-28T00:18:54.0018899Z   OK https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg 13ms
+2026-11-28T00:18:54.0047303Z   OK https://api.nuget.org/v3-flatcontainer/j2534-sharp/1.0.0-ci00036/j2534-sharp.1.0.0-ci00036.nupkg 16ms
+2026-11-28T00:18:54.5052613Z Installed J2534-Sharp 1.0.0-CI00036 from https://api.nuget.org/v3/index.json to C:\Users\runneradmin\.nuget\packages\j2534-sharp\1.0.0-ci00036 with content hash uLWH+B911nU6O8Y43BrV/Edn2ZHH+jPMlWQZu21bedhplC5+6x9ipq8LuqcB6x9rIwIBsKnphmfSiCCKpuvJbw==.
+2026-11-28T00:18:54.5099109Z Adding package 'J2534-Sharp.1.0.0-CI00036' to folder 'D:\a\J2534Diag-Independent\J2534Diag-Independent\packages'
+2026-11-28T00:18:54.5209394Z Added package 'J2534-Sharp.1.0.0-CI00036' to folder 'D:\a\J2534Diag-Independent\J2534Diag-Independent\packages'
+2026-11-28T00:18:54.5759456Z Installed Newtonsoft.Json 13.0.3 from https://api.nuget.org/v3/index.json to C:\Users\runneradmin\.nuget\packages\newtonsoft.json\13.0.3 with content hash HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ==.
+2026-11-28T00:18:54.5782429Z Adding package 'Newtonsoft.Json.13.0.3' to folder 'D:\a\J2534Diag-Independent\J2534Diag-Independent\packages'
+2026-11-28T00:18:54.5943981Z Added package 'Newtonsoft.Json.13.0.3' to folder 'D:\a\J2534Diag-Independent\J2534Diag-Independent\packages'
+2026-11-28T00:18:54.6269087Z   GET https://api.nuget.org/v3/vulnerabilities/index.json
+2026-11-28T00:18:54.6317705Z   OK https://api.nuget.org/v3/vulnerabilities/index.json 4ms
+2026-11-28T00:18:54.6812485Z   GET https://api.nuget.org/v3-vulnerabilities/2026.11.20.05.34.20/vulnerability.base.json
+2026-11-28T00:18:54.6822872Z   GET https://api.nuget.org/v3-vulnerabilities/2026.11.20.05.34.20/2026.11.27.17.35.08/vulnerability.update.json
+2026-11-28T00:18:54.6848376Z   OK https://api.nuget.org/v3-vulnerabilities/2026.11.20.05.34.20/vulnerability.base.json 3ms
+2026-11-28T00:18:54.6876859Z   OK https://api.nuget.org/v3-vulnerabilities/2026.11.20.05.34.20/2026.11.27.17.35.08/vulnerability.update.json 5ms
+2026-11-28T00:18:54.7653623Z 
+2026-11-28T00:18:54.7654162Z NuGet Config files used:
+2026-11-28T00:18:54.7654750Z     C:\Users\runneradmin\AppData\Roaming\NuGet\NuGet.Config
+2026-11-28T00:18:54.7655603Z     C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.FallbackLocation.config
+2026-11-28T00:18:54.7656463Z     C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.Offline.config
+2026-11-28T00:18:54.7656950Z 
+2026-11-28T00:18:54.7657099Z Feeds used:
+2026-11-28T00:18:54.7657477Z     https://api.nuget.org/v3/index.json
+2026-11-28T00:18:54.7657899Z     C:\Program Files (x86)\Microsoft SDKs\NuGetPackages\
+2026-11-28T00:18:54.7661766Z 
+2026-11-28T00:18:54.7662039Z Installed:
+2026-11-28T00:18:54.7727920Z     2 package(s) to packages.config projects
+2026-11-28T00:18:54.8968111Z MSBuild version 17.14.60+43b635718 for .NET Framework
+2026-11-28T00:18:54.9217951Z 
+2026-11-28T00:19:07.6045075Z D:\a\J2534Diag-Independent\J2534Diag-Independent\Forms\MisfireForm.cs(318,30): warning CS0168: The variable 'ex' is declared but never used [D:\a\J2534Diag-Independent\J2534Diag-Independent\J2534Diag.csproj]
+2026-11-28T00:19:07.6048420Z D:\a\J2534Diag-Independent\J2534Diag-Independent\Controls\SelectedVehicleControl.Designer.cs(14,44): warning CS0169: The field 'SelectedVehicleControl.lblModel' is never used [D:\a\J2534Diag-Independent\J2534Diag-Independent\J2534Diag.csproj]
+2026-11-28T00:19:07.6054018Z D:\a\J2534Diag-Independent\J2534Diag-Independent\Controls\SelectedVehicleControl.Designer.cs(13,44): warning CS0169: The field 'SelectedVehicleControl.lblMake' is never used [D:\a\J2534Diag-Independent\J2534Diag-Independent\J2534Diag.csproj]
+2026-11-28T00:19:07.6056100Z D:\a\J2534Diag-Independent\J2534Diag-Independent\Forms\MisfireForm.cs(22,31): warning CS0169: The field 'MisfireForm.MisfirePids' is never used [D:\a\J2534Diag-Independent\J2534Diag-Independent\J2534Diag.csproj]
+2026-11-28T00:19:07.6191683Z   J2534Diag -> D:\a\J2534Diag-Independent\J2534Diag-Independent\bin\Release\J2534Diag.exe
+2026-11-28T00:19:07.8134249Z SourceCommit=2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249
+2026-11-28T00:19:07.8137489Z AcceptedRun=46086955097
+2026-11-28T00:19:07.8140244Z RecoveryRun=46087182555
+2026-11-28T00:19:07.8142688Z ExecutableSHA256=C4A9B9CF8602D9D3DFCDA0CADB29792302E21EA4B62C9F2A7362FFF3F126AD0F
+2026-11-28T00:19:07.8144305Z PayloadHashesVerified=9
+2026-11-28T00:19:07.8146205Z PackageBytes=1897018
+2026-11-28T00:19:07.8148411Z PackageSHA256=0FDAD6D5E480BBE885B21FFC15BF7680FDF78791B29F7FCD6392BDE470B644F1
+2026-11-28T00:19:07.8150402Z AcceptanceRetested=False
+2026-11-28T00:19:07.8513383Z ##[group]Run actions/upload-artifact@v4
+2026-11-28T00:19:07.8513784Z with:
+2026-11-28T00:19:07.8514045Z   name: J2534Diag-R29-Windows
+2026-11-28T00:19:07.8514344Z   path: deliverables/J2534Diag-R29-Windows.zip
+2026-11-28T00:19:07.8514678Z   retention-days: 90
+2026-11-28T00:19:07.8514930Z   if-no-files-found: warn
+2026-11-28T00:19:07.8515255Z   compression-level: 6
+2026-11-28T00:19:07.8515536Z   overwrite: false
+2026-11-28T00:19:07.8515765Z   include-hidden-files: false
+2026-11-28T00:19:07.8516025Z env:
+2026-11-28T00:19:07.8516317Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:19:07.8516668Z ##[endgroup]
+2026-11-28T00:19:08.0171095Z (node:5384) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-28T00:19:08.0171984Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-28T00:19:08.0222244Z With the provided path, there will be 1 file uploaded
+2026-11-28T00:19:08.0226509Z Artifact name is valid!
+2026-11-28T00:19:08.0228639Z Root directory input is valid!
+2026-11-28T00:19:08.3141016Z Beginning upload of artifact content to blob storage
+2026-11-28T00:19:08.3852648Z (node:5384) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-28T00:19:08.9049225Z Uploaded bytes 1896130
+2026-11-28T00:19:08.9480966Z Finished uploading artifact content to blob storage!
+2026-11-28T00:19:08.9481965Z SHA256 digest of uploaded artifact zip is 5dd6ebcb76725228b1d22026729910e4cb469f20aafd85a4e72c2e63a3477d94
+2026-11-28T00:19:08.9484256Z Finalizing artifact upload
+2026-11-28T00:19:09.3770211Z Artifact J2534Diag-R29-Windows.zip successfully finalized. Artifact ID 15240080062
+2026-11-28T00:19:09.3771191Z Artifact J2534Diag-R29-Windows has been successfully uploaded! Final size is 1896130 bytes. Artifact ID is 15240080062
+2026-11-28T00:19:09.3781291Z Artifact download URL: https://github.com/bmcleid/J2534Diag-Independent/actions/runs/46087182555/artifacts/15240080062
+2026-11-28T00:19:09.4058232Z ##[group]Run $ErrorActionPreference = 'Stop'
+2026-11-28T00:19:09.4058734Z [36;1m$ErrorActionPreference = 'Stop'[0m
+2026-11-28T00:19:09.4059089Z [36;1m$tag = 'j2534diag-r29-2aa3d43a0c5e'[0m
+2026-11-28T00:19:09.4059984Z [36;1mgh release create $tag deliverables/J2534Diag-R29-Windows.zip --repo $env:GITHUB_REPOSITORY --draft --target '2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249' --title 'J2534Diag R29 saved-session review' --notes-file docs/R29_SAVED_SESSION_REVIEW.md[0m
+2026-11-28T00:19:09.4061004Z [36;1mif ($LASTEXITCODE -ne 0) { throw 'Draft preservation failed; uploaded package remains available' }[0m
+2026-11-28T00:19:09.4061747Z [36;1mgh release view $tag --repo $env:GITHUB_REPOSITORY --json url,tagName,isDraft,assets | Tee-Object diagnostics/draft-release.json[0m
+2026-11-28T00:19:09.4094502Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-28T00:19:09.4094882Z env:
+2026-11-28T00:19:09.4095313Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:19:09.4097847Z   GH_TOKEN: ***
+2026-11-28T00:19:09.4098152Z ##[endgroup]
+2026-11-28T00:19:14.6789167Z https://github.com/bmcleid/J2534Diag-Independent/releases/tag/untagged-993a71743095eeb69d7e
+2026-11-28T00:19:15.3450258Z {"assets":[{"apiUrl":"https://api.github.com/repos/bmcleid/J2534Diag-Independent/releases/assets/802563706","contentType":"application/zip","createdAt":"2026-11-28T00:19:14Z","digest":"sha256:0fdad6d5e480bbe885b21ffc15bf7680fdf78791b29f7fcd6392bde470b644f1","downloadCount":0,"id":"RA_kwDOVFSVOM4v1iZ6","label":"","name":"J2534Diag-R29-Windows.zip","size":1897018,"state":"uploaded","updatedAt":"2026-11-28T00:19:14Z","url":"https://github.com/bmcleid/J2534Diag-Independent/releases/download/untagged-993a71743095eeb69d7e/J2534Diag-R29-Windows.zip"}],"isDraft":true,"tagName":"j2534diag-r29-2aa3d43a0c5e","url":"https://github.com/bmcleid/J2534Diag-Independent/releases/tag/untagged-993a71743095eeb69d7e"}
+2026-11-28T00:19:15.4087081Z ##[group]Run actions/upload-artifact@v4
+2026-11-28T00:19:15.4087480Z with:
+2026-11-28T00:19:15.4087785Z   name: J2534Diag-R29-package-recovery-evidence
+2026-11-28T00:19:15.4088164Z   path: diagnostics/**
+2026-11-28T00:19:15.4088441Z   retention-days: 30
+2026-11-28T00:19:15.4088831Z   if-no-files-found: warn
+2026-11-28T00:19:15.4089107Z   compression-level: 6
+2026-11-28T00:19:15.4089375Z   overwrite: false
+2026-11-28T00:19:15.4089712Z   include-hidden-files: false
+2026-11-28T00:19:15.4089988Z env:
+2026-11-28T00:19:15.4090319Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:19:15.4090692Z ##[endgroup]
+2026-11-28T00:19:15.5762424Z (node:644) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-28T00:19:15.5763894Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-28T00:19:15.5823845Z With the provided path, there will be 3 files uploaded
+2026-11-28T00:19:15.5828054Z Artifact name is valid!
+2026-11-28T00:19:15.5829716Z Root directory input is valid!
+2026-11-28T00:19:15.8494499Z Beginning upload of artifact content to blob storage
+2026-11-28T00:19:15.8682484Z (node:644) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-28T00:19:16.0080463Z Uploaded bytes 1354
+2026-11-28T00:19:16.0495878Z Finished uploading artifact content to blob storage!
+2026-11-28T00:19:16.0496772Z SHA256 digest of uploaded artifact zip is 2bdc6c12c20613124d80ff792b31b157e051ebe8ec3a3240e595315a33e736ae
+2026-11-28T00:19:16.0498803Z Finalizing artifact upload
+2026-11-28T00:19:16.3971828Z Artifact J2534Diag-R29-package-recovery-evidence.zip successfully finalized. Artifact ID 15239258129
+2026-11-28T00:19:16.3972987Z Artifact J2534Diag-R29-package-recovery-evidence has been successfully uploaded! Final size is 1354 bytes. Artifact ID is 15239258129
+2026-11-28T00:19:16.3980029Z Artifact download URL: https://github.com/bmcleid/J2534Diag-Independent/actions/runs/46087182555/artifacts/15239258129
+2026-11-28T00:19:16.4295109Z Post job cleanup.
+2026-11-28T00:19:16.6034109Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-28T00:19:16.6313543Z git version 2.56.1.windows.1
+2026-11-28T00:19:16.6409254Z Temporarily overriding HOME='D:\a\_temp\11bdb624-03ad-461c-a1b4-8b6df6a1f83a' before making global git config changes
+2026-11-28T00:19:16.6425498Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-28T00:19:16.6428364Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\J2534Diag-Independent\J2534Diag-Independent
+2026-11-28T00:19:16.6730670Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-28T00:19:16.7003569Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-28T00:19:17.1351292Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-28T00:19:17.1591702Z http.https://github.com/.extraheader
+2026-11-28T00:19:17.1630064Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-11-28T00:19:17.1935909Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-28T00:19:17.6436966Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-28T00:19:17.6710435Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-28T00:19:18.1242189Z Cleaning up orphan processes
+2026-11-28T00:19:18.1581525Z Terminate orphan process: pid (1172) (VBCSCompiler)
+2026-11-28T00:19:18.1722103Z Terminate orphan process: pid (5772) (conhost)
+2026-11-28T00:19:18.1857540Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/download-artifact@v4, actions/upload-artifact@v4, microsoft/setup-msbuild@v2, NuGet/setup-nuget@v2. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

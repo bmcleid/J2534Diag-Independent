@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -18,13 +18,6 @@ namespace J2534Diag
 {
     public partial class FuelTrimForm : Form
     {
-        private enum LiveDataProtocol
-        {
-            Auto,
-            Obd,
-            Uds
-        }
-
         public struct MSG
         {
             public string id;
@@ -38,18 +31,12 @@ namespace J2534Diag
         readonly List<UdsPid> UdsPids;
         private readonly Dictionary<byte, UdsPid> _udsPidsByDidLowByte;
 
-        // ISO-TP reassembly state
-        List<byte> isotpBuffer = new List<byte>();
-        int isotpExpectedLength = 0;
-        bool isotpCollecting = false;
-
-        DateTime lastFrameTime = DateTime.Now;
-        string partialVin = "";
         private const string ReceiveOwner = "FUEL_TRIM";
         private bool _ownsReceiveChannel;
         private Thread _monitorThread;
         private Thread _pollingThread;
         private CancellationTokenSource _cts;
+        private FuelTrimPollingGate _pollReplyGate;
         private const int ThrottleBins = 10;
         private const int RpmBins = 10;
         private const int cellHeight = 40; // or any value you prefer
@@ -57,33 +44,181 @@ namespace J2534Diag
         private double?[,] trimGridBank1 = new double?[ThrottleBins, RpmBins];
         private double?[,] trimGridBank2 = new double?[ThrottleBins, RpmBins];
 
-        private double lastThrottle = 0;
-        private double lastRpm = 0;
-        private double lastStft1 = 0, lastLtft1 = 0;
-        private double lastStft2 = 0, lastLtft2 = 0;
-        private DateTime _liveDataProtocolWindowStart = DateTime.MinValue;
-        private DateTime _lastObdResponseTime = DateTime.MinValue;
-        private DateTime _lastUdsResponseTime = DateTime.MinValue;
-        private readonly TimeSpan _liveDataProtocolProbeWindow = TimeSpan.FromMilliseconds(1500);
-
+        private readonly FuelTrimSampleState _samples = new FuelTrimSampleState(Stopwatch.Frequency * 2);
+        private readonly ComboBox _responseSource = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList, Width = 285
+        };
+        private System.Windows.Forms.Timer _freshnessTimer;
+        private int _displayGeneration;
+        private readonly object _sampleQueueLock = new object();
+        private readonly Dictionary<string, Tuple<FuelTrimInput, long, int>> _pendingSamples =
+            new Dictionary<string, Tuple<FuelTrimInput, long, int>>();
+        private bool _sampleRefreshQueued;
+        private readonly FuelTrimSessionReport _sessionReport = new FuelTrimSessionReport(Stopwatch.Frequency);
+        private readonly Button _exportButton = new Button { Text = "Export session…", AutoSize = true };
+        private readonly Label _sessionHealth = new Label { Text = "Session: Idle", AutoSize = true, ForeColor = Color.DarkBlue };
+        private Action<string> _disconnectReporter;
+        private Func<DialogResult> _chooseUnsavedReportAction;
+        private Func<bool> _saveUnsavedReport;
+        private Action _beforeCloseExport;
+        private bool _layoutBusy;
         public bool BatchMode { get; private set; } = false;
 
         public FuelTrimForm(J2534Manager j2534Manager)
         {
             InitializeComponent();
 
+            Text = "Fuel Trims — " + BuildIdentity.Description;
             SetupGrids();
 
             ObdPids = ObdPidMap.GetObdPids(useImperialUnits);
             UdsPids = UdsPidMap.GetUdsPids(useImperialUnits);
             _udsPidsByDidLowByte = UdsPids.ToDictionary(pid => pid.DidLowByte);
             SetupPidDisplayControls();
-            UpdateTrimGridDisplay();
+            flpActions.Controls.Add(new Label { Text = "Response source:", AutoSize = true });
+            flpActions.Controls.Add(_responseSource);
+            flpActions.Controls.Add(new Label
+            {
+                Text = "Mode 01 polling only. 2 s freshness (app policy). Grids show observed history; address is not ECU identity.",
+                AutoSize = true
+            });
+            flpActions.Controls.Add(_exportButton);
+            _exportButton.Click += (sender, args) => ExportSession();
+            _chooseUnsavedReportAction = () => MessageBox.Show(this,
+                _sessionReport.ObservationsSinceExport + " new observations since the last successful export.\n" +
+                "The report has unsaved changes or the current connection must close.\n" +
+                "Save the current bounded session report before closing?\nYes: choose a file, disconnect, then save. No: disconnect without saving. Cancel: keep open.",
+                "Session report", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            _saveUnsavedReport = ExportSession;
+            flpActions.Controls.Add(new Label { Text = BuildIdentity.Description, AutoSize = true });
+            flpActions.Controls.Add(_sessionHealth);
+            SizeChanged += (sender, args) => LayoutFuelPanels();
+            pnlGrids.SizeChanged += (sender, args) => LayoutFuelPanels();
+            lblBank1.Text = "Bank 1 observed history";
+            lblBank2.Text = "Bank 2 observed history";
+            _responseSource.SelectedIndexChanged += (sender, args) =>
+            {
+                _sessionReport.SelectSource(_responseSource.SelectedItem as string, DateTime.UtcNow);
+                trimGridBank1 = new double?[ThrottleBins, RpmBins];
+                trimGridBank2 = new double?[ThrottleBins, RpmBins];
+                RefreshFuelDisplay(false);
+            };
+            _freshnessTimer = new System.Windows.Forms.Timer(components) { Interval = 250 };
+            _freshnessTimer.Tick += (sender, args) =>
+            {
+                if (_cts != null && _cts.IsCancellationRequested)
+                {
+                    _sessionReport.Stop(Stopwatch.GetTimestamp(), DateTime.UtcNow, _sessionReport.SessionState);
+                    _samples.Clear();
+                }
+                _sessionReport.Refresh(Stopwatch.GetTimestamp(), DateTime.UtcNow);
+                UpdateSessionHealth();
+                RefreshFuelDisplay(false);
+            };
+            _freshnessTimer.Start();
+            RefreshFuelDisplay(false);
 
             // Start everything after the form is loaded
             this.Load += Form1_Load;
             this.FormClosing += Form1_FormClosing;
             this.j2534Manager = j2534Manager;
+            _disconnectReporter = outcome => _sessionReport.Event("Disconnect", outcome, DateTime.UtcNow);
+            j2534Manager.DisconnectOutcomeChanged += _disconnectReporter;
+            UpdateSessionHealth();
+            LayoutFuelPanels();
+        }
+
+        private void UpdateSessionHealth()
+        {
+            string text = _sessionReport.HealthText();
+            if (_sessionHealth.Text == text) return;
+            _sessionHealth.Text = text;
+            LayoutFuelPanels();
+        }
+        private void DiscardPendingSamples(FuelTrimEvidenceCounter counter)
+        {
+            lock (_sampleQueueLock)
+            {
+                _sessionReport.Account(counter, _pendingSamples.Count);
+                _pendingSamples.Clear(); _sampleRefreshQueued = false;
+            }
+        }
+
+        private void LayoutFuelPanels()
+        {
+            if (_layoutBusy || ClientSize.Width <= 12) return;
+            _layoutBusy = true;
+            try
+            {
+                int availableWidth = Math.Max(1, ClientSize.Width - 12);
+                int rows = Math.Max(1, (int)Math.Ceiling(6 * 146.0 / availableWidth));
+                int gaugeHeight = Math.Min(264, rows * 128 + 8);
+                flpPids.SetBounds(6, 6, availableWidth, gaugeHeight);
+                _sessionHealth.MaximumSize = new Size(Math.Max(1, availableWidth - 12), 0);
+                int actionHeight = Math.Max(36, flpActions.GetPreferredSize(new Size(availableWidth, 0)).Height);
+                flpActions.SetBounds(6, flpPids.Bottom + 4, availableWidth, actionHeight);
+                pnlGrids.SetBounds(6, flpActions.Bottom + 6, availableWidth,
+                    Math.Max(80, ClientSize.Height - flpActions.Bottom - 12));
+                bool stacked = pnlGrids.ClientSize.Width < 1000;
+                int width = Math.Max(320, stacked ? pnlGrids.ClientSize.Width - 28 : (pnlGrids.ClientSize.Width - 32) / 2);
+                int height = Math.Max(180, Math.Min(424, pnlGrids.ClientSize.Height - 30));
+                int secondX = stacked ? 0 : width + 12, secondY = stacked ? height + 34 : 0;
+                Point scroll = pnlGrids.AutoScrollPosition;
+                lblBank1.Location = new Point(scroll.X, scroll.Y);
+                dgvTrimGridBank1.Location = new Point(scroll.X, scroll.Y + 22);
+                lblBank2.Location = new Point(scroll.X + secondX, scroll.Y + secondY);
+                dgvTrimGridBank2.Location = new Point(scroll.X + secondX, scroll.Y + secondY + 22);
+                foreach (var grid in new[] { dgvTrimGridBank1, dgvTrimGridBank2 })
+                {
+                    grid.Size = new Size(width, height);
+                    grid.ScrollBars = ScrollBars.Both;
+                    grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+                }
+                pnlGrids.AutoScrollMinSize = new Size(width, secondY + height + 24);
+            }
+            finally { _layoutBusy = false; }
+        }
+
+        private bool ExportSession()
+        {
+            using (var dialog = new SaveFileDialog { Filter = "Session CSV (*.csv)|*.csv", DefaultExt = "csv",
+                FileName = "J2534Diag-" + BuildIdentity.Release + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".csv" })
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK) return false;
+                try { ExportSessionTo(dialog.FileName); return true; }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "Session export failed: " + ex.Message, "Export", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return false;
+                }
+            }
+        }
+        internal bool ConfirmReportBeforeClose()
+        {
+            return ConfirmReportForApplicationClose(null, false);
+        }
+        internal bool ConfirmReportForApplicationClose(Action disconnect, bool connectionRetained)
+        {
+            if (!_sessionReport.HasUnexportedChanges && !connectionRetained) return true;
+            DialogResult decision = _chooseUnsavedReportAction();
+            if (decision == DialogResult.No) { disconnect?.Invoke(); return true; }
+            if (decision != DialogResult.Yes) return false;
+            // The actual Save dialog comes first. Cancel must not disconnect.
+            // ExportSessionTo runs this hook only after a destination is chosen,
+            // before capturing the final disconnect events and metadata.
+            Action previous = _beforeCloseExport;
+            _beforeCloseExport = disconnect;
+            try { return _saveUnsavedReport() && !_sessionReport.HasUnexportedChanges; }
+            finally { _beforeCloseExport = previous; }
+        }
+        internal void ExportSessionTo(string path)
+        {
+            _beforeCloseExport?.Invoke();
+            _sessionReport.Refresh(Stopwatch.GetTimestamp(), DateTime.UtcNow);
+            _sessionReport.Export(path, BuildIdentity.Description + " / " + BuildIdentity.SourceCommit,
+                BuildIdentity.ExecutableSha256(), j2534Manager.LastDisconnectOutcome);
+            UpdateSessionHealth();
         }
 
         private void SetupPidDisplayControls()
@@ -131,6 +266,7 @@ namespace J2534Diag
 
         private void btnClearFuelTrims_Click(object sender, EventArgs e)
         {
+            _sessionReport.ChartsCleared(DateTime.UtcNow);
             trimGridBank1 = new double?[ThrottleBins, RpmBins];
             trimGridBank2 = new double?[ThrottleBins, RpmBins];
             UpdateTrimGridDisplay();
@@ -173,11 +309,21 @@ namespace J2534Diag
                 Debug.WriteLine("Fuel trim cannot start; receiver owned by " + j2534Manager.ReceiveGate.CurrentOwner);
                 return;
             }
+            DiscardPendingSamples(FuelTrimEvidenceCounter.InactiveOrGenerationDiscarded);
+            _sessionReport.Begin(j2534Manager.CaptureOnlyMode ? "Capture-only" :
+                "Managed active diagnostics / " + j2534Manager.BitMode + " / FuelTrims Mode01", j2534Manager.Vin, DateTime.UtcNow);
+            _samples.Clear();
+            _responseSource.Items.Clear();
+            trimGridBank1 = new double?[ThrottleBins, RpmBins];
+            trimGridBank2 = new double?[ThrottleBins, RpmBins];
+            int generation = Interlocked.Increment(ref _displayGeneration);
+            RefreshFuelDisplay(false);
             _ownsReceiveChannel = true;
+            UpdateSessionHealth();
             _cts = new CancellationTokenSource();
-            _liveDataProtocolWindowStart = DateTime.UtcNow;
-            _lastObdResponseTime = DateTime.MinValue;
-            _lastUdsResponseTime = DateTime.MinValue;
+            var sessionCancellation = _cts;
+            _pollReplyGate = new FuelTrimPollingGate();
+            var sessionPollGate = _pollReplyGate;
 
             try
             {
@@ -204,9 +350,9 @@ namespace J2534Diag
                 j2534Manager.Channel.StartMsgFilter(passFilter);
 
                 //Start background CAN monitor
-                _monitorThread = new Thread(() =>
+                _monitorThread = new Thread(() => ChannelLifecyclePolicy.RunCoupledWorker(sessionCancellation, () =>
                 {
-                    while (!_cts.IsCancellationRequested && j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
+                    while (!sessionCancellation.IsCancellationRequested && j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
                     {
                         try
                         {
@@ -214,292 +360,153 @@ namespace J2534Diag
                             //Debug.WriteLine($"Received {resp.Messages.Length} messages at {DateTime.Now:HH:mm:ss.fff}");
                             foreach (var msg in resp.Messages)
                             {
-                                if (_cts.IsCancellationRequested || j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed)
+                                if (sessionCancellation.IsCancellationRequested || j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed)
                                 {
                                     return;
                                 }
                                 // Process immediately
-                                ParseIsoTpMessage(msg.Data, j2534Manager.Channel);
+                                QueueScalarSample(msg.Data, unchecked((uint)msg.RxStatus), generation);
                             }
                         }
-                        catch
+                        catch (Exception ex)
                         {
+                            _sessionReport.SetStatus("Driver error", ex.Message, DateTime.UtcNow);
+                            _sessionReport.Event("ReceiveError", ex.GetType().Name + ": " + ex.Message, DateTime.UtcNow);
                             return;
                         }
                         Thread.Sleep(1);
                     }
-                })
+                }, ex => { _sessionReport.SetStatus("Driver error", ex.Message, DateTime.UtcNow);
+                    _sessionReport.Event("WorkerError", ex.ToString(), DateTime.UtcNow); Debug.WriteLine(ex); }))
                 { IsBackground = true };
                 _monitorThread.Start();
 
-                // Start polling thread
-                _pollingThread = new Thread(() =>
+                // One pending PID, bounded reply wait and cooperative quiet stop.
+                _pollingThread = new Thread(() => ChannelLifecyclePolicy.RunCoupledWorker(sessionCancellation, () =>
                 {
-
-                    while (!_cts.IsCancellationRequested && j2534Manager.Channel != null && !j2534Manager.Channel.IsDisposed)
-                    {
-                        var protocol = GetLiveDataProtocolToPoll();
-                        if (protocol == LiveDataProtocol.Uds)
+                    sessionPollGate.Run(
+                        () => ObdPids.Where(p => p.Enabled).Select(p => p.Pid).ToArray(),
+                        pid =>
                         {
-                            foreach (var pid in UdsPids.Where(p => p.Enabled))
-                            {
-                                if (_cts.IsCancellationRequested || j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed)
-                                {
-                                    break;
-                                }
-
-                                var request = BuildUdsPidRequest(pid, j2534Manager.BitMode);
-                                if (_cts.IsCancellationRequested || j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed) return;
-                                try
-                                {
-                                    Debug.WriteLine($"Sending UDS DID request: {BitConverter.ToString(request)} (Time: {DateTime.Now:HH:mm:ss.fff})");
-                                    j2534Manager.SendDiagnosticMessage(request);
-                                }
-                                catch (J2534Exception ex)
-                                {
-                                    Debug.WriteLine($"Error sending message: {ex.Message}");
-                                    return;
-                                }
-                                Thread.Sleep(2);
-                            }
-                        }
-                        else
-                        {
-                            foreach (var pid in ObdPids.Where(p => p.Enabled))
-                            {
-                                if (_cts.IsCancellationRequested || j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed)
-                                {
-                                    break;
-                                }
-
-                                var request = BuildObdPidRequest(pid, j2534Manager.BitMode);
-                                if (_cts.IsCancellationRequested || j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed) return;
-                                try
-                                {
-                                    Debug.WriteLine($"Sending OBD PID request: {BitConverter.ToString(request)} (Time: {DateTime.Now:HH:mm:ss.fff})");
-                                    j2534Manager.SendDiagnosticMessage(request);
-                                }
-                                catch (J2534Exception ex)
-                                {
-                                    Debug.WriteLine($"Error sending message: {ex.Message}");
-                                    return;
-                                }
-                                Thread.Sleep(2);
-                            }
-                        }
-
-                        Thread.Sleep(protocol == LiveDataProtocol.Uds ? 10 : 5);
-
-                    }
-                })
+                            if (sessionCancellation.IsCancellationRequested ||
+                                j2534Manager.Channel == null || j2534Manager.Channel.IsDisposed) return;
+                            var definition = ObdPids.First(p => p.Pid == pid);
+                            j2534Manager.SendDiagnosticMessage(
+                                BuildObdPidRequest(definition, j2534Manager.BitMode));
+                        },
+                        sessionCancellation.Token);
+                    string outcome = sessionPollGate.LastStopReason;
+                    _sessionReport.SetStatus(outcome == "Cancelled" ? "Stopped" : outcome, outcome, DateTime.UtcNow);
+                }, ex => { _sessionReport.SetStatus("Driver error", ex.Message, DateTime.UtcNow);
+                    _sessionReport.Event("WorkerError", ex.ToString(), DateTime.UtcNow); Debug.WriteLine(ex); }))
                 { IsBackground = true };
                 _pollingThread.Start();
             }
             catch (J2534Exception ex)
             {
                 Debug.WriteLine($"Error starting API and threads: {ex.Message}");
+                _sessionReport.SetStatus("Driver error", ex.Message, DateTime.UtcNow);
+                _sessionReport.Event("StartupError", ex.Message, DateTime.UtcNow);
                 StopListening();
             }
         }
 
-        private byte[] BuildUdsPidRequest(UdsPid pid, BitType bitMode)
+        private void QueueScalarSample(byte[] data, uint rxStatus, int generation)
         {
-            var request = new byte[12];
-
-            if (bitMode == BitType.BITS_11)
+            FuelTrimInput input;
+            if (!FuelTrimScalarFrame.TryRead(data, rxStatus, out input))
             {
-                request[0] = 0x00;
-                request[1] = 0x00;
-                request[2] = 0x07;
-                request[3] = 0xDF;
-            }
-            else
-            {
-                Array.Copy(pid.ArbId, 0, request, 0, 4);
-            }
-
-            request[4] = pid.Length;
-            request[5] = pid.Service;
-            request[6] = pid.DidHighByte;
-            request[7] = pid.DidLowByte;
-            return request;
-        }
-
-        void ParseIsoTpMessage(byte[] data, Channel channel)
-        {
-            if (data == null || data.Length < 5) return; // 4 bytes CAN ID + at least 1 byte payload
-
-
-            //// Only process messages from known UDS/OBD2 response IDs
-            //uint canId = (uint)(data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3]);
-            //if (canId != 0x07E8 && canId != 0x07E0 && canId != 0x07DF)
-            //    return;
-
-            var payload = data.Skip(4).ToArray();
-            if (payload.Length == 0) return;
-
-            Debug.WriteLine($"Processing CAN ID: {BitConverter.ToString(data.Take(4).ToArray())} Payload: {BitConverter.ToString(payload)} (Time: {DateTime.Now:HH:mm:ss.fff})");
-
-            byte pci = payload[0];
-            int frameType = (pci & 0xF0) >> 4;
-
-            // Update timestamp for ISO-TP timeout detection
-            lastFrameTime = DateTime.Now;
-
-            switch (frameType)
-            {
-                case 0x0: // Single Frame
-                    {
-                        int sfLen = pci & 0x0F;
-                        if (payload.Length >= 1 + sfLen)
-                        {
-                            var msg = payload.Skip(1).Take(sfLen).ToArray();
-                            TryPrintPidValue(msg);
-                        }
-                        //else
-                        //Console.WriteLine("Single Frame: Payload too short");
-                        break;
-                    }
-                case 0x1: // First Frame
-                    {
-                        if (payload.Length >= 2)
-                        {
-                            var responseCanId = data.Take(4).ToArray();
-
-                            isotpExpectedLength = ((pci & 0x0F) << 8) + payload[1];
-                            isotpBuffer.Clear();
-                            isotpBuffer.AddRange(payload.Skip(2));
-                            isotpCollecting = true;
-
-                            // Insert a small delay to ensure timing is right for flow control
-                            Thread.Sleep(2);
-
-                            // Always send FC to the sender of the First Frame
-                            SendFlowControl(responseCanId, blockSize: 0, separationTime: 2);
-                        }
-                        break;
-                    }
-                case 0x2: // Consecutive Frame
-                    {
-                        int seqNum = pci & 0x0F;
-                        if (payload.Length > 1 && isotpCollecting)
-                        {
-                            isotpBuffer.AddRange(payload.Skip(1));
-
-                            if (isotpBuffer.Count >= isotpExpectedLength)
-                            {
-                                isotpCollecting = false;
-                                var msg = isotpBuffer.Take(isotpExpectedLength).ToArray();
-                                TryPrintPidValue(msg);
-                            }
-                        }
-                        break;
-                    }
-                case 0x3: // Flow Control
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        void SendFlowControl(byte[] canId, int blockSize = 0, int separationTime = 0)
-        {
-            var fc = new byte[12];
-
-            if (j2534Manager.BitMode == BitType.BITS_11)
-            {
-                fc[0] = canId[0];
-                fc[1] = canId[1];
-                fc[2] = canId[2];
-                fc[3] = (byte)(canId[3] - 0x08);
-            }
-            else
-            {
-                fc[0] = canId[0];
-                fc[1] = canId[1];
-                fc[2] = canId[3];
-                fc[3] = canId[2];
-            }
-
-            fc[4] = 0x30;
-            j2534Manager.SendDiagnosticMessage(fc);
-        }
-
-        private LiveDataProtocol GetLiveDataProtocolToPoll()
-        {
-            if (_lastObdResponseTime != DateTime.MinValue)
-            {
-                return LiveDataProtocol.Obd;
-            }
-
-            if (_lastUdsResponseTime != DateTime.MinValue)
-            {
-                return LiveDataProtocol.Uds;
-            }
-
-            if (_liveDataProtocolWindowStart == DateTime.MinValue)
-            {
-                _liveDataProtocolWindowStart = DateTime.UtcNow;
-            }
-
-            var elapsed = DateTime.UtcNow - _liveDataProtocolWindowStart;
-            if (elapsed < _liveDataProtocolProbeWindow)
-            {
-                return LiveDataProtocol.Obd;
-            }
-
-            if (elapsed < _liveDataProtocolProbeWindow + _liveDataProtocolProbeWindow)
-            {
-                return LiveDataProtocol.Uds;
-            }
-
-            _liveDataProtocolWindowStart = DateTime.UtcNow;
-            return LiveDataProtocol.Obd;
-        }
-
-        private void TryPrintPidValue(byte[] payload)
-        {
-            if (payload.Length < 2) return;
-
-            if (payload[0] == 0x41)
-            {
-                _lastObdResponseTime = DateTime.UtcNow;
-                TryPrintObdPidValue(payload);
+                _sessionReport.Account(FuelTrimEvidenceCounter.NonScalarOrInvalidIgnored);
                 return;
             }
-
-            if (payload.Length >= 4 && payload[0] == 0x62 && payload[1] == 0xF4)
+            _sessionReport.Account(FuelTrimEvidenceCounter.EligibleScalarFrames);
+            // A retired callback must not acknowledge a new session's pending PID.
+            if (generation != Volatile.Read(ref _displayGeneration) || !_ownsReceiveChannel ||
+                _cts == null || _cts.IsCancellationRequested)
             {
-                _lastUdsResponseTime = DateTime.UtcNow;
-                TryPrintUdsPidValue(payload);
-            }
-        }
-
-        private void TryPrintObdPidValue(byte[] payload)
-        {
-            if (payload.Length < 2 || payload[0] != 0x41) return;
-
-            byte pid = payload[1];
-            var pidDef = ObdPids.FirstOrDefault(p => p.Pid == pid);
-            if (pidDef != null)
-            {
-                var data = payload.Skip(2).ToArray();
-                double value = pidDef.Formula(data);
-                UpdateLiveData(pid, value, pidDef.Unit);
-            }
-        }
-
-        private void TryPrintUdsPidValue(byte[] payload)
-        {
-            byte didLowByte = payload[2];
-            if (!_udsPidsByDidLowByte.TryGetValue(didLowByte, out var pidDef))
-            {
+                _sessionReport.Account(FuelTrimEvidenceCounter.InactiveOrGenerationDiscarded);
                 return;
             }
+            if (input.Protocol == "Mode01") _pollReplyGate?.Observe(input.Pid);
+            long received = Stopwatch.GetTimestamp();
+            if (!IsHandleCreated || IsDisposed || Disposing)
+            {
+                _sessionReport.Account(FuelTrimEvidenceCounter.UnavailableUiDiscarded);
+                return;
+            }
+            lock (_sampleQueueLock)
+            {
+                // Stop may retire the generation while this callback waits for the queue lock.
+                // Recheck inside the same lock used to drain retired pending entries.
+                if (generation != Volatile.Read(ref _displayGeneration) || !_ownsReceiveChannel ||
+                    _cts == null || _cts.IsCancellationRequested)
+                {
+                    _sessionReport.Account(FuelTrimEvidenceCounter.InactiveOrGenerationDiscarded);
+                    return;
+                }
+                string key = input.SourceKey + "/" + input.Pid;
+                if (!_pendingSamples.ContainsKey(key) && _pendingSamples.Count >= 96)
+                {
+                    _sessionReport.Account(FuelTrimEvidenceCounter.QueueCapacityDiscarded);
+                    return;
+                }
+                if (_pendingSamples.ContainsKey(key)) _sessionReport.Account(FuelTrimEvidenceCounter.CoalescedBeforeAcceptance);
+                _pendingSamples[key] = Tuple.Create(input, received, generation);
+                if (_sampleRefreshQueued) return;
+                _sampleRefreshQueued = true;
+            }
+            try { BeginInvoke(new Action(FlushScalarSamples)); }
+            catch (InvalidOperationException) { DiscardPendingSamples(FuelTrimEvidenceCounter.UnavailableUiDiscarded); }
+        }
 
-            var data = payload.Skip(3).ToArray();
-            double value = pidDef.Formula(data);
-            UpdateLiveData(didLowByte, value, pidDef.Unit);
+        private void FlushScalarSamples()
+        {
+            List<Tuple<FuelTrimInput, long, int>> pending;
+            lock (_sampleQueueLock)
+            {
+                pending = _pendingSamples.Values.ToList();
+                _pendingSamples.Clear();
+                _sampleRefreshQueued = false;
+            }
+            if (IsDisposed || Disposing || !_ownsReceiveChannel ||
+                _cts == null || _cts.IsCancellationRequested)
+            {
+                _sessionReport.Account(FuelTrimEvidenceCounter.InactiveOrGenerationDiscarded, pending.Count);
+                return;
+            }
+            bool accepted = false;
+            foreach (var queued in pending)
+            {
+                if (queued.Item3 != _displayGeneration)
+                { _sessionReport.Account(FuelTrimEvidenceCounter.InactiveOrGenerationDiscarded); continue; }
+                FuelTrimInput input = queued.Item1;
+                double value;
+                if (input.Protocol == "Mode01")
+                {
+                    var definition = ObdPids.FirstOrDefault(p => p.Pid == input.Pid);
+                    if (definition == null)
+                    { _sessionReport.Account(FuelTrimEvidenceCounter.DecodeOrStateRejected); continue; }
+                    value = definition.Formula(input.Data);
+                }
+                else
+                {
+                    UdsPid definition;
+                    if (!_udsPidsByDidLowByte.TryGetValue(input.Pid, out definition))
+                    { _sessionReport.Account(FuelTrimEvidenceCounter.DecodeOrStateRejected); continue; }
+                    value = definition.Formula(input.Data);
+                }
+                if (!_samples.Update(input.SourceKey, input.Pid, value, queued.Item2))
+                { _sessionReport.Account(FuelTrimEvidenceCounter.DecodeOrStateRejected); continue; }
+                if (!_sessionReport.Observe(input.SourceKey, input.Pid, value, queued.Item2, DateTime.UtcNow, Stopwatch.GetTimestamp()))
+                    _sessionReport.Account(FuelTrimEvidenceCounter.ReportObservationRejected);
+                if (!_responseSource.Items.Contains(input.SourceKey))
+                {
+                    _responseSource.Items.Add(input.SourceKey);
+                    if (_responseSource.SelectedIndex < 0) _responseSource.SelectedIndex = 0;
+                }
+                accepted = true;
+            }
+            RefreshFuelDisplay(accepted);
         }
 
         byte[] BuildObdPidRequest(ObdPid pid, BitType bitMode)
@@ -524,63 +531,34 @@ namespace J2534Diag
             return request;
         }
 
-        private void UpdateLiveData(byte pid, double value, string unit)
+        private void RefreshFuelDisplay(bool recordHistory)
         {
-            UpdatePidDisplay(pid, value, unit);
-
-            switch (pid)
+            var snapshot = _samples.Snapshot(_responseSource.SelectedItem as string, Stopwatch.GetTimestamp());
+            foreach (var definition in ObdPids)
             {
-                case 0x11:
-                    lastThrottle = value;
-                    break;
-                case 0x0C:
-                    lastRpm = value;
-                    break;
-                case 0x06:
-                    lastStft1 = value;
-                    break;
-                case 0x07:
-                    lastLtft1 = value;
-                    break;
-                case 0x08:
-                    lastStft2 = value;
-                    break;
-                case 0x09:
-                    lastLtft2 = value;
-                    break;
-            }
-
-            if (lastThrottle >= 0 && lastRpm >= 0)
-            {
-                int tBin = Math.Min((int)(lastThrottle / 10.0), ThrottleBins - 1);
-                int rBin = Math.Min((int)(lastRpm / 500.0), RpmBins - 1);
-
-                double totalTrim1 = lastStft1 + lastLtft1;
-                trimGridBank1[tBin, rBin] = totalTrim1;
-
-                double totalTrim2 = lastStft2 + lastLtft2;
-                trimGridBank2[tBin, rBin] = totalTrim2;
-
-                UpdateTrimGridDisplay();
-            }
-        }
-
-        private void UpdatePidDisplay(byte pid, double value, string unit)
-        {
-            if (_pidControls.TryGetValue(pid, out var control))
-            {
-                if (control.InvokeRequired)
+                PidDisplayControl control;
+                if (_pidControls.TryGetValue(definition.Pid, out control))
                 {
-                    control.Invoke(new Action(() => control.ValueText = value.ToString()));
-
+                    double? value = snapshot.Value(definition.Pid);
+                    control.ValueText = !definition.Enabled ? "Disabled" : value.HasValue
+                        ? value.Value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
+                        : "Unknown / stale";
                 }
             }
-            else
+            if (recordHistory)
             {
-                control.ValueText = value.ToString();
+                for (int bank = 1; bank <= 2; bank++)
+                {
+                    double throttle, rpm, total;
+                    if (!snapshot.TryBank(bank, out throttle, out rpm, out total)) continue;
+                    int tBin = Math.Min((int)(throttle / 10.0), ThrottleBins - 1);
+                    int rBin = Math.Min((int)(rpm / 500.0), RpmBins - 1);
+                    (bank == 1 ? trimGridBank1 : trimGridBank2)[tBin, rBin] = total;
+                }
             }
-            //Debug.WriteLine($"PID {pid:X2} Value: {value} {unit} (Time: {DateTime.Now:HH:mm:ss.fff})");
+            UpdateTrimGridDisplay();
         }
+
         private void UpdateTrimGridDisplay()
         {
             UpdateSingleTrimGridDisplay(dgvTrimGridBank1, trimGridBank1, "Bank 1");
@@ -708,21 +686,35 @@ namespace J2534Diag
         public void StartListening()
         {
             if (j2534Manager.CaptureOnlyMode) return;
-            if (_monitorThread == null || !_monitorThread.IsAlive)
+            if (_ownsReceiveChannel)
             {
-                StartApiAndThreads();
+                if (_cts != null && !_cts.IsCancellationRequested &&
+                    _monitorThread != null && _monitorThread.IsAlive &&
+                    _pollingThread != null && _pollingThread.IsAlive) return;
+                // Retire both workers and filters before replacing any session field.
+                StopListening();
+                if (_ownsReceiveChannel) return;
             }
+            StartApiAndThreads();
         }
 
         public void StopListening()
         {
             if (!_ownsReceiveChannel) return;
+            _sessionReport.Stop(Stopwatch.GetTimestamp(), DateTime.UtcNow, "StopListening requested");
+            Interlocked.Increment(ref _displayGeneration);
+            DiscardPendingSamples(FuelTrimEvidenceCounter.InactiveOrGenerationDiscarded);
+            _samples.Clear();
+            RefreshFuelDisplay(false);
             _cts?.Cancel();
             // Do not release the exclusive reader until both worker threads exit.
-            bool pollingStopped = _pollingThread == null || _pollingThread.Join(3000);
-            bool monitorStopped = _monitorThread == null || _monitorThread.Join(3000);
+            bool pollingStopped = ChannelLifecyclePolicy.RequestStopAndWait(_pollingThread, _cts, 3000);
+            bool monitorStopped = ChannelLifecyclePolicy.RequestStopAndWait(_monitorThread, _cts, 3000);
             if (!pollingStopped || !monitorStopped)
             {
+                _sessionReport.SetStatus("Cleanup pending", "Worker did not exit", DateTime.UtcNow);
+                UpdateSessionHealth();
+                _sessionReport.Event("StopPending", "Worker did not exit; receive ownership retained", DateTime.UtcNow);
                 Debug.WriteLine("Fuel trim receive shutdown pending; retaining channel ownership.");
                 return;
             }
@@ -735,13 +727,20 @@ namespace J2534Diag
             }
             catch (Exception ex)
             {
+                _sessionReport.SetStatus("Cleanup pending", ex.Message, DateTime.UtcNow);
+                UpdateSessionHealth();
+                _sessionReport.Event("CleanupError", ex.ToString(), DateTime.UtcNow);
                 Debug.WriteLine("Fuel trim filter cleanup failed: " + ex);
                 return;
             }
+            _pollReplyGate?.Dispose();
+            _pollReplyGate = null;
             _cts?.Dispose();
             _cts = null;
             _ownsReceiveChannel = false;
             j2534Manager.ReceiveGate.Release(ReceiveOwner);
+            _sessionReport.Event("StopCompleted", "Workers joined; filters cleared; receive ownership released", DateTime.UtcNow);
+            UpdateSessionHealth();
         }
     }
 }

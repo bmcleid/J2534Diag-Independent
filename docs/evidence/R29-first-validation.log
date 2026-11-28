@@ -1,0 +1,946 @@
+﻿2026-11-28T00:16:01.8079182Z Current runner version: '2.338.2'
+2026-11-28T00:16:01.8103863Z ##[group]Runner Image Provisioner
+2026-11-28T00:16:01.8104685Z Hosted Compute Agent
+2026-11-28T00:16:01.8105299Z Version: 20261111.635
+2026-11-28T00:16:01.8105907Z Commit: b8a594ea514ff44cadb5342986c68b1eac6e22ed
+2026-11-28T00:16:01.8106796Z Build Date: 2026-11-11T01:49:01Z
+2026-11-28T00:16:01.8107466Z Worker ID: {b3d0ae73-bc8f-4225-a960-c2aeefd0dbfe}
+2026-11-28T00:16:01.8108106Z Region: centralus
+2026-11-28T00:16:01.8108652Z Cloud: Azure
+2026-11-28T00:16:01.8109139Z ##[endgroup]
+2026-11-28T00:16:01.8110434Z ##[group]Operating System
+2026-11-28T00:16:01.8111068Z Microsoft Windows Server 2022
+2026-11-28T00:16:01.8111697Z 10.0.20348
+2026-11-28T00:16:01.8112189Z Datacenter
+2026-11-28T00:16:01.8112643Z ##[endgroup]
+2026-11-28T00:16:01.8113129Z ##[group]Runner Image
+2026-11-28T00:16:01.8113664Z Image: windows-2022
+2026-11-28T00:16:01.8114167Z Version: 20261123.376.1
+2026-11-28T00:16:01.8115778Z Included Software: https://github.com/actions/runner-images/blob/win22/20261123.376/images/windows/Windows2022-Readme.md
+2026-11-28T00:16:01.8117375Z Image Release: https://github.com/actions/runner-images/releases/tag/win22%2F20261123.376
+2026-11-28T00:16:01.8118493Z ##[endgroup]
+2026-11-28T00:16:01.8119666Z ##[group]GITHUB_TOKEN Permissions
+2026-11-28T00:16:01.8121980Z Actions: read
+2026-11-28T00:16:01.8122493Z Contents: write
+2026-11-28T00:16:01.8123085Z Metadata: read
+2026-11-28T00:16:01.8123605Z ##[endgroup]
+2026-11-28T00:16:01.8125563Z Secret source: Actions
+2026-11-28T00:16:01.8126400Z Cache mode: write
+2026-11-28T00:16:01.8127021Z Prepare workflow directory
+2026-11-28T00:16:01.8425954Z Prepare all required actions
+2026-11-28T00:16:01.8471864Z Getting action download info
+2026-11-28T00:16:02.1869958Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-28T00:16:02.2840179Z Download action repository 'microsoft/setup-msbuild@v2' (SHA:6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce)
+2026-11-28T00:16:02.5386108Z Download action repository 'NuGet/setup-nuget@v2' (SHA:d105a947828025cd7a980103c35ba2bfae586d0f)
+2026-11-28T00:16:02.8767527Z Download action repository 'actions/download-artifact@v4' (SHA:d3f86a106a0bac45b974a628896c90dbdf5c8093)
+2026-11-28T00:16:03.3152823Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-28T00:16:03.6385920Z Complete job name: review
+2026-11-28T00:16:03.8194988Z ##[group]Run actions/checkout@v4
+2026-11-28T00:16:03.8196790Z with:
+2026-11-28T00:16:03.8197576Z   repository: bmcleid/J2534Diag-Independent
+2026-11-28T00:16:03.8204290Z   token: ***
+2026-11-28T00:16:03.8205079Z   ssh-strict: true
+2026-11-28T00:16:03.8206610Z   ssh-user: git
+2026-11-28T00:16:03.8207524Z   persist-credentials: true
+2026-11-28T00:16:03.8208393Z   clean: true
+2026-11-28T00:16:03.8209205Z   sparse-checkout-cone-mode: true
+2026-11-28T00:16:03.8210094Z   fetch-depth: 1
+2026-11-28T00:16:03.8210870Z   fetch-tags: false
+2026-11-28T00:16:03.8211742Z   show-progress: true
+2026-11-28T00:16:03.8212551Z   lfs: false
+2026-11-28T00:16:03.8213301Z   submodules: false
+2026-11-28T00:16:03.8214082Z   set-safe-directory: true
+2026-11-28T00:16:03.8215022Z   allow-unsafe-pr-checkout: false
+2026-11-28T00:16:03.8216529Z ##[endgroup]
+2026-11-28T00:16:03.9674385Z Syncing repository: bmcleid/J2534Diag-Independent
+2026-11-28T00:16:03.9676864Z ##[group]Getting Git version info
+2026-11-28T00:16:03.9678083Z Working directory is 'D:\a\J2534Diag-Independent\J2534Diag-Independent'
+2026-11-28T00:16:04.0478883Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-28T00:16:04.3623751Z git version 2.56.1.windows.1
+2026-11-28T00:16:04.3668265Z ##[endgroup]
+2026-11-28T00:16:04.3686058Z Temporarily overriding HOME='D:\a\_temp\ba44c515-fe9d-4ad2-862a-c9ed9dbfac42' before making global git config changes
+2026-11-28T00:16:04.3688233Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-28T00:16:04.3696964Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\J2534Diag-Independent\J2534Diag-Independent
+2026-11-28T00:16:04.4330286Z Deleting the contents of 'D:\a\J2534Diag-Independent\J2534Diag-Independent'
+2026-11-28T00:16:04.4335689Z ##[group]Initializing the repository
+2026-11-28T00:16:04.4344860Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\J2534Diag-Independent\J2534Diag-Independent
+2026-11-28T00:16:04.4981262Z Initialized empty Git repository in D:/a/J2534Diag-Independent/J2534Diag-Independent/.git/
+2026-11-28T00:16:04.5021482Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/bmcleid/J2534Diag-Independent
+2026-11-28T00:16:04.5598088Z ##[endgroup]
+2026-11-28T00:16:04.5599487Z ##[group]Disabling automatic garbage collection
+2026-11-28T00:16:04.5606672Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-28T00:16:04.5909336Z ##[endgroup]
+2026-11-28T00:16:04.5910677Z ##[group]Setting up auth
+2026-11-28T00:16:04.5921187Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-28T00:16:04.6214157Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-28T00:16:05.9960042Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-28T00:16:06.0254801Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-28T00:16:06.5041325Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-28T00:16:06.5334909Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-28T00:16:07.0056483Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-11-28T00:16:07.0359944Z ##[endgroup]
+2026-11-28T00:16:07.0360651Z ##[group]Fetching the repository
+2026-11-28T00:16:07.0377246Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249:refs/remotes/origin/feature/native-gui-capture-preview
+2026-11-28T00:16:08.2685354Z From https://github.com/bmcleid/J2534Diag-Independent
+2026-11-28T00:16:08.2686529Z  * [new ref]         2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249 -> origin/feature/native-gui-capture-preview
+2026-11-28T00:16:08.2720361Z ##[endgroup]
+2026-11-28T00:16:08.2721032Z ##[group]Determining the checkout info
+2026-11-28T00:16:08.2722755Z ##[endgroup]
+2026-11-28T00:16:08.2735787Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-28T00:16:08.3147387Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-28T00:16:08.3446698Z ##[group]Checking out the ref
+2026-11-28T00:16:08.3455516Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force -B feature/native-gui-capture-preview refs/remotes/origin/feature/native-gui-capture-preview
+2026-11-28T00:16:08.4347143Z Switched to a new branch 'feature/native-gui-capture-preview'
+2026-11-28T00:16:08.4401801Z branch 'feature/native-gui-capture-preview' set up to track 'origin/feature/native-gui-capture-preview'.
+2026-11-28T00:16:08.4439792Z ##[endgroup]
+2026-11-28T00:16:08.4843115Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-28T00:16:08.5102659Z 2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249
+2026-11-28T00:16:08.5457387Z ##[group]Run microsoft/setup-msbuild@v2
+2026-11-28T00:16:08.5457852Z with:
+2026-11-28T00:16:08.5458150Z   msbuild-architecture: x86
+2026-11-28T00:16:08.5459030Z ##[endgroup]
+2026-11-28T00:16:08.6724050Z [command]C:\ProgramData\Chocolatey\bin\vswhere.exe -products * -requires Microsoft.Component.MSBuild -property installationPath -latest
+2026-11-28T00:16:09.1467704Z C:\Program Files\Microsoft Visual Studio\2022\Enterprise
+2026-11-28T00:16:09.1780741Z ##[group]Run NuGet/setup-nuget@v2
+2026-11-28T00:16:09.1781200Z with:
+2026-11-28T00:16:09.1781535Z   nuget-version: latest
+2026-11-28T00:16:09.1781828Z ##[endgroup]
+2026-11-28T00:16:09.2937545Z (node:3532) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-28T00:16:09.2938534Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-28T00:16:09.6035811Z Installed nuget.exe version 8.0.0
+2026-11-28T00:16:09.6323296Z ##[group]Run nuget restore J2534Diag.sln -NonInteractive
+2026-11-28T00:16:09.6323899Z [36;1mnuget restore J2534Diag.sln -NonInteractive[0m
+2026-11-28T00:16:09.6783353Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-28T00:16:09.6783853Z env:
+2026-11-28T00:16:09.6784205Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:16:09.6784629Z ##[endgroup]
+2026-11-28T00:16:11.5113519Z MSBuild auto-detection: using msbuild version '17.14.60.43110' from 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin'.
+2026-11-28T00:16:20.5012575Z Restoring NuGet package J2534-Sharp.1.0.0-CI00036.
+2026-11-28T00:16:20.5013232Z Restoring NuGet package Newtonsoft.Json.13.0.3.
+2026-11-28T00:16:21.2599000Z   GET https://api.nuget.org/v3-flatcontainer/j2534-sharp/1.0.0-ci00036/j2534-sharp.1.0.0-ci00036.nupkg
+2026-11-28T00:16:21.2600336Z   GET https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg
+2026-11-28T00:16:21.2878802Z   OK https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg 28ms
+2026-11-28T00:16:21.2927661Z   OK https://api.nuget.org/v3-flatcontainer/j2534-sharp/1.0.0-ci00036/j2534-sharp.1.0.0-ci00036.nupkg 33ms
+2026-11-28T00:16:21.8568595Z Installed J2534-Sharp 1.0.0-CI00036 from https://api.nuget.org/v3/index.json to C:\Users\runneradmin\.nuget\packages\j2534-sharp\1.0.0-ci00036 with content hash uLWH+B911nU6O8Y43BrV/Edn2ZHH+jPMlWQZu21bedhplC5+6x9ipq8LuqcB6x9rIwIBsKnphmfSiCCKpuvJbw==.
+2026-11-28T00:16:21.8631038Z Adding package 'J2534-Sharp.1.0.0-CI00036' to folder 'D:\a\J2534Diag-Independent\J2534Diag-Independent\packages'
+2026-11-28T00:16:21.8753101Z Added package 'J2534-Sharp.1.0.0-CI00036' to folder 'D:\a\J2534Diag-Independent\J2534Diag-Independent\packages'
+2026-11-28T00:16:21.9723945Z Installed Newtonsoft.Json 13.0.3 from https://api.nuget.org/v3/index.json to C:\Users\runneradmin\.nuget\packages\newtonsoft.json\13.0.3 with content hash HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ==.
+2026-11-28T00:16:21.9749899Z Adding package 'Newtonsoft.Json.13.0.3' to folder 'D:\a\J2534Diag-Independent\J2534Diag-Independent\packages'
+2026-11-28T00:16:21.9913071Z Added package 'Newtonsoft.Json.13.0.3' to folder 'D:\a\J2534Diag-Independent\J2534Diag-Independent\packages'
+2026-11-28T00:16:22.0270970Z   GET https://api.nuget.org/v3/vulnerabilities/index.json
+2026-11-28T00:16:22.0321078Z   OK https://api.nuget.org/v3/vulnerabilities/index.json 4ms
+2026-11-28T00:16:22.0856359Z   GET https://api.nuget.org/v3-vulnerabilities/2026.11.20.05.34.20/vulnerability.base.json
+2026-11-28T00:16:22.0868895Z   GET https://api.nuget.org/v3-vulnerabilities/2026.11.20.05.34.20/2026.11.27.11.35.07/vulnerability.update.json
+2026-11-28T00:16:22.0902309Z   OK https://api.nuget.org/v3-vulnerabilities/2026.11.20.05.34.20/2026.11.27.11.35.07/vulnerability.update.json 3ms
+2026-11-28T00:16:22.0908382Z   OK https://api.nuget.org/v3-vulnerabilities/2026.11.20.05.34.20/vulnerability.base.json 5ms
+2026-11-28T00:16:22.1784089Z 
+2026-11-28T00:16:22.1784751Z NuGet Config files used:
+2026-11-28T00:16:22.1785459Z     C:\Users\runneradmin\AppData\Roaming\NuGet\NuGet.Config
+2026-11-28T00:16:22.1786126Z     C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.FallbackLocation.config
+2026-11-28T00:16:22.1786910Z     C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.Offline.config
+2026-11-28T00:16:22.1787199Z 
+2026-11-28T00:16:22.1787380Z Feeds used:
+2026-11-28T00:16:22.1787931Z     https://api.nuget.org/v3/index.json
+2026-11-28T00:16:22.1788469Z     C:\Program Files (x86)\Microsoft SDKs\NuGetPackages\
+2026-11-28T00:16:22.1793571Z 
+2026-11-28T00:16:22.1793996Z Installed:
+2026-11-28T00:16:22.1859546Z     2 package(s) to packages.config projects
+2026-11-28T00:16:22.3138354Z ##[group]Run actions/download-artifact@v4
+2026-11-28T00:16:22.3138771Z with:
+2026-11-28T00:16:22.3141642Z   github-token: ***
+2026-11-28T00:16:22.3142022Z   run-id: 46040117261
+2026-11-28T00:16:22.3142415Z   name: R28-exact-binary-failure-dialog-evidence
+2026-11-28T00:16:22.3142807Z   path: fixtures
+2026-11-28T00:16:22.3143085Z   merge-multiple: false
+2026-11-28T00:16:22.3143440Z   repository: bmcleid/J2534Diag-Independent
+2026-11-28T00:16:22.3143777Z env:
+2026-11-28T00:16:22.3144108Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:16:22.3144520Z ##[endgroup]
+2026-11-28T00:16:22.4792272Z Downloading single artifact
+2026-11-28T00:16:22.4877726Z (node:6936) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-28T00:16:22.4878490Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-28T00:16:22.5530069Z (node:6936) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-28T00:16:22.8432642Z Preparing to download the following artifacts:
+2026-11-28T00:16:22.8434121Z - R28-exact-binary-failure-dialog-evidence (ID: 15219915972, Size: 441070, Expected Digest: sha256:fc793af88538bd37b71adda60af94e3d897fa6070568b437ae81e3913d8996ee)
+2026-11-28T00:16:22.8469858Z Downloading artifact '15219915972' from 'bmcleid/J2534Diag-Independent'
+2026-11-28T00:16:23.2452886Z Redirecting to blob download url: https://productionresultssa14.blob.core.windows.net/actions-results/f2dfe291-ebcf-870c-a107-e26a7cb33222/workflow-job-run-a4c13f80-6528-5af2-b4c0-4d53b57e2fc4/artifacts/92be9e8e5d713cfaba1b2268dff06ecf570e99658db6b236a2839be574c89aa0.zip
+2026-11-28T00:16:23.2454317Z Starting download of artifact to: D:\a\J2534Diag-Independent\J2534Diag-Independent\fixtures
+2026-11-28T00:16:23.4500604Z (node:6936) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-28T00:16:23.6088243Z SHA256 digest of downloaded artifact is fc793af88538bd37b71adda60af94e3d897fa6070568b437ae81e3913d8996ee
+2026-11-28T00:16:23.6088869Z Artifact download completed successfully.
+2026-11-28T00:16:23.6089253Z Total of 1 artifact(s) downloaded
+2026-11-28T00:16:23.6094947Z Download artifact has finished successfully
+2026-11-28T00:16:23.6370015Z ##[group]Run actions/download-artifact@v4
+2026-11-28T00:16:23.6370502Z with:
+2026-11-28T00:16:23.6373087Z   github-token: ***
+2026-11-28T00:16:23.6373357Z   run-id: 45904637124
+2026-11-28T00:16:23.6373709Z   name: J2534Diag-build-diagnostics
+2026-11-28T00:16:23.6374149Z   path: fixtures
+2026-11-28T00:16:23.6374511Z   merge-multiple: false
+2026-11-28T00:16:23.6374895Z   repository: bmcleid/J2534Diag-Independent
+2026-11-28T00:16:23.6375482Z env:
+2026-11-28T00:16:23.6375822Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:16:23.6376208Z ##[endgroup]
+2026-11-28T00:16:23.7998983Z Downloading single artifact
+2026-11-28T00:16:23.8091119Z (node:1764) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-28T00:16:23.8092706Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-28T00:16:23.8478076Z (node:1764) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-28T00:16:24.1443559Z Preparing to download the following artifacts:
+2026-11-28T00:16:24.1444471Z - J2534Diag-build-diagnostics (ID: 15157716732, Size: 403493, Expected Digest: sha256:adcb8a3d6f510343b72cb0e5546185de0f9719dbf16adabd42a0e90b79d167bd)
+2026-11-28T00:16:24.1476112Z Downloading artifact '15157716732' from 'bmcleid/J2534Diag-Independent'
+2026-11-28T00:16:24.5564846Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/fcf52ab1-4d9e-851f-aef1-4be3e043b943/workflow-job-run-5301be46-406e-589c-b109-aa7caad7e4d2/artifacts/5b89a14715e8be5dc6160289c46c7a8e7fc273360fa9f58c76685417d7ac171d.zip
+2026-11-28T00:16:24.5566246Z Starting download of artifact to: D:\a\J2534Diag-Independent\J2534Diag-Independent\fixtures
+2026-11-28T00:16:24.7343387Z (node:1764) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-28T00:16:24.8723677Z SHA256 digest of downloaded artifact is adcb8a3d6f510343b72cb0e5546185de0f9719dbf16adabd42a0e90b79d167bd
+2026-11-28T00:16:24.8724274Z Artifact download completed successfully.
+2026-11-28T00:16:24.8724596Z Total of 1 artifact(s) downloaded
+2026-11-28T00:16:24.8731268Z Download artifact has finished successfully
+2026-11-28T00:16:24.9007034Z ##[group]Run $ErrorActionPreference = 'Stop'
+2026-11-28T00:16:24.9007592Z [36;1m$ErrorActionPreference = 'Stop'[0m
+2026-11-28T00:16:24.9008016Z [36;1mNew-Item -ItemType Directory -Force diagnostics | Out-Null[0m
+2026-11-28T00:16:24.9008444Z [36;1m$providers = @()[0m
+2026-11-28T00:16:24.9008957Z [36;1mforeach ($view in @([Microsoft.Win32.RegistryView]::Registry64, [Microsoft.Win32.RegistryView]::Registry32)) {[0m
+2026-11-28T00:16:24.9009708Z [36;1m  foreach ($hive in @([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryHive]::CurrentUser)) {[0m
+2026-11-28T00:16:24.9010378Z [36;1m    $root = [Microsoft.Win32.RegistryKey]::OpenBaseKey($hive, $view)[0m
+2026-11-28T00:16:24.9010758Z [36;1m    try {[0m
+2026-11-28T00:16:24.9011225Z [36;1m      foreach ($key in @('SOFTWARE\PassThruSupport.04.04','SOFTWARE\PassThruSupport.05.00')) {[0m
+2026-11-28T00:16:24.9011737Z [36;1m        $node = $root.OpenSubKey($key)[0m
+2026-11-28T00:16:24.9012308Z [36;1m        if ($node) { try { $providers += @($node.GetSubKeyNames()) } finally { $node.Dispose() } }[0m
+2026-11-28T00:16:24.9012777Z [36;1m      }[0m
+2026-11-28T00:16:24.9013080Z [36;1m    } finally { $root.Dispose() }[0m
+2026-11-28T00:16:24.9013400Z [36;1m  }[0m
+2026-11-28T00:16:24.9013638Z [36;1m}[0m
+2026-11-28T00:16:24.9014096Z [36;1mif ($providers.Count -ne 0) { throw 'Refuse offline acceptance with registered providers' }[0m
+2026-11-28T00:16:24.9014763Z [36;1m'RegisteredProviders=0;ProviderHandles=0;Vehicle=False' | Set-Content diagnostics/preflight.txt[0m
+2026-11-28T00:16:24.9015347Z [36;1m$identity = Get-Content Services/BuildIdentity.cs -Raw[0m
+2026-11-28T00:16:24.9015925Z [36;1m$identity = $identity.Replace('SourceCommit = "workspace"', ('SourceCommit = "' + $env:GITHUB_SHA + '"'))[0m
+2026-11-28T00:16:24.9016553Z [36;1mif (-not $identity.Contains($env:GITHUB_SHA)) { throw 'Missing source stamp' }[0m
+2026-11-28T00:16:24.9017123Z [36;1mSet-Content Services/BuildIdentity.cs $identity -Encoding UTF8[0m
+2026-11-28T00:16:24.9052699Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-28T00:16:24.9053083Z env:
+2026-11-28T00:16:24.9053433Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:16:24.9054509Z ##[endgroup]
+2026-11-28T00:16:25.2814051Z ##[group]Run & msbuild.exe J2534Diag.sln '/p:Configuration=Release' '/p:Platform=Any CPU' '/verbosity:minimal' 2>&1 | Tee-Object diagnostics/build.log
+2026-11-28T00:16:25.2815045Z [36;1m& msbuild.exe J2534Diag.sln '/p:Configuration=Release' '/p:Platform=Any CPU' '/verbosity:minimal' 2>&1 | Tee-Object diagnostics/build.log[0m
+2026-11-28T00:16:25.2815826Z [36;1mif ($LASTEXITCODE -ne 0) { throw 'R29 product compilation failed' }[0m
+2026-11-28T00:16:25.2816598Z [36;1m& msbuild.exe Tests/review/SavedSessionReviewTests.csproj '/p:Configuration=Release' '/verbosity:minimal' 2>&1 | Tee-Object diagnostics/test-build.log[0m
+2026-11-28T00:16:25.2817385Z [36;1mif ($LASTEXITCODE -ne 0) { throw 'Saved-review harness compilation failed' }[0m
+2026-11-28T00:16:25.2850661Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-28T00:16:25.2851140Z env:
+2026-11-28T00:16:25.2851474Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:16:25.2852004Z ##[endgroup]
+2026-11-28T00:16:25.6354621Z MSBuild version 17.14.60+43b635718 for .NET Framework
+2026-11-28T00:16:25.6599752Z 
+2026-11-28T00:16:37.9570625Z D:\a\J2534Diag-Independent\J2534Diag-Independent\Forms\MisfireForm.cs(318,30): warning CS0168: The variable 'ex' is declared but never used [D:\a\J2534Diag-Independent\J2534Diag-Independent\J2534Diag.csproj]
+2026-11-28T00:16:37.9572382Z D:\a\J2534Diag-Independent\J2534Diag-Independent\Forms\MisfireForm.cs(22,31): warning CS0169: The field 'MisfireForm.MisfirePids' is never used [D:\a\J2534Diag-Independent\J2534Diag-Independent\J2534Diag.csproj]
+2026-11-28T00:16:37.9578837Z D:\a\J2534Diag-Independent\J2534Diag-Independent\Controls\SelectedVehicleControl.Designer.cs(13,44): warning CS0169: The field 'SelectedVehicleControl.lblMake' is never used [D:\a\J2534Diag-Independent\J2534Diag-Independent\J2534Diag.csproj]
+2026-11-28T00:16:37.9583628Z D:\a\J2534Diag-Independent\J2534Diag-Independent\Controls\SelectedVehicleControl.Designer.cs(14,44): warning CS0169: The field 'SelectedVehicleControl.lblModel' is never used [D:\a\J2534Diag-Independent\J2534Diag-Independent\J2534Diag.csproj]
+2026-11-28T00:16:37.9749053Z   J2534Diag -> D:\a\J2534Diag-Independent\J2534Diag-Independent\bin\Release\J2534Diag.exe
+2026-11-28T00:16:38.0864872Z MSBuild version 17.14.60+43b635718 for .NET Framework
+2026-11-28T00:16:38.1132661Z 
+2026-11-28T00:16:38.4387426Z   SavedSessionReviewTests -> D:\a\J2534Diag-Independent\J2534Diag-Independent\Tests\review\bin\Release\SavedSessionReviewTests.exe
+2026-11-28T00:16:38.5077533Z ##[group]Run $ErrorActionPreference = 'Stop'
+2026-11-28T00:16:38.5078426Z [36;1m$ErrorActionPreference = 'Stop'[0m
+2026-11-28T00:16:38.5079334Z [36;1m$exeHash = (Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash[0m
+2026-11-28T00:16:38.5081296Z [36;1m$process = Start-Process Tests/review/bin/Release/SavedSessionReviewTests.exe -ArgumentList @((Join-Path $pwd bin/Release),(Join-Path $pwd diagnostics),(Join-Path $pwd fixtures)) -PassThru -RedirectStandardOutput diagnostics/review.log -RedirectStandardError diagnostics/review-error.log[0m
+2026-11-28T00:16:38.5083285Z [36;1mif (-not $process.WaitForExit(240000)) { Stop-Process -Id $process.Id -Force; throw 'Saved review exceeded four-minute bounded wait' }[0m
+2026-11-28T00:16:38.5083900Z [36;1mGet-Content diagnostics/review.log[0m
+2026-11-28T00:16:38.5084255Z [36;1mGet-Content diagnostics/review-error.log[0m
+2026-11-28T00:16:38.5084827Z [36;1mif ($process.ExitCode -ne 0) { throw "Saved review failed: $($process.ExitCode)" }[0m
+2026-11-28T00:16:38.5085520Z [36;1mif ((Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash -ne $exeHash) { throw 'Product changed during acceptance' }[0m
+2026-11-28T00:16:38.5086243Z [36;1mforeach ($name in @('saved-report-complete.png','saved-report-failure-filter.png')) {[0m
+2026-11-28T00:16:38.5086717Z [36;1m  if (Test-Path "diagnostics/$name") {[0m
+[Screenshot preserved separately in docs/evidence/R29-*.png]
+2026-11-28T00:16:38.5088124Z [36;1m  }[0m
+2026-11-28T00:16:38.5088350Z [36;1m}[0m
+2026-11-28T00:16:38.5122937Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-28T00:16:38.5123375Z env:
+2026-11-28T00:16:38.5123732Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:16:38.5124143Z ##[endgroup]
+2026-11-28T00:16:50.0836278Z CHECK 1: Actual GUI assembly matches exact packaged executable/source
+2026-11-28T00:16:50.0839641Z CHECK 2: Fixture accepts measured zero
+2026-11-28T00:16:50.0841636Z CHECK 3: File hash/path identify the parsed byte snapshot
+2026-11-28T00:16:50.0843156Z CHECK 4: Observation and disconnect counts preserved
+2026-11-28T00:16:50.0844637Z CHECK 5: Measured zero remains zero
+2026-11-28T00:16:50.0846485Z CHECK 6: Unknown empty values stay empty
+2026-11-28T00:16:50.0848240Z CHECK 7: Quoted comma, escaped quote, whitespace and multiline error text preserved
+2026-11-28T00:16:50.0851057Z CHECK 8: Recorded counters retained without decoding
+2026-11-28T00:16:50.0853900Z CHECK 9: Original data-record order retained
+2026-11-28T00:16:50.0855490Z CHECK 10: Returned cell copy cannot mutate saved document
+2026-11-28T00:16:50.0857014Z CHECK 11: Review does not write source file
+2026-11-28T00:16:50.0858441Z CHECK 12: Raw CAN format rejected as a scalar report
+2026-11-28T00:16:50.0860500Z CHECK 13: Unknown schema rejected
+2026-11-28T00:16:50.0862011Z CHECK 14: Truncated missing summary rejected
+2026-11-28T00:16:50.0863209Z CHECK 15: Missing retained-row count rejected
+2026-11-28T00:16:50.0865061Z CHECK 16: Reordered scalar header rejected explicitly
+2026-11-28T00:16:50.0866670Z CHECK 17: Malformed quoting rejected
+2026-11-28T00:16:50.0868165Z CHECK 18: Invalid UTF-8 rejected
+2026-11-28T00:16:50.0869626Z CHECK 19: Empty input rejected
+2026-11-28T00:16:50.0871103Z CHECK 20: Oversized file rejected before allocation
+2026-11-28T00:16:50.0872571Z CHECK 21: Excess data records rejected without partial display
+2026-11-28T00:16:50.0873374Z CHECK 22: BOM-free UTF-8 accepted
+2026-11-28T00:16:50.0875394Z CHECK 23: Preserved R28 fixture exact hash: r28-refusal-manual-export.csv
+2026-11-28T00:16:50.0876967Z CHECK 24: Preserved report row count: r28-refusal-manual-export.csv
+2026-11-28T00:16:50.0878497Z CHECK 25: Failure/recovery event counts: r28-refusal-manual-export.csv
+2026-11-28T00:16:50.0881566Z CHECK 26: Preserved fixture unchanged after review: r28-refusal-manual-export.csv
+2026-11-28T00:16:50.0882220Z CHECK 27: Preserved R28 fixture exact hash: r28-refusal-recovered.csv
+2026-11-28T00:16:50.0882842Z CHECK 28: Preserved report row count: r28-refusal-recovered.csv
+2026-11-28T00:16:50.0884784Z CHECK 29: Failure/recovery event counts: r28-refusal-recovered.csv
+2026-11-28T00:16:50.0886231Z CHECK 30: Preserved fixture unchanged after review: r28-refusal-recovered.csv
+2026-11-28T00:16:50.0887190Z CHECK 31: Preserved R28 fixture exact hash: r28-reader-recovered.csv
+2026-11-28T00:16:50.0889180Z CHECK 32: Preserved report row count: r28-reader-recovered.csv
+2026-11-28T00:16:50.0891180Z CHECK 33: Failure/recovery event counts: r28-reader-recovered.csv
+2026-11-28T00:16:50.0892771Z CHECK 34: Preserved fixture unchanged after review: r28-reader-recovered.csv
+2026-11-28T00:16:50.0894250Z CHECK 35: Preserved R28 normal observations reopen exactly
+2026-11-28T00:16:50.0895760Z CHECK 36: Normal observation source unchanged
+2026-11-28T00:16:50.0897095Z CHECK 37: Existing 20,007-record continuity report opens without truncation
+2026-11-28T00:16:50.0898608Z PARSER_CHECKS_COMPLETE
+2026-11-28T00:16:50.0899916Z CHECK 38: R29 production main window and Saved session tab started
+2026-11-28T00:16:50.0901781Z CHECK 39: R29 build identity visible
+2026-11-28T00:16:50.0903588Z CHECK 40: No registered J2534 providers in actual manager
+2026-11-28T00:16:50.0905047Z CHECK 41: No managed Api opened
+2026-11-28T00:16:50.0906222Z CHECK 42: No managed Device opened
+2026-11-28T00:16:50.0908293Z CHECK 43: No managed Channel opened
+2026-11-28T00:16:50.0909662Z CHECK 44: No native provider/session selected
+2026-11-28T00:16:50.0912592Z CHECK 45: No named vendor provider module: savedsessionreviewtests.exe
+2026-11-28T00:16:50.0913566Z CHECK 46: No named vendor provider module: ntdll.dll
+2026-11-28T00:16:50.0916031Z CHECK 47: No named vendor provider module: mscoree.dll
+2026-11-28T00:16:50.0919220Z CHECK 48: No named vendor provider module: kernel32.dll
+2026-11-28T00:16:50.0922181Z CHECK 49: No named vendor provider module: kernelbase.dll
+2026-11-28T00:16:50.0924158Z CHECK 50: No named vendor provider module: apphelp.dll
+2026-11-28T00:16:50.0926502Z CHECK 51: No named vendor provider module: advapi32.dll
+2026-11-28T00:16:50.0927962Z CHECK 52: No named vendor provider module: msvcrt.dll
+2026-11-28T00:16:50.0929570Z CHECK 53: No named vendor provider module: sechost.dll
+2026-11-28T00:16:50.0931048Z CHECK 54: No named vendor provider module: bcrypt.dll
+2026-11-28T00:16:50.0932524Z CHECK 55: No named vendor provider module: rpcrt4.dll
+2026-11-28T00:16:50.0933141Z CHECK 56: No named vendor provider module: mscoreei.dll
+2026-11-28T00:16:50.0935196Z CHECK 57: No named vendor provider module: shlwapi.dll
+2026-11-28T00:16:50.0937250Z CHECK 58: No named vendor provider module: kernel.appcore.dll
+2026-11-28T00:16:50.0938981Z CHECK 59: No named vendor provider module: version.dll
+2026-11-28T00:16:50.0940495Z CHECK 60: No named vendor provider module: clr.dll
+2026-11-28T00:16:50.0941239Z CHECK 61: No named vendor provider module: user32.dll
+2026-11-28T00:16:50.0943157Z CHECK 62: No named vendor provider module: win32u.dll
+2026-11-28T00:16:50.0944874Z CHECK 63: No named vendor provider module: gdi32.dll
+2026-11-28T00:16:50.0946303Z CHECK 64: No named vendor provider module: vcruntime140_1_clr0400.dll
+2026-11-28T00:16:50.0947875Z CHECK 65: No named vendor provider module: vcruntime140_clr0400.dll
+2026-11-28T00:16:50.0948494Z CHECK 66: No named vendor provider module: gdi32full.dll
+2026-11-28T00:16:50.0950551Z CHECK 67: No named vendor provider module: ucrtbase.dll
+2026-11-28T00:16:50.0951596Z CHECK 68: No named vendor provider module: ucrtbase_clr0400.dll
+2026-11-28T00:16:50.0953357Z CHECK 69: No named vendor provider module: msvcp_win.dll
+2026-11-28T00:16:50.0955329Z CHECK 70: No named vendor provider module: imm32.dll
+2026-11-28T00:16:50.0956815Z CHECK 71: No named vendor provider module: mscorlib.ni.dll
+2026-11-28T00:16:50.0958665Z CHECK 72: No named vendor provider module: ole32.dll
+2026-11-28T00:16:50.0961220Z CHECK 73: No named vendor provider module: combase.dll
+2026-11-28T00:16:50.0961830Z CHECK 74: No named vendor provider module: bcryptprimitives.dll
+2026-11-28T00:16:50.0962659Z CHECK 75: No named vendor provider module: uxtheme.dll
+2026-11-28T00:16:50.0964561Z CHECK 76: No named vendor provider module: clrjit.dll
+2026-11-28T00:16:50.0966899Z CHECK 77: No named vendor provider module: system.ni.dll
+2026-11-28T00:16:50.0968263Z CHECK 78: No named vendor provider module: system.drawing.ni.dll
+2026-11-28T00:16:50.0969165Z CHECK 79: No named vendor provider module: system.windows.forms.ni.dll
+2026-11-28T00:16:50.0971148Z CHECK 80: No named vendor provider module: shell32.dll
+2026-11-28T00:16:50.0973187Z CHECK 81: No named vendor provider module: windows.storage.dll
+2026-11-28T00:16:50.0974651Z CHECK 82: No named vendor provider module: shcore.dll
+2026-11-28T00:16:50.0976072Z CHECK 83: No named vendor provider module: profapi.dll
+2026-11-28T00:16:50.0977415Z CHECK 84: No named vendor provider module: system.core.ni.dll
+2026-11-28T00:16:50.0978997Z CHECK 85: No named vendor provider module: cryptsp.dll
+2026-11-28T00:16:50.0980375Z CHECK 86: No named vendor provider module: rsaenh.dll
+2026-11-28T00:16:50.0981897Z CHECK 87: No named vendor provider module: cryptbase.dll
+2026-11-28T00:16:50.0982768Z CHECK 88: No named vendor provider module: microsoft.visualbasic.ni.dll
+2026-11-28T00:16:50.0984720Z CHECK 89: No named vendor provider module: ntmarta.dll
+2026-11-28T00:16:50.0986510Z CHECK 90: No named vendor provider module: uiautomationclient.ni.dll
+2026-11-28T00:16:50.0987397Z CHECK 91: No named vendor provider module: uiautomationtypes.ni.dll
+2026-11-28T00:16:50.0989237Z CHECK 92: No named vendor provider module: system.configuration.ni.dll
+2026-11-28T00:16:50.0990822Z CHECK 93: No named vendor provider module: system.xml.ni.dll
+2026-11-28T00:16:50.0992274Z CHECK 94: No named vendor provider module: comctl32.dll
+2026-11-28T00:16:50.0993574Z CHECK 95: No named vendor provider module: gdiplus.dll
+2026-11-28T00:16:50.0995072Z CHECK 96: No named vendor provider module: dwrite.dll
+2026-11-28T00:16:50.0996475Z CHECK 97: No named vendor provider module: msctf.dll
+2026-11-28T00:16:50.0997106Z CHECK 98: No named vendor provider module: textshaping.dll
+2026-11-28T00:16:50.0999466Z CHECK 99: No named vendor provider module: comctl32.dll
+2026-11-28T00:16:50.1000430Z CHECK 100: No named vendor provider module: windowscodecs.dll
+2026-11-28T00:16:50.1002258Z CHECK 101: No named vendor provider module: textinputframework.dll
+2026-11-28T00:16:50.1003812Z CHECK 102: No named vendor provider module: oleaut32.dll
+2026-11-28T00:16:50.1005092Z CHECK 103: No named vendor provider module: coremessaging.dll
+2026-11-28T00:16:50.1006944Z CHECK 104: No named vendor provider module: coreuicomponents.dll
+2026-11-28T00:16:50.1007675Z CHECK 105: No named vendor provider module: psapi.dll
+2026-11-28T00:16:50.1009745Z CHECK 106: Native file-picker path readback matches source
+2026-11-28T00:16:50.1011297Z CHECK 107: Actual Open dialog loads all preserved R28 records
+2026-11-28T00:16:50.1012164Z CHECK 108: Viewer displays exact source SHA-256
+2026-11-28T00:16:50.1014161Z CHECK 109: Saved grid is read-only
+2026-11-28T00:16:50.1015835Z CHECK 110: Failure filter retains exact original source-record 10
+2026-11-28T00:16:50.1017074Z CHECK 111: Full selected failure details visible
+2026-11-28T00:16:50.1018775Z CHECK 112: Clear filter restores original complete order
+2026-11-28T00:16:50.1020697Z CHECK 113: Normal observations shown after separate report load
+2026-11-28T00:16:50.1022201Z CHECK 114: Exact event selector shows nine saved observations without matching metadata text
+2026-11-28T00:16:50.1023611Z CHECK 115: Failed import retains prior displayed report
+2026-11-28T00:16:50.1024462Z CHECK 116: Native Open cancellation retains prior report
+2026-11-28T00:16:50.1026006Z CHECK 117: Saved review leaves live report clean
+2026-11-28T00:16:50.1027497Z CHECK 118: No registered J2534 providers in actual manager
+2026-11-28T00:16:50.1029220Z CHECK 119: No managed Api opened
+2026-11-28T00:16:50.1030534Z CHECK 120: No managed Device opened
+2026-11-28T00:16:50.1031661Z CHECK 121: No managed Channel opened
+2026-11-28T00:16:50.1033540Z CHECK 122: No native provider/session selected
+2026-11-28T00:16:50.1035375Z CHECK 123: No named vendor provider module: savedsessionreviewtests.exe
+2026-11-28T00:16:50.1036889Z CHECK 124: No named vendor provider module: ntdll.dll
+2026-11-28T00:16:50.1038497Z CHECK 125: No named vendor provider module: mscoree.dll
+2026-11-28T00:16:50.1039764Z CHECK 126: No named vendor provider module: kernel32.dll
+2026-11-28T00:16:50.1041759Z CHECK 127: No named vendor provider module: kernelbase.dll
+2026-11-28T00:16:50.1043290Z CHECK 128: No named vendor provider module: apphelp.dll
+2026-11-28T00:16:50.1044452Z CHECK 129: No named vendor provider module: advapi32.dll
+2026-11-28T00:16:50.1046010Z CHECK 130: No named vendor provider module: msvcrt.dll
+2026-11-28T00:16:50.1047470Z CHECK 131: No named vendor provider module: sechost.dll
+2026-11-28T00:16:50.1049324Z CHECK 132: No named vendor provider module: bcrypt.dll
+2026-11-28T00:16:50.1050866Z CHECK 133: No named vendor provider module: rpcrt4.dll
+2026-11-28T00:16:50.1052236Z CHECK 134: No named vendor provider module: mscoreei.dll
+2026-11-28T00:16:50.1053676Z CHECK 135: No named vendor provider module: shlwapi.dll
+2026-11-28T00:16:50.1055183Z CHECK 136: No named vendor provider module: kernel.appcore.dll
+2026-11-28T00:16:50.1056875Z CHECK 137: No named vendor provider module: version.dll
+2026-11-28T00:16:50.1058204Z CHECK 138: No named vendor provider module: clr.dll
+2026-11-28T00:16:50.1059609Z CHECK 139: No named vendor provider module: user32.dll
+2026-11-28T00:16:50.1060952Z CHECK 140: No named vendor provider module: win32u.dll
+2026-11-28T00:16:50.1062274Z CHECK 141: No named vendor provider module: gdi32.dll
+2026-11-28T00:16:50.1063783Z CHECK 142: No named vendor provider module: vcruntime140_1_clr0400.dll
+2026-11-28T00:16:50.1064632Z CHECK 143: No named vendor provider module: vcruntime140_clr0400.dll
+2026-11-28T00:16:50.1066862Z CHECK 144: No named vendor provider module: gdi32full.dll
+2026-11-28T00:16:50.1068713Z CHECK 145: No named vendor provider module: ucrtbase.dll
+2026-11-28T00:16:50.1073341Z CHECK 146: No named vendor provider module: ucrtbase_clr0400.dll
+2026-11-28T00:16:50.1075257Z CHECK 147: No named vendor provider module: msvcp_win.dll
+2026-11-28T00:16:50.1076912Z CHECK 148: No named vendor provider module: imm32.dll
+2026-11-28T00:16:50.1077551Z CHECK 149: No named vendor provider module: mscorlib.ni.dll
+2026-11-28T00:16:50.1079935Z CHECK 150: No named vendor provider module: ole32.dll
+2026-11-28T00:16:50.1081468Z CHECK 151: No named vendor provider module: combase.dll
+2026-11-28T00:16:50.1082954Z CHECK 152: No named vendor provider module: bcryptprimitives.dll
+2026-11-28T00:16:50.1084379Z CHECK 153: No named vendor provider module: uxtheme.dll
+2026-11-28T00:16:50.1085887Z CHECK 154: No named vendor provider module: clrjit.dll
+2026-11-28T00:16:50.1087407Z CHECK 155: No named vendor provider module: system.ni.dll
+2026-11-28T00:16:50.1088891Z CHECK 156: No named vendor provider module: system.drawing.ni.dll
+2026-11-28T00:16:50.1090393Z CHECK 157: No named vendor provider module: system.windows.forms.ni.dll
+2026-11-28T00:16:50.1092258Z CHECK 158: No named vendor provider module: shell32.dll
+2026-11-28T00:16:50.1093600Z CHECK 159: No named vendor provider module: windows.storage.dll
+2026-11-28T00:16:50.1094500Z CHECK 160: No named vendor provider module: shcore.dll
+2026-11-28T00:16:50.1096497Z CHECK 161: No named vendor provider module: profapi.dll
+2026-11-28T00:16:50.1098397Z CHECK 162: No named vendor provider module: system.core.ni.dll
+2026-11-28T00:16:50.1099923Z CHECK 163: No named vendor provider module: cryptsp.dll
+2026-11-28T00:16:50.1101530Z CHECK 164: No named vendor provider module: rsaenh.dll
+2026-11-28T00:16:50.1102968Z CHECK 165: No named vendor provider module: cryptbase.dll
+2026-11-28T00:16:50.1104705Z CHECK 166: No named vendor provider module: microsoft.visualbasic.ni.dll
+2026-11-28T00:16:50.1105966Z CHECK 167: No named vendor provider module: ntmarta.dll
+2026-11-28T00:16:50.1107463Z CHECK 168: No named vendor provider module: uiautomationclient.ni.dll
+2026-11-28T00:16:50.1108958Z CHECK 169: No named vendor provider module: uiautomationtypes.ni.dll
+2026-11-28T00:16:50.1110410Z CHECK 170: No named vendor provider module: system.configuration.ni.dll
+2026-11-28T00:16:50.1111794Z CHECK 171: No named vendor provider module: system.xml.ni.dll
+2026-11-28T00:16:50.1113579Z CHECK 172: No named vendor provider module: comctl32.dll
+2026-11-28T00:16:50.1115361Z CHECK 173: No named vendor provider module: gdiplus.dll
+2026-11-28T00:16:50.1116836Z CHECK 174: No named vendor provider module: dwrite.dll
+2026-11-28T00:16:50.1118619Z CHECK 175: No named vendor provider module: msctf.dll
+2026-11-28T00:16:50.1120174Z CHECK 176: No named vendor provider module: textshaping.dll
+2026-11-28T00:16:50.1121757Z CHECK 177: No named vendor provider module: comctl32.dll
+2026-11-28T00:16:50.1123190Z CHECK 178: No named vendor provider module: windowscodecs.dll
+2026-11-28T00:16:50.1124779Z CHECK 179: No named vendor provider module: textinputframework.dll
+2026-11-28T00:16:50.1125425Z CHECK 180: No named vendor provider module: oleaut32.dll
+2026-11-28T00:16:50.1127624Z CHECK 181: No named vendor provider module: coremessaging.dll
+2026-11-28T00:16:50.1129131Z CHECK 182: No named vendor provider module: coreuicomponents.dll
+2026-11-28T00:16:50.1129924Z CHECK 183: No named vendor provider module: psapi.dll
+2026-11-28T00:16:50.1131880Z CHECK 184: No named vendor provider module: uiautomationcore.dll
+2026-11-28T00:16:50.1133643Z CHECK 185: No named vendor provider module: clbcatq.dll
+2026-11-28T00:16:50.1135056Z CHECK 186: No named vendor provider module: sxs.dll
+2026-11-28T00:16:50.1136423Z CHECK 187: No named vendor provider module: windowmanagementapi.dll
+2026-11-28T00:16:50.1137850Z CHECK 188: No named vendor provider module: wintypes.dll
+2026-11-28T00:16:50.1139299Z CHECK 189: No named vendor provider module: uiamanager.dll
+2026-11-28T00:16:50.1140085Z CHECK 190: No named vendor provider module: accessibility.ni.dll
+2026-11-28T00:16:50.1142159Z CHECK 191: No named vendor provider module: uiautomationprovider.ni.dll
+2026-11-28T00:16:50.1143818Z CHECK 192: No named vendor provider module: uiautomationclientsideproviders.ni.dll
+2026-11-28T00:16:50.1145245Z CHECK 193: No named vendor provider module: oleacc.dll
+2026-11-28T00:16:50.1146728Z CHECK 194: No named vendor provider module: onecorecommonproxystub.dll
+2026-11-28T00:16:50.1148256Z CHECK 195: No named vendor provider module: presentationnative_v0400.dll
+2026-11-28T00:16:50.1149790Z CHECK 196: No named vendor provider module: system.enterpriseservices.thunk.dll
+2026-11-28T00:16:50.1151265Z CHECK 197: No named vendor provider module: windowsbase.ni.dll
+2026-11-28T00:16:50.1152688Z CHECK 198: No named vendor provider module: presentationcore.ni.dll
+2026-11-28T00:16:50.1154144Z CHECK 199: No named vendor provider module: wpfgfx_v0400.dll
+2026-11-28T00:16:50.1155613Z CHECK 200: No named vendor provider module: msvcp140_clr0400.dll
+2026-11-28T00:16:50.1156823Z CHECK 201: No named vendor provider module: dwmapi.dll
+2026-11-28T00:16:50.1158254Z CHECK 202: No named vendor provider module: comdlg32.dll
+2026-11-28T00:16:50.1159706Z CHECK 203: No named vendor provider module: dui70.dll
+2026-11-28T00:16:50.1161501Z CHECK 204: No named vendor provider module: duser.dll
+2026-11-28T00:16:50.1163256Z CHECK 205: No named vendor provider module: tiptsf.dll
+2026-11-28T00:16:50.1164778Z CHECK 206: No named vendor provider module: edputil.dll
+2026-11-28T00:16:50.1166243Z CHECK 207: No named vendor provider module: explorerframe.dll
+2026-11-28T00:16:50.1167705Z CHECK 208: No named vendor provider module: thumbcache.dll
+2026-11-28T00:16:50.1169514Z CHECK 209: No named vendor provider module: policymanager.dll
+2026-11-28T00:16:50.1172061Z CHECK 210: No named vendor provider module: msvcp110_win.dll
+2026-11-28T00:16:50.1172646Z CHECK 211: No named vendor provider module: dataexchange.dll
+2026-11-28T00:16:50.1173387Z CHECK 212: No named vendor provider module: twinapi.appcore.dll
+2026-11-28T00:16:50.1175247Z CHECK 213: No named vendor provider module: windows.globalization.dll
+2026-11-28T00:16:50.1177148Z CHECK 214: No named vendor provider module: globinputhost.dll
+2026-11-28T00:16:50.1178658Z CHECK 215: No named vendor provider module: bcp47langs.dll
+2026-11-28T00:16:50.1180098Z CHECK 216: No named vendor provider module: propsys.dll
+2026-11-28T00:16:50.1180977Z CHECK 217: No named vendor provider module: cfgmgr32.dll
+2026-11-28T00:16:50.1183318Z CHECK 218: No named vendor provider module: urlmon.dll
+2026-11-28T00:16:50.1184567Z CHECK 219: No named vendor provider module: iertutil.dll
+2026-11-28T00:16:50.1186062Z CHECK 220: No named vendor provider module: netutils.dll
+2026-11-28T00:16:50.1186633Z CHECK 221: No named vendor provider module: srvcli.dll
+2026-11-28T00:16:50.1188035Z CHECK 222: No named vendor provider module: sspicli.dll
+2026-11-28T00:16:50.1189481Z CHECK 223: No named vendor provider module: virtdisk.dll
+2026-11-28T00:16:50.1190983Z CHECK 224: No named vendor provider module: fltlib.dll
+2026-11-28T00:16:50.1191799Z CHECK 225: No named vendor provider module: windows.system.launcher.dll
+2026-11-28T00:16:50.1194125Z CHECK 226: No named vendor provider module: windows.staterepositorycore.dll
+2026-11-28T00:16:50.1195115Z CHECK 227: No named vendor provider module: xmllite.dll
+2026-11-28T00:16:50.1197015Z CHECK 228: No named vendor provider module: windows.fileexplorer.common.dll
+2026-11-28T00:16:50.1198485Z CHECK 229: No named vendor provider module: linkinfo.dll
+2026-11-28T00:16:50.1199963Z CHECK 230: No named vendor provider module: mpr.dll
+2026-11-28T00:16:50.1201668Z CHECK 231: No named vendor provider module: structuredquery.dll
+2026-11-28T00:16:50.1203139Z CHECK 232: No named vendor provider module: atlthunk.dll
+2026-11-28T00:16:50.1204737Z CHECK 233: No named vendor provider module: windows.storage.search.dll
+2026-11-28T00:16:50.1205752Z CHECK 234: No named vendor provider module: icu.dll
+2026-11-28T00:16:50.1207616Z CHECK 235: No named vendor provider module: iconcodecservice.dll
+2026-11-28T00:16:50.1209063Z CHECK 236: No named vendor provider module: networkexplorer.dll
+2026-11-28T00:16:50.1210428Z CHECK 237: No named vendor provider module: p9np.dll
+2026-11-28T00:16:50.1211266Z CHECK 238: No named vendor provider module: drprov.dll
+2026-11-28T00:16:50.1213334Z CHECK 239: No named vendor provider module: ntlanman.dll
+2026-11-28T00:16:50.1214152Z CHECK 240: No named vendor provider module: coml2.dll
+2026-11-28T00:16:50.1215950Z CHECK 241: No named vendor provider module: twinapi.dll
+2026-11-28T00:16:50.1217435Z CHECK 242: No named vendor provider module: ntshrui.dll
+2026-11-28T00:16:50.1218852Z CHECK 243: No named vendor provider module: cscapi.dll
+2026-11-28T00:16:50.1220362Z CHECK 244: No named vendor provider module: actxprxy.dll
+2026-11-28T00:16:50.1221815Z CHECK 245: No named vendor provider module: tortoiseoverlays.dll
+2026-11-28T00:16:50.1223626Z CHECK 246: No named vendor provider module: tortoisestub.dll
+2026-11-28T00:16:50.1225142Z CHECK 247: No named vendor provider module: tortoisesvn.dll
+2026-11-28T00:16:50.1226363Z CHECK 248: No named vendor provider module: wininet.dll
+2026-11-28T00:16:50.1228366Z CHECK 249: No named vendor provider module: libsvn_tsvn.dll
+2026-11-28T00:16:50.1230872Z CHECK 250: No named vendor provider module: libapr_tsvn.dll
+2026-11-28T00:16:50.1231721Z CHECK 251: No named vendor provider module: ws2_32.dll
+2026-11-28T00:16:50.1233669Z CHECK 252: No named vendor provider module: crypt32.dll
+2026-11-28T00:16:50.1235534Z CHECK 253: No named vendor provider module: intl3_tsvn.dll
+2026-11-28T00:16:50.1237125Z CHECK 254: No named vendor provider module: msvcp140.dll
+2026-11-28T00:16:50.1238722Z CHECK 255: No named vendor provider module: vcruntime140_1.dll
+2026-11-28T00:16:50.1240276Z CHECK 256: No named vendor provider module: vcruntime140.dll
+2026-11-28T00:16:50.1241807Z CHECK 257: No named vendor provider module: libaprutil_tsvn.dll
+2026-11-28T00:16:50.1242679Z CHECK 258: No named vendor provider module: libsasl.dll
+2026-11-28T00:16:50.1244412Z CHECK 259: No named vendor provider module: wldap32.dll
+2026-11-28T00:16:50.1246213Z CHECK 260: No named vendor provider module: secur32.dll
+2026-11-28T00:16:50.1248008Z CHECK 261: No named vendor provider module: ncrypt.dll
+2026-11-28T00:16:50.1249398Z CHECK 262: No named vendor provider module: ntasn1.dll
+2026-11-28T00:16:50.1251147Z CHECK 263: No named vendor provider module: ehstorshell.dll
+2026-11-28T00:16:50.1252881Z CHECK 264: No named vendor provider module: setupapi.dll
+2026-11-28T00:16:50.1254179Z CHECK 265: No named vendor provider module: cscui.dll
+2026-11-28T00:16:50.1255678Z CHECK 266: No named vendor provider module: samcli.dll
+2026-11-28T00:16:50.1256967Z CHECK 267: No named vendor provider module: samlib.dll
+2026-11-28T00:16:50.1258475Z CHECK 268: No named vendor provider module: windows.staterepositoryps.dll
+2026-11-28T00:16:50.1259997Z CHECK 269: No named vendor provider module: system.data.ni.dll
+2026-11-28T00:16:50.1261298Z CHECK 270: No named vendor provider module: system.data.dll
+2026-11-28T00:16:50.1262881Z CHECK 271: No named vendor provider module: system.numerics.ni.dll
+2026-11-28T00:16:50.1264529Z CHECK 272: Offline review closes without live unsaved-data prompt
+2026-11-28T00:16:50.1265502Z CHECK 273: R29 production main window and Saved session tab started
+2026-11-28T00:16:50.1267280Z CHECK 274: R29 build identity visible
+2026-11-28T00:16:50.1269121Z CHECK 275: No registered J2534 providers in actual manager
+2026-11-28T00:16:50.1270892Z CHECK 276: No managed Api opened
+2026-11-28T00:16:50.1272413Z CHECK 277: No managed Device opened
+2026-11-28T00:16:50.1273984Z CHECK 278: No managed Channel opened
+2026-11-28T00:16:50.1275469Z CHECK 279: No native provider/session selected
+2026-11-28T00:16:50.1277002Z CHECK 280: No named vendor provider module: savedsessionreviewtests.exe
+2026-11-28T00:16:50.1277662Z CHECK 281: No named vendor provider module: ntdll.dll
+2026-11-28T00:16:50.1279672Z CHECK 282: No named vendor provider module: mscoree.dll
+2026-11-28T00:16:50.1281195Z CHECK 283: No named vendor provider module: kernel32.dll
+2026-11-28T00:16:50.1282777Z CHECK 284: No named vendor provider module: kernelbase.dll
+2026-11-28T00:16:50.1284241Z CHECK 285: No named vendor provider module: apphelp.dll
+2026-11-28T00:16:50.1285752Z CHECK 286: No named vendor provider module: advapi32.dll
+2026-11-28T00:16:50.1287392Z CHECK 287: No named vendor provider module: msvcrt.dll
+2026-11-28T00:16:50.1288650Z CHECK 288: No named vendor provider module: sechost.dll
+2026-11-28T00:16:50.1289907Z CHECK 289: No named vendor provider module: bcrypt.dll
+2026-11-28T00:16:50.1291282Z CHECK 290: No named vendor provider module: rpcrt4.dll
+2026-11-28T00:16:50.1292825Z CHECK 291: No named vendor provider module: mscoreei.dll
+2026-11-28T00:16:50.1294312Z CHECK 292: No named vendor provider module: shlwapi.dll
+2026-11-28T00:16:50.1295835Z CHECK 293: No named vendor provider module: kernel.appcore.dll
+2026-11-28T00:16:50.1297223Z CHECK 294: No named vendor provider module: version.dll
+2026-11-28T00:16:50.1298521Z CHECK 295: No named vendor provider module: clr.dll
+2026-11-28T00:16:50.1299927Z CHECK 296: No named vendor provider module: user32.dll
+2026-11-28T00:16:50.1301372Z CHECK 297: No named vendor provider module: win32u.dll
+2026-11-28T00:16:50.1302780Z CHECK 298: No named vendor provider module: gdi32.dll
+2026-11-28T00:16:50.1304230Z CHECK 299: No named vendor provider module: vcruntime140_1_clr0400.dll
+2026-11-28T00:16:50.1305695Z CHECK 300: No named vendor provider module: vcruntime140_clr0400.dll
+2026-11-28T00:16:50.1307194Z CHECK 301: No named vendor provider module: gdi32full.dll
+2026-11-28T00:16:50.1308576Z CHECK 302: No named vendor provider module: ucrtbase.dll
+2026-11-28T00:16:50.1310231Z CHECK 303: No named vendor provider module: ucrtbase_clr0400.dll
+2026-11-28T00:16:50.1310989Z CHECK 304: No named vendor provider module: msvcp_win.dll
+2026-11-28T00:16:50.1312794Z CHECK 305: No named vendor provider module: imm32.dll
+2026-11-28T00:16:50.1314590Z CHECK 306: No named vendor provider module: mscorlib.ni.dll
+2026-11-28T00:16:50.1316363Z CHECK 307: No named vendor provider module: ole32.dll
+2026-11-28T00:16:50.1317803Z CHECK 308: No named vendor provider module: combase.dll
+2026-11-28T00:16:50.1319219Z CHECK 309: No named vendor provider module: bcryptprimitives.dll
+2026-11-28T00:16:50.1320796Z CHECK 310: No named vendor provider module: uxtheme.dll
+2026-11-28T00:16:50.1322689Z CHECK 311: No named vendor provider module: clrjit.dll
+2026-11-28T00:16:50.1324368Z CHECK 312: No named vendor provider module: system.ni.dll
+2026-11-28T00:16:50.1325803Z CHECK 313: No named vendor provider module: system.drawing.ni.dll
+2026-11-28T00:16:50.1327366Z CHECK 314: No named vendor provider module: system.windows.forms.ni.dll
+2026-11-28T00:16:50.1328737Z CHECK 315: No named vendor provider module: shell32.dll
+2026-11-28T00:16:50.1330211Z CHECK 316: No named vendor provider module: windows.storage.dll
+2026-11-28T00:16:50.1331666Z CHECK 317: No named vendor provider module: shcore.dll
+2026-11-28T00:16:50.1333125Z CHECK 318: No named vendor provider module: profapi.dll
+2026-11-28T00:16:50.1334821Z CHECK 319: No named vendor provider module: system.core.ni.dll
+2026-11-28T00:16:50.1336402Z CHECK 320: No named vendor provider module: cryptsp.dll
+2026-11-28T00:16:50.1337802Z CHECK 321: No named vendor provider module: rsaenh.dll
+2026-11-28T00:16:50.1339290Z CHECK 322: No named vendor provider module: cryptbase.dll
+2026-11-28T00:16:50.1340207Z CHECK 323: No named vendor provider module: microsoft.visualbasic.ni.dll
+2026-11-28T00:16:50.1342084Z CHECK 324: No named vendor provider module: ntmarta.dll
+2026-11-28T00:16:50.1343859Z CHECK 325: No named vendor provider module: uiautomationclient.ni.dll
+2026-11-28T00:16:50.1345427Z CHECK 326: No named vendor provider module: uiautomationtypes.ni.dll
+2026-11-28T00:16:50.1346369Z CHECK 327: No named vendor provider module: system.configuration.ni.dll
+2026-11-28T00:16:50.1348063Z CHECK 328: No named vendor provider module: system.xml.ni.dll
+2026-11-28T00:16:50.1349467Z CHECK 329: No named vendor provider module: comctl32.dll
+2026-11-28T00:16:50.1350836Z CHECK 330: No named vendor provider module: gdiplus.dll
+2026-11-28T00:16:50.1352088Z CHECK 331: No named vendor provider module: dwrite.dll
+2026-11-28T00:16:50.1353652Z CHECK 332: No named vendor provider module: msctf.dll
+2026-11-28T00:16:50.1355149Z CHECK 333: No named vendor provider module: textshaping.dll
+2026-11-28T00:16:50.1356377Z CHECK 334: No named vendor provider module: comctl32.dll
+2026-11-28T00:16:50.1357744Z CHECK 335: No named vendor provider module: windowscodecs.dll
+2026-11-28T00:16:50.1358548Z CHECK 336: No named vendor provider module: textinputframework.dll
+2026-11-28T00:16:50.1360255Z CHECK 337: No named vendor provider module: oleaut32.dll
+2026-11-28T00:16:50.1362026Z CHECK 338: No named vendor provider module: coremessaging.dll
+2026-11-28T00:16:50.1363486Z CHECK 339: No named vendor provider module: coreuicomponents.dll
+2026-11-28T00:16:50.1364931Z CHECK 340: No named vendor provider module: psapi.dll
+2026-11-28T00:16:50.1365802Z CHECK 341: No named vendor provider module: uiautomationcore.dll
+2026-11-28T00:16:50.1367477Z CHECK 342: No named vendor provider module: clbcatq.dll
+2026-11-28T00:16:50.1369419Z CHECK 343: No named vendor provider module: sxs.dll
+2026-11-28T00:16:50.1371048Z CHECK 344: No named vendor provider module: windowmanagementapi.dll
+2026-11-28T00:16:50.1372928Z CHECK 345: No named vendor provider module: wintypes.dll
+2026-11-28T00:16:50.1374509Z CHECK 346: No named vendor provider module: uiamanager.dll
+2026-11-28T00:16:50.1375366Z CHECK 347: No named vendor provider module: accessibility.ni.dll
+2026-11-28T00:16:50.1377293Z CHECK 348: No named vendor provider module: uiautomationprovider.ni.dll
+2026-11-28T00:16:50.1378632Z CHECK 349: No named vendor provider module: uiautomationclientsideproviders.ni.dll
+2026-11-28T00:16:50.1379480Z CHECK 350: No named vendor provider module: oleacc.dll
+2026-11-28T00:16:50.1381269Z CHECK 351: No named vendor provider module: onecorecommonproxystub.dll
+2026-11-28T00:16:50.1382808Z CHECK 352: No named vendor provider module: presentationnative_v0400.dll
+2026-11-28T00:16:50.1384419Z CHECK 353: No named vendor provider module: system.enterpriseservices.thunk.dll
+2026-11-28T00:16:50.1386130Z CHECK 354: No named vendor provider module: windowsbase.ni.dll
+2026-11-28T00:16:50.1386992Z CHECK 355: No named vendor provider module: presentationcore.ni.dll
+2026-11-28T00:16:50.1388768Z CHECK 356: No named vendor provider module: wpfgfx_v0400.dll
+2026-11-28T00:16:50.1390303Z CHECK 357: No named vendor provider module: msvcp140_clr0400.dll
+2026-11-28T00:16:50.1391198Z CHECK 358: No named vendor provider module: dwmapi.dll
+2026-11-28T00:16:50.1392933Z CHECK 359: No named vendor provider module: dui70.dll
+2026-11-28T00:16:50.1394333Z CHECK 360: No named vendor provider module: duser.dll
+2026-11-28T00:16:50.1395792Z CHECK 361: No named vendor provider module: edputil.dll
+2026-11-28T00:16:50.1397390Z CHECK 362: No named vendor provider module: explorerframe.dll
+2026-11-28T00:16:50.1398706Z CHECK 363: No named vendor provider module: thumbcache.dll
+2026-11-28T00:16:50.1400063Z CHECK 364: No named vendor provider module: policymanager.dll
+2026-11-28T00:16:50.1401558Z CHECK 365: No named vendor provider module: msvcp110_win.dll
+2026-11-28T00:16:50.1402184Z CHECK 366: No named vendor provider module: dataexchange.dll
+2026-11-28T00:16:50.1404134Z CHECK 367: No named vendor provider module: twinapi.appcore.dll
+2026-11-28T00:16:50.1405592Z CHECK 368: No named vendor provider module: windows.globalization.dll
+2026-11-28T00:16:50.1407087Z CHECK 369: No named vendor provider module: globinputhost.dll
+2026-11-28T00:16:50.1408515Z CHECK 370: No named vendor provider module: bcp47langs.dll
+2026-11-28T00:16:50.1410142Z CHECK 371: No named vendor provider module: propsys.dll
+2026-11-28T00:16:50.1411739Z CHECK 372: No named vendor provider module: cfgmgr32.dll
+2026-11-28T00:16:50.1413340Z CHECK 373: No named vendor provider module: urlmon.dll
+2026-11-28T00:16:50.1414825Z CHECK 374: No named vendor provider module: iertutil.dll
+2026-11-28T00:16:50.1416169Z CHECK 375: No named vendor provider module: netutils.dll
+2026-11-28T00:16:50.1417569Z CHECK 376: No named vendor provider module: srvcli.dll
+2026-11-28T00:16:50.1418933Z CHECK 377: No named vendor provider module: sspicli.dll
+2026-11-28T00:16:50.1420332Z CHECK 378: No named vendor provider module: virtdisk.dll
+2026-11-28T00:16:50.1421763Z CHECK 379: No named vendor provider module: fltlib.dll
+2026-11-28T00:16:50.1422642Z CHECK 380: No named vendor provider module: windows.system.launcher.dll
+2026-11-28T00:16:50.1424428Z CHECK 381: No named vendor provider module: windows.staterepositorycore.dll
+2026-11-28T00:16:50.1425960Z CHECK 382: No named vendor provider module: xmllite.dll
+2026-11-28T00:16:50.1427200Z CHECK 383: No named vendor provider module: windows.fileexplorer.common.dll
+2026-11-28T00:16:50.1428695Z CHECK 384: No named vendor provider module: linkinfo.dll
+2026-11-28T00:16:50.1429485Z CHECK 385: No named vendor provider module: mpr.dll
+2026-11-28T00:16:50.1431230Z CHECK 386: No named vendor provider module: structuredquery.dll
+2026-11-28T00:16:50.1432583Z CHECK 387: No named vendor provider module: atlthunk.dll
+2026-11-28T00:16:50.1434415Z CHECK 388: No named vendor provider module: windows.storage.search.dll
+2026-11-28T00:16:50.1435797Z CHECK 389: No named vendor provider module: icu.dll
+2026-11-28T00:16:50.1437457Z CHECK 390: No named vendor provider module: iconcodecservice.dll
+2026-11-28T00:16:50.1439058Z CHECK 391: No named vendor provider module: networkexplorer.dll
+2026-11-28T00:16:50.1440478Z CHECK 392: No named vendor provider module: p9np.dll
+2026-11-28T00:16:50.1442866Z CHECK 393: No named vendor provider module: drprov.dll
+2026-11-28T00:16:50.1443536Z CHECK 394: No named vendor provider module: ntlanman.dll
+2026-11-28T00:16:50.1445052Z CHECK 395: No named vendor provider module: coml2.dll
+2026-11-28T00:16:50.1446595Z CHECK 396: No named vendor provider module: ntshrui.dll
+2026-11-28T00:16:50.1448150Z CHECK 397: No named vendor provider module: cscapi.dll
+2026-11-28T00:16:50.1449617Z CHECK 398: No named vendor provider module: actxprxy.dll
+2026-11-28T00:16:50.1451182Z CHECK 399: No named vendor provider module: tortoiseoverlays.dll
+2026-11-28T00:16:50.1452726Z CHECK 400: No named vendor provider module: tortoisestub.dll
+2026-11-28T00:16:50.1454204Z CHECK 401: No named vendor provider module: tortoisesvn.dll
+2026-11-28T00:16:50.1455726Z CHECK 402: No named vendor provider module: wininet.dll
+2026-11-28T00:16:50.1457324Z CHECK 403: No named vendor provider module: libsvn_tsvn.dll
+2026-11-28T00:16:50.1458749Z CHECK 404: No named vendor provider module: libapr_tsvn.dll
+2026-11-28T00:16:50.1460078Z CHECK 405: No named vendor provider module: ws2_32.dll
+2026-11-28T00:16:50.1461332Z CHECK 406: No named vendor provider module: crypt32.dll
+2026-11-28T00:16:50.1462791Z CHECK 407: No named vendor provider module: intl3_tsvn.dll
+2026-11-28T00:16:50.1464200Z CHECK 408: No named vendor provider module: msvcp140.dll
+2026-11-28T00:16:50.1465615Z CHECK 409: No named vendor provider module: vcruntime140_1.dll
+2026-11-28T00:16:50.1466937Z CHECK 410: No named vendor provider module: vcruntime140.dll
+2026-11-28T00:16:50.1468535Z CHECK 411: No named vendor provider module: libaprutil_tsvn.dll
+2026-11-28T00:16:50.1469881Z CHECK 412: No named vendor provider module: libsasl.dll
+2026-11-28T00:16:50.1471431Z CHECK 413: No named vendor provider module: wldap32.dll
+2026-11-28T00:16:50.1472747Z CHECK 414: No named vendor provider module: secur32.dll
+2026-11-28T00:16:50.1474209Z CHECK 415: No named vendor provider module: ncrypt.dll
+2026-11-28T00:16:50.1475576Z CHECK 416: No named vendor provider module: ntasn1.dll
+2026-11-28T00:16:50.1477047Z CHECK 417: No named vendor provider module: ehstorshell.dll
+2026-11-28T00:16:50.1478474Z CHECK 418: No named vendor provider module: setupapi.dll
+2026-11-28T00:16:50.1479939Z CHECK 419: No named vendor provider module: cscui.dll
+2026-11-28T00:16:50.1481310Z CHECK 420: No named vendor provider module: samcli.dll
+2026-11-28T00:16:50.1482840Z CHECK 421: No named vendor provider module: samlib.dll
+2026-11-28T00:16:50.1484343Z CHECK 422: No named vendor provider module: windows.staterepositoryps.dll
+2026-11-28T00:16:50.1485798Z CHECK 423: No named vendor provider module: system.data.ni.dll
+2026-11-28T00:16:50.1487232Z CHECK 424: No named vendor provider module: system.data.dll
+2026-11-28T00:16:50.1488680Z CHECK 425: No named vendor provider module: system.numerics.ni.dll
+2026-11-28T00:16:50.1489971Z CHECK 426: Restart opens a clean separate review page
+2026-11-28T00:16:50.1491356Z CHECK 427: Preserved report reopens after restart
+2026-11-28T00:16:50.1492829Z CHECK 428: No registered J2534 providers in actual manager
+2026-11-28T00:16:50.1494177Z CHECK 429: No managed Api opened
+2026-11-28T00:16:50.1495595Z CHECK 430: No managed Device opened
+2026-11-28T00:16:50.1497009Z CHECK 431: No managed Channel opened
+2026-11-28T00:16:50.1498397Z CHECK 432: No native provider/session selected
+2026-11-28T00:16:50.1499836Z CHECK 433: No named vendor provider module: savedsessionreviewtests.exe
+2026-11-28T00:16:50.1501189Z CHECK 434: No named vendor provider module: ntdll.dll
+2026-11-28T00:16:50.1502524Z CHECK 435: No named vendor provider module: mscoree.dll
+2026-11-28T00:16:50.1503904Z CHECK 436: No named vendor provider module: kernel32.dll
+2026-11-28T00:16:50.1505560Z CHECK 437: No named vendor provider module: kernelbase.dll
+2026-11-28T00:16:50.1506923Z CHECK 438: No named vendor provider module: apphelp.dll
+2026-11-28T00:16:50.1508454Z CHECK 439: No named vendor provider module: advapi32.dll
+2026-11-28T00:16:50.1509864Z CHECK 440: No named vendor provider module: msvcrt.dll
+2026-11-28T00:16:50.1511276Z CHECK 441: No named vendor provider module: sechost.dll
+2026-11-28T00:16:50.1512662Z CHECK 442: No named vendor provider module: bcrypt.dll
+2026-11-28T00:16:50.1514123Z CHECK 443: No named vendor provider module: rpcrt4.dll
+2026-11-28T00:16:50.1515652Z CHECK 444: No named vendor provider module: mscoreei.dll
+2026-11-28T00:16:50.1516967Z CHECK 445: No named vendor provider module: shlwapi.dll
+2026-11-28T00:16:50.1518522Z CHECK 446: No named vendor provider module: kernel.appcore.dll
+2026-11-28T00:16:50.1519897Z CHECK 447: No named vendor provider module: version.dll
+2026-11-28T00:16:50.1521340Z CHECK 448: No named vendor provider module: clr.dll
+2026-11-28T00:16:50.1522705Z CHECK 449: No named vendor provider module: user32.dll
+2026-11-28T00:16:50.1524108Z CHECK 450: No named vendor provider module: win32u.dll
+2026-11-28T00:16:50.1525444Z CHECK 451: No named vendor provider module: gdi32.dll
+2026-11-28T00:16:50.1526880Z CHECK 452: No named vendor provider module: vcruntime140_1_clr0400.dll
+2026-11-28T00:16:50.1528379Z CHECK 453: No named vendor provider module: vcruntime140_clr0400.dll
+2026-11-28T00:16:50.1529852Z CHECK 454: No named vendor provider module: gdi32full.dll
+2026-11-28T00:16:50.1531245Z CHECK 455: No named vendor provider module: ucrtbase.dll
+2026-11-28T00:16:50.1532697Z CHECK 456: No named vendor provider module: ucrtbase_clr0400.dll
+2026-11-28T00:16:50.1534244Z CHECK 457: No named vendor provider module: msvcp_win.dll
+2026-11-28T00:16:50.1535778Z CHECK 458: No named vendor provider module: imm32.dll
+2026-11-28T00:16:50.1537365Z CHECK 459: No named vendor provider module: mscorlib.ni.dll
+2026-11-28T00:16:50.1538649Z CHECK 460: No named vendor provider module: ole32.dll
+2026-11-28T00:16:50.1543572Z CHECK 461: No named vendor provider module: combase.dll
+2026-11-28T00:16:50.1546908Z CHECK 462: No named vendor provider module: bcryptprimitives.dll
+2026-11-28T00:16:50.1548749Z CHECK 463: No named vendor provider module: uxtheme.dll
+2026-11-28T00:16:50.1550131Z CHECK 464: No named vendor provider module: clrjit.dll
+2026-11-28T00:16:50.1552090Z CHECK 465: No named vendor provider module: system.ni.dll
+2026-11-28T00:16:50.1554021Z CHECK 466: No named vendor provider module: system.drawing.ni.dll
+2026-11-28T00:16:50.1555888Z CHECK 467: No named vendor provider module: system.windows.forms.ni.dll
+2026-11-28T00:16:50.1557756Z CHECK 468: No named vendor provider module: shell32.dll
+2026-11-28T00:16:50.1559468Z CHECK 469: No named vendor provider module: windows.storage.dll
+2026-11-28T00:16:50.1560984Z CHECK 470: No named vendor provider module: shcore.dll
+2026-11-28T00:16:50.1562320Z CHECK 471: No named vendor provider module: profapi.dll
+2026-11-28T00:16:50.1565116Z CHECK 472: No named vendor provider module: system.core.ni.dll
+2026-11-28T00:16:50.1565698Z CHECK 473: No named vendor provider module: cryptsp.dll
+2026-11-28T00:16:50.1566318Z CHECK 474: No named vendor provider module: rsaenh.dll
+2026-11-28T00:16:50.1568414Z CHECK 475: No named vendor provider module: cryptbase.dll
+2026-11-28T00:16:50.1570562Z CHECK 476: No named vendor provider module: microsoft.visualbasic.ni.dll
+2026-11-28T00:16:50.1571922Z CHECK 477: No named vendor provider module: ntmarta.dll
+2026-11-28T00:16:50.1573791Z CHECK 478: No named vendor provider module: uiautomationclient.ni.dll
+2026-11-28T00:16:50.1575348Z CHECK 479: No named vendor provider module: uiautomationtypes.ni.dll
+2026-11-28T00:16:50.1577646Z CHECK 480: No named vendor provider module: system.configuration.ni.dll
+2026-11-28T00:16:50.1579692Z CHECK 481: No named vendor provider module: system.xml.ni.dll
+2026-11-28T00:16:50.1580301Z CHECK 482: No named vendor provider module: comctl32.dll
+2026-11-28T00:16:50.1582838Z CHECK 483: No named vendor provider module: gdiplus.dll
+2026-11-28T00:16:50.1584290Z CHECK 484: No named vendor provider module: dwrite.dll
+2026-11-28T00:16:50.1585963Z CHECK 485: No named vendor provider module: msctf.dll
+2026-11-28T00:16:50.1588034Z CHECK 486: No named vendor provider module: textshaping.dll
+2026-11-28T00:16:50.1589421Z CHECK 487: No named vendor provider module: comctl32.dll
+2026-11-28T00:16:50.1591145Z CHECK 488: No named vendor provider module: windowscodecs.dll
+2026-11-28T00:16:50.1591809Z CHECK 489: No named vendor provider module: textinputframework.dll
+2026-11-28T00:16:50.1593544Z CHECK 490: No named vendor provider module: oleaut32.dll
+2026-11-28T00:16:50.1594595Z CHECK 491: No named vendor provider module: coremessaging.dll
+2026-11-28T00:16:50.1595272Z CHECK 492: No named vendor provider module: coreuicomponents.dll
+2026-11-28T00:16:50.1597105Z CHECK 493: No named vendor provider module: psapi.dll
+2026-11-28T00:16:50.1598616Z CHECK 494: No named vendor provider module: uiautomationcore.dll
+2026-11-28T00:16:50.1600042Z CHECK 495: No named vendor provider module: clbcatq.dll
+2026-11-28T00:16:50.1601829Z CHECK 496: No named vendor provider module: sxs.dll
+2026-11-28T00:16:50.1603655Z CHECK 497: No named vendor provider module: windowmanagementapi.dll
+2026-11-28T00:16:50.1605114Z CHECK 498: No named vendor provider module: wintypes.dll
+2026-11-28T00:16:50.1606530Z CHECK 499: No named vendor provider module: uiamanager.dll
+2026-11-28T00:16:50.1607968Z CHECK 500: No named vendor provider module: accessibility.ni.dll
+2026-11-28T00:16:50.1609500Z CHECK 501: No named vendor provider module: uiautomationprovider.ni.dll
+2026-11-28T00:16:50.1610451Z CHECK 502: No named vendor provider module: uiautomationclientsideproviders.ni.dll
+2026-11-28T00:16:50.1612069Z CHECK 503: No named vendor provider module: oleacc.dll
+2026-11-28T00:16:50.1613405Z CHECK 504: No named vendor provider module: onecorecommonproxystub.dll
+2026-11-28T00:16:50.1614947Z CHECK 505: No named vendor provider module: presentationnative_v0400.dll
+2026-11-28T00:16:50.1615890Z CHECK 506: No named vendor provider module: system.enterpriseservices.thunk.dll
+2026-11-28T00:16:50.1617875Z CHECK 507: No named vendor provider module: windowsbase.ni.dll
+2026-11-28T00:16:50.1619772Z CHECK 508: No named vendor provider module: presentationcore.ni.dll
+2026-11-28T00:16:50.1620660Z CHECK 509: No named vendor provider module: wpfgfx_v0400.dll
+2026-11-28T00:16:50.1622443Z CHECK 510: No named vendor provider module: msvcp140_clr0400.dll
+2026-11-28T00:16:50.1624062Z CHECK 511: No named vendor provider module: dwmapi.dll
+2026-11-28T00:16:50.1625568Z CHECK 512: No named vendor provider module: dui70.dll
+2026-11-28T00:16:50.1627304Z CHECK 513: No named vendor provider module: duser.dll
+2026-11-28T00:16:50.1628773Z CHECK 514: No named vendor provider module: edputil.dll
+2026-11-28T00:16:50.1630069Z CHECK 515: No named vendor provider module: explorerframe.dll
+2026-11-28T00:16:50.1630896Z CHECK 516: No named vendor provider module: thumbcache.dll
+2026-11-28T00:16:50.1632780Z CHECK 517: No named vendor provider module: policymanager.dll
+2026-11-28T00:16:50.1634555Z CHECK 518: No named vendor provider module: msvcp110_win.dll
+2026-11-28T00:16:50.1635881Z CHECK 519: No named vendor provider module: dataexchange.dll
+2026-11-28T00:16:50.1637102Z CHECK 520: No named vendor provider module: twinapi.appcore.dll
+2026-11-28T00:16:50.1638427Z CHECK 521: No named vendor provider module: windows.globalization.dll
+2026-11-28T00:16:50.1639693Z CHECK 522: No named vendor provider module: globinputhost.dll
+2026-11-28T00:16:50.1641040Z CHECK 523: No named vendor provider module: bcp47langs.dll
+2026-11-28T00:16:50.1641896Z CHECK 524: No named vendor provider module: propsys.dll
+2026-11-28T00:16:50.1643593Z CHECK 525: No named vendor provider module: cfgmgr32.dll
+2026-11-28T00:16:50.1645280Z CHECK 526: No named vendor provider module: urlmon.dll
+2026-11-28T00:16:50.1646668Z CHECK 527: No named vendor provider module: iertutil.dll
+2026-11-28T00:16:50.1647552Z CHECK 528: No named vendor provider module: netutils.dll
+2026-11-28T00:16:50.1649113Z CHECK 529: No named vendor provider module: srvcli.dll
+2026-11-28T00:16:50.1650663Z CHECK 530: No named vendor provider module: sspicli.dll
+2026-11-28T00:16:50.1651677Z CHECK 531: No named vendor provider module: virtdisk.dll
+2026-11-28T00:16:50.1653082Z CHECK 532: No named vendor provider module: fltlib.dll
+2026-11-28T00:16:50.1654392Z CHECK 533: No named vendor provider module: windows.system.launcher.dll
+2026-11-28T00:16:50.1655551Z CHECK 534: No named vendor provider module: windows.staterepositorycore.dll
+2026-11-28T00:16:50.1657376Z CHECK 535: No named vendor provider module: xmllite.dll
+2026-11-28T00:16:50.1659277Z CHECK 536: No named vendor provider module: windows.fileexplorer.common.dll
+2026-11-28T00:16:50.1660567Z CHECK 537: No named vendor provider module: linkinfo.dll
+2026-11-28T00:16:50.1662073Z CHECK 538: No named vendor provider module: mpr.dll
+2026-11-28T00:16:50.1663518Z CHECK 539: No named vendor provider module: structuredquery.dll
+2026-11-28T00:16:50.1664702Z CHECK 540: No named vendor provider module: atlthunk.dll
+2026-11-28T00:16:50.1666011Z CHECK 541: No named vendor provider module: windows.storage.search.dll
+2026-11-28T00:16:50.1667406Z CHECK 542: No named vendor provider module: icu.dll
+2026-11-28T00:16:50.1668410Z CHECK 543: No named vendor provider module: iconcodecservice.dll
+2026-11-28T00:16:50.1670155Z CHECK 544: No named vendor provider module: networkexplorer.dll
+2026-11-28T00:16:50.1671777Z CHECK 545: No named vendor provider module: p9np.dll
+2026-11-28T00:16:50.1673088Z CHECK 546: No named vendor provider module: drprov.dll
+2026-11-28T00:16:50.1674841Z CHECK 547: No named vendor provider module: ntlanman.dll
+2026-11-28T00:16:50.1676172Z CHECK 548: No named vendor provider module: coml2.dll
+2026-11-28T00:16:50.1677618Z CHECK 549: No named vendor provider module: ntshrui.dll
+2026-11-28T00:16:50.1678891Z CHECK 550: No named vendor provider module: cscapi.dll
+2026-11-28T00:16:50.1680244Z CHECK 551: No named vendor provider module: actxprxy.dll
+2026-11-28T00:16:50.1681194Z CHECK 552: No named vendor provider module: tortoiseoverlays.dll
+2026-11-28T00:16:50.1682698Z CHECK 553: No named vendor provider module: tortoisestub.dll
+2026-11-28T00:16:50.1684185Z CHECK 554: No named vendor provider module: tortoisesvn.dll
+2026-11-28T00:16:50.1685013Z CHECK 555: No named vendor provider module: wininet.dll
+2026-11-28T00:16:50.1686687Z CHECK 556: No named vendor provider module: libsvn_tsvn.dll
+2026-11-28T00:16:50.1688357Z CHECK 557: No named vendor provider module: libapr_tsvn.dll
+2026-11-28T00:16:50.1689608Z CHECK 558: No named vendor provider module: ws2_32.dll
+2026-11-28T00:16:50.1690931Z CHECK 559: No named vendor provider module: crypt32.dll
+2026-11-28T00:16:50.1692249Z CHECK 560: No named vendor provider module: intl3_tsvn.dll
+2026-11-28T00:16:50.1693550Z CHECK 561: No named vendor provider module: msvcp140.dll
+2026-11-28T00:16:50.1694917Z CHECK 562: No named vendor provider module: vcruntime140_1.dll
+2026-11-28T00:16:50.1696665Z CHECK 563: No named vendor provider module: vcruntime140.dll
+2026-11-28T00:16:50.1698166Z CHECK 564: No named vendor provider module: libaprutil_tsvn.dll
+2026-11-28T00:16:50.1699611Z CHECK 565: No named vendor provider module: libsasl.dll
+2026-11-28T00:16:50.1700956Z CHECK 566: No named vendor provider module: wldap32.dll
+2026-11-28T00:16:50.1702216Z CHECK 567: No named vendor provider module: secur32.dll
+2026-11-28T00:16:50.1703947Z CHECK 568: No named vendor provider module: ncrypt.dll
+2026-11-28T00:16:50.1705335Z CHECK 569: No named vendor provider module: ntasn1.dll
+2026-11-28T00:16:50.1706772Z CHECK 570: No named vendor provider module: ehstorshell.dll
+2026-11-28T00:16:50.1708073Z CHECK 571: No named vendor provider module: setupapi.dll
+2026-11-28T00:16:50.1709289Z CHECK 572: No named vendor provider module: cscui.dll
+2026-11-28T00:16:50.1710661Z CHECK 573: No named vendor provider module: samcli.dll
+2026-11-28T00:16:50.1711950Z CHECK 574: No named vendor provider module: samlib.dll
+2026-11-28T00:16:50.1713372Z CHECK 575: No named vendor provider module: windows.staterepositoryps.dll
+2026-11-28T00:16:50.1714699Z CHECK 576: No named vendor provider module: system.data.ni.dll
+2026-11-28T00:16:50.1716082Z CHECK 577: No named vendor provider module: system.data.dll
+2026-11-28T00:16:50.1717300Z CHECK 578: No named vendor provider module: system.numerics.ni.dll
+2026-11-28T00:16:50.1718572Z CHECK 579: Restarted offline review closes cleanly
+2026-11-28T00:16:50.1719885Z CHECK 580: GUI/restart/filter paths leave original CSV unchanged
+2026-11-28T00:16:50.1721258Z CHECK 581: R29 executable unchanged after acceptance
+2026-11-28T00:16:50.1722687Z PASS: 581 R29 saved-session parser/production-GUI checkpoints; no provider/vehicle.
+[Screenshot preserved separately in docs/evidence/R29-*.png]
+[Screenshot preserved separately in docs/evidence/R29-*.png]
+2026-11-28T00:16:50.4222761Z ##[group]Run $ErrorActionPreference = 'Stop'
+2026-11-28T00:16:50.4223195Z [36;1m$ErrorActionPreference = 'Stop'[0m
+2026-11-28T00:16:50.4223677Z [36;1mCopy-Item diagnostics/generated/roundtrip.csv bin/Release/Example-Synthetic-Session.csv[0m
+2026-11-28T00:16:50.4224091Z [36;1m@([0m
+2026-11-28T00:16:50.4224311Z [36;1m  'J2534Diag R29 - Saved session review',[0m
+2026-11-28T00:16:50.4224652Z [36;1m  'Extract in a separate folder and keep R28 as fallback.',[0m
+2026-11-28T00:16:50.4225064Z [36;1m  'Run J2534Diag.exe; choose Saved session; choose Open saved session.',[0m
+2026-11-28T00:16:50.4225548Z [36;1m  'Example-Synthetic-Session.csv is synthetic test data, not a vehicle recording.',[0m
+2026-11-28T00:16:50.4226056Z [36;1m  'Review is offline and makes no ECU requests. No adapter connection is needed.',[0m
+2026-11-28T00:16:50.4226532Z [36;1m  'Only this app scalar Schema=2 report CSVs are supported; see owner R29 record.',[0m
+2026-11-28T00:16:50.4227019Z [36;1m  'Physical R29 adapter/vehicle acceptance remains unverified.',[0m
+2026-11-28T00:16:50.4227360Z [36;1m  "SourceCommit=$env:GITHUB_SHA"[0m
+2026-11-28T00:16:50.4227848Z [36;1m) | Set-Content bin/Release/R29_README.txt -Encoding UTF8[0m
+2026-11-28T00:16:50.4228184Z [36;1m$out = (Resolve-Path bin/Release).Path[0m
+2026-11-28T00:16:50.4228753Z [36;1m$hashes = Get-ChildItem $out -File | Sort-Object Name | ForEach-Object { (Get-FileHash $_.FullName -Algorithm SHA256).Hash + '  ' + $_.Name }[0m
+2026-11-28T00:16:50.4229842Z [36;1m@("Release=R29","SourceCommit=$env:GITHUB_SHA","WorkflowRun=$env:GITHUB_RUN_ID",'OfflineSavedReview=PASS','Vehicle=UNVERIFIED','PayloadSHA256:') + $hashes | Set-Content bin/Release/ENGINEERING_PREVIEW_MANIFEST.txt -Encoding UTF8[0m
+2026-11-28T00:16:50.4230681Z [36;1mforeach ($line in $hashes) {[0m
+2026-11-28T00:16:50.4230982Z [36;1m  if ($line -match '^([A-F0-9]{64})  (.+)$') {[0m
+2026-11-28T00:16:50.4231519Z [36;1m    if ((Get-FileHash (Join-Path $out $Matches[2]) -Algorithm SHA256).Hash -ne $Matches[1]) { throw 'Package payload hash mismatch' }[0m
+2026-11-28T00:16:50.4232010Z [36;1m  }[0m
+2026-11-28T00:16:50.4232186Z [36;1m}[0m
+2026-11-28T00:16:50.4232456Z [36;1mNew-Item -ItemType Directory -Force deliverables | Out-Null[0m
+2026-11-28T00:16:50.4232856Z [36;1mAdd-Type -AssemblyName System.IO.Compression.FileSystem[0m
+2026-11-28T00:16:50.4233396Z [36;1m[IO.Compression.ZipFile]::CreateFromDirectory($out,(Join-Path $pwd deliverables/J2534Diag-R29-Windows.zip))[0m
+2026-11-28T00:16:50.4233932Z [36;1m$zip = Join-Path $pwd deliverables/J2534Diag-R29-Windows.zip[0m
+2026-11-28T00:16:50.4234314Z [36;1m$readback = [IO.Compression.ZipFile]::OpenRead($zip)[0m
+2026-11-28T00:16:50.4234601Z [36;1mtry {[0m
+2026-11-28T00:16:50.4234816Z [36;1m  foreach ($entry in $readback.Entries) {[0m
+2026-11-28T00:16:50.4235096Z [36;1m    $stream = $entry.Open()[0m
+2026-11-28T00:16:50.4235690Z [36;1m    try { $sha = [Security.Cryptography.SHA256]::Create(); $digest = [Convert]::ToHexString($sha.ComputeHash($stream)); $sha.Dispose() } finally { $stream.Dispose() }[0m
+2026-11-28T00:16:50.4236511Z [36;1m    if ($digest -ne (Get-FileHash (Join-Path $out $entry.FullName) -Algorithm SHA256).Hash) { throw 'ZIP entry mismatch' }[0m
+2026-11-28T00:16:50.4236979Z [36;1m  }[0m
+2026-11-28T00:16:50.4237193Z [36;1m} finally { $readback.Dispose() }[0m
+2026-11-28T00:16:50.4237601Z [36;1m"PackageBytes=$((Get-Item $zip).Length)" | Tee-Object diagnostics/package-verification.txt[0m
+2026-11-28T00:16:50.4238239Z [36;1m"PackageSHA256=$((Get-FileHash $zip -Algorithm SHA256).Hash)" | Tee-Object diagnostics/package-verification.txt -Append[0m
+2026-11-28T00:16:50.4239021Z [36;1m"ExecutableSHA256=$((Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash)" | Tee-Object diagnostics/package-verification.txt -Append[0m
+2026-11-28T00:16:50.4239736Z [36;1mCopy-Item bin/Release/ENGINEERING_PREVIEW_MANIFEST.txt diagnostics/runtime-manifest.txt[0m
+2026-11-28T00:16:50.4241583Z [36;1m$tag = "j2534diag-r29-$($env:GITHUB_SHA.Substring(0,12))"[0m
+2026-11-28T00:16:50.4242321Z [36;1mgh release create $tag $zip --repo $env:GITHUB_REPOSITORY --draft --target $env:GITHUB_SHA --title 'J2534Diag R29 saved-session review' --notes-file docs/R29_SAVED_SESSION_REVIEW.md[0m
+2026-11-28T00:16:50.4243145Z [36;1mif ($LASTEXITCODE -ne 0) { throw 'Durable draft release preservation failed; do not rebuild' }[0m
+2026-11-28T00:16:50.4243806Z [36;1mgh release view $tag --repo $env:GITHUB_REPOSITORY --json url,tagName,isDraft,assets | Set-Content diagnostics/draft-release.json[0m
+2026-11-28T00:16:50.4277546Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-28T00:16:50.4277891Z env:
+2026-11-28T00:16:50.4278151Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:16:50.4282765Z   GH_***: ***
+2026-11-28T00:16:50.4282951Z ##[endgroup]
+2026-11-28T00:16:50.9062528Z PackageBytes=1897018
+2026-11-28T00:16:50.9094657Z PackageSHA256=D85095ADE7C3AB242FB16A86F7D8C78484AA20356307D9B8972FEFECB1075037
+2026-11-28T00:16:50.9118463Z ExecutableSHA256=C4A9B9CF8602D9D3DFCDA0CADB29792302E21EA4B62C9F2A7362FFF3F126AD0F
+2026-11-28T00:16:54.2918817Z gh: To use GitHub CLI in a GitHub Actions workflow, set the GH_TOKEN environment variable. Example:
+2026-11-28T00:16:54.2919432Z   env:
+2026-11-28T00:16:54.2919676Z     GH_TOKEN: ${{ github.token }}
+2026-11-28T00:16:54.4581724Z [31;1mException: [0mD:\a\_temp\23be63a1-abb1-4d46-b366-1a7e395e0ebe.ps1:40[0m
+2026-11-28T00:16:54.4582295Z [31;1m[0m[36;1mLine |[0m
+2026-11-28T00:16:54.4583073Z [31;1m[0m[36;1m[36;1m  40 | [0m … DE -ne 0) { [36;1mthrow 'Durable draft release preservation failed; do not [0m …[0m
+2026-11-28T00:16:54.4584021Z [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+2026-11-28T00:16:54.4584700Z [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mDurable draft release preservation failed; do not rebuild[0m
+2026-11-28T00:16:54.5014619Z ##[error]Process completed with exit code 1.
+2026-11-28T00:16:54.5163743Z ##[group]Run actions/upload-artifact@v4
+2026-11-28T00:16:54.5164067Z with:
+2026-11-28T00:16:54.5164289Z   name: J2534Diag-R29-saved-review-evidence
+2026-11-28T00:16:54.5164547Z   path: diagnostics/**
+2026-11-28T00:16:54.5164745Z   retention-days: 30
+2026-11-28T00:16:54.5164947Z   if-no-files-found: warn
+2026-11-28T00:16:54.5165152Z   compression-level: 6
+2026-11-28T00:16:54.5165350Z   overwrite: false
+2026-11-28T00:16:54.5165546Z   include-hidden-files: false
+2026-11-28T00:16:54.5165757Z env:
+2026-11-28T00:16:54.5166001Z   NUGET: C:\hostedtoolcache\windows\nuget.exe\8.0.0\x64/nuget.exe
+2026-11-28T00:16:54.5166300Z ##[endgroup]
+2026-11-28T00:16:54.6944088Z (node:7952) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-28T00:16:54.6944901Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-28T00:16:54.7059249Z With the provided path, there will be 17 files uploaded
+2026-11-28T00:16:54.7064019Z Artifact name is valid!
+2026-11-28T00:16:54.7065561Z Root directory input is valid!
+2026-11-28T00:16:54.9925919Z Beginning upload of artifact content to blob storage
+2026-11-28T00:16:55.0420751Z (node:7952) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-28T00:16:55.2820942Z Uploaded bytes 181270
+2026-11-28T00:16:55.3215174Z Finished uploading artifact content to blob storage!
+2026-11-28T00:16:55.3215943Z SHA256 digest of uploaded artifact zip is a479d322b2f26bb498c601d1e93f8c8d55951045d905c1ab5e0241c8dade9920
+2026-11-28T00:16:55.3218307Z Finalizing artifact upload
+2026-11-28T00:16:55.6761743Z Artifact J2534Diag-R29-saved-review-evidence.zip successfully finalized. Artifact ID 15239267830
+2026-11-28T00:16:55.6762652Z Artifact J2534Diag-R29-saved-review-evidence has been successfully uploaded! Final size is 181270 bytes. Artifact ID is 15239267830
+2026-11-28T00:16:55.6771362Z Artifact download URL: https://github.com/bmcleid/J2534Diag-Independent/actions/runs/46086955097/artifacts/15239267830
+2026-11-28T00:16:55.7128275Z Post job cleanup.
+2026-11-28T00:16:55.8864519Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-28T00:16:55.9183197Z git version 2.56.1.windows.1
+2026-11-28T00:16:55.9257610Z Temporarily overriding HOME='D:\a\_temp\a3d0dddf-66bb-4b2b-9a45-c6a70c3710a4' before making global git config changes
+2026-11-28T00:16:55.9258896Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-28T00:16:55.9270010Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\J2534Diag-Independent\J2534Diag-Independent
+2026-11-28T00:16:55.9633883Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-28T00:16:55.9932644Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-28T00:16:56.4653694Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-28T00:16:56.4920124Z http.https://github.com/.extraheader
+2026-11-28T00:16:56.4958352Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-11-28T00:16:56.5256126Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-28T00:16:57.0107452Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-28T00:16:57.0403575Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-28T00:16:57.5332472Z Cleaning up orphan processes
+2026-11-28T00:16:57.5565430Z Terminate orphan process: pid (1776) (VBCSCompiler)
+2026-11-28T00:16:57.5678263Z Terminate orphan process: pid (5756) (conhost)
+2026-11-28T00:16:57.5734110Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/download-artifact@v4, actions/upload-artifact@v4, microsoft/setup-msbuild@v2, NuGet/setup-nuget@v2. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

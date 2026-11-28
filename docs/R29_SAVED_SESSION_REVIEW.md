@@ -20,6 +20,45 @@ Extract R29 in a separate folder, preserving R28. Run J2534Diag.exe, choose Save
 
 ## Validation plan
 
-One scoped Windows build and parser/production-GUI acceptance gate for this new artifact. Reuse preserved R28 normal and refusal/recovery reports and a 20,007-record continuity export. Check exact source hashes, observations, error/disconnect events, multiline/quoted fields, zero/unknown values, malformed input, limits, filtering, picker/cancel, failed-load retention, restart and source immutability. Require zero provider registrations/handles. Do not repeat R28 close/dialog/history/vehicle suites. Results are pending until actual Windows output is inspected.
+One scoped Windows build and parser/production-GUI acceptance gate for this new artifact. Reuse preserved R28 normal and refusal/recovery reports and a 20,007-record continuity export. Check exact source hashes, observations, error/disconnect events, multiline/quoted fields, zero/unknown values, malformed input, limits, filtering, picker/cancel, failed-load retention, restart and source immutability. Require zero provider registrations/handles. Do not repeat R28 close/dialog/history/vehicle suites. The source-commit results were pending; verified outcomes below supersede that pending status.
 
 A local executor was unavailable at implementation start; code was prepared through repository APIs and will be compiled/tested by the existing hosted Windows route. No local compiler pass is claimed. Product acceptance and package delivery must use the successful exact-source run, not this plan. PR #29 stays Draft/unmerged.
+
+## Verified completion — November 27, 2026 Eastern
+
+**CONFIRMED: R29 saved-session review is implemented, compiled, and accepted offline.** Product source `2aa3d43a0c5e3fe2c913e2a8b96d90f91157c249`; actual parser/production-GUI acceptance ran once in [Windows 46086955097](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/46086955097), job `140798643825`. The acceptance step passed **581 checkpoints** including repeated module-name checks, not 581 functional scenarios. App compiled with four existing unused-variable/field warnings; focused harness compiled without new errors. Actual screenshots were inspected.
+
+### Completed scope
+
+1. Refreshed Shared Index v251, owner/registry/coordination/CI policy and PR29.
+2. Corrected the old handoff with a current continuation checkpoint; preserved historical notes and R28 fallback.
+3. Confirmed the scalar-review gap against the application project, source tree, CAN importer and exporter.
+4. Added a separate read-only Saved session tab and complete Schema=2 reader.
+5. Added exact event filtering, case-insensitive text search, original source-record numbers and complete field details.
+6. Preserved raw cell text, order, missing values, measured zero, error/disconnect evidence, source path and one-snapshot SHA-256. Exporter identity remains a recorded claim.
+7. Added explicit malformed/schema/incomplete/size/row-limit rejection and prior-report retention.
+8. Verified parser and real production GUI with preserved R28 normal and failure/recovery reports, native file picker/cancel, filter/clear, failed load, clean live report, restart/reopen and unchanged source files.
+9. Recovered and verified a distributable ZIP with the exact accepted executable and all nine original payload hashes.
+10. Preserved the package as a durable draft release and updated canonical GitHub owner/shared records with readback. Library index writeback is explicitly pending because the local executor and file-write tools are unavailable; no successful Library save or direct chat attachment is claimed.
+
+The 20,007-record continuity report opened completely. Normal report reopened with 110 records and nine Observation rows. Actual GUI loaded all 18 refusal-recovery records; searching R28_REFUSAL_FIXTURE yielded exactly original source record 10 and its full failure detail. Exact event selection yielded nine observations, excluding metadata text. Native picker cancellation and invalid-file parse retained the previous report. Restart/reopen worked; original hashes remained unchanged. Zero registered providers and null API/device/channel/native-session handles were checked. No adapter/vehicle communication or programming, DTC clear, actuation or merge occurred.
+
+### Validation and delivery accounting
+
+The first hosted run's overall conclusion is **FAILURE**, despite compile/parser/GUI/package verification passing: its draft-release upload failed because the workflow accidentally renamed the GH_TOKEN environment key. No product defect was established. The successfully created ZIP was not uploaded by the later success-only artifact step; the transient runner's package could not be recovered directly. This orchestration error is corrected in workflow-only commit `dc29d23bd7f2caff62263b5e7c4146fc5c08d0bc`: correct token key and upload package before external release action.
+
+[Package-only recovery 46087182555](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/46087182555), job `140799383256`, **SUCCESS**, harness/workflow commit `185b6c702ef67437162aba83ffa22da39aa9a67d` on `test/r29-package-recovery-20261127`. It rebuilt only the pinned original source, stamping the original product commit, and required the exact previously accepted EXE and **all nine original payload hashes**. Both comparisons passed. No acceptance tests, old suites or vehicle checks were rerun. ZIP entries were reopened and independently compared to payload SHA-256 values within the recovery gate. There were two product compiles total (initial validation plus package recovery), one parser/GUI acceptance run, and zero full/historical/R28-dialog suites. Never describe the first hosted job as entirely successful.
+
+ZIP metadata changed during repackaging: original transient ZIP SHA-256 D85095ADE7C3AB242FB16A86F7D8C78484AA20356307D9B8972FEFECB1075037; delivered ZIP SHA-256 below differs, while all nine payloads and tested EXE are identical.
+
+### Delivered package
+
+- [J2534Diag-R29-Windows.zip](https://github.com/bmcleid/J2534Diag-Independent/releases/download/untagged-993a71743095eeb69d7e/J2534Diag-R29-Windows.zip), **1,897,018 bytes**, SHA-256 `0fdad6d5e480bbe885b21ffc15bf7680fdf78791b29f7fcd6392bde470b644f1`.
+- EXE SHA-256 `c4a9b9cf8602d9d3dfcda0cadb29792302e21ea4b62c9f2a7362fff3f126ad0f`.
+- [Durable draft release](https://github.com/bmcleid/J2534Diag-Independent/releases/tag/untagged-993a71743095eeb69d7e), release ID `461179973`, tag name `j2534diag-r29-2aa3d43a0c5e`, target original product source. Asset `802563706` independently read back as uploaded, exact byte count and SHA-256 digest match. Draft retained, not publicly published.
+- [Windows artifact 15240080062](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/46087182555/artifacts/15240080062) wraps that ZIP; wrapper 1,896,130 bytes, SHA-256 `5dd6ebcb76725228b1d22026729910e4cb469f20aafd85a4e72c2e63a3477d94`, expires February 26, 2027. Do not confuse wrapper and inner package hashes.
+- First acceptance evidence artifact `15239267830`: 181,270 bytes, SHA-256 `a479d322b2f26bb498c601d1e93f8c8d55951045d905c1ab5e0241c8dade9920`.
+- Recovery evidence artifact `15239258129`: 1,354 bytes, SHA-256 `2bdc6c12c20613124d80ff792b31b157e051ebe8ec3a3240e595315a33e736ae`.
+- Durable text logs and screenshots are preserved in this branch under docs/evidence/R29-*.
+
+Extract R29 separately; keep R28 unchanged. Choose Saved session, then Open saved session. Example-Synthetic-Session.csv is a labelled demonstration, not vehicle evidence. No owner retest or vehicle scan is requested. Owner-PC R29 launch/physical acceptance remain unverified; R28's owner launch and completed close/recovery evidence remain valid. PR #29 stays Draft/unmerged. The saved-review development scope is closed; the sole administrative follow-up is Library index/direct-file delivery when an executor is available. This is not a scheduled automation.

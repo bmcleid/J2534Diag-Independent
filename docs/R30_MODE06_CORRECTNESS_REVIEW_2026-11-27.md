@@ -110,3 +110,12 @@ First reuse any existing saved Mode06/support responses if available. Do not inf
 ### Durable delivery receipts
 
 Saved final [J2534Diag-R30-Windows.zip](https://chatgpt.com/library?file_id=libfile_4f18c58c0de88191a8770ff153f8c657&account_id=personal), Librarylibfile_4f18c58c0de88191a8770ff153f8c657/version0, backingfile_00000000d2f481f5ad76cc56805a3717;1,901,701bytes; final package hash above. Saved [J2534Diag-R30-Mode06-Evidence.zip](https://chatgpt.com/library?file_id=libfile_30ee081d823881919a75db5ee398a683&account_id=personal), Librarylibfile_30ee081d823881919a75db5ee398a683/version0, backingfile_00000000a85881f59f929dce4cb558fb;3,879,126bytes; SHA256868edeff203103fa3a6883437a7e4ceb869050e1b2820cfe1377b2bce9cd910b. Both save receipts and local identity metadata confirmed. Evidence archive CRC/member hashes PASS; contains both original runtime/evidence wrappers, full hosted logs and scoped-result/readme references, preserving the superseded visual failure. Source/harness remain pinned in Git and are not duplicated as a second repository archive. No owner install or hardware check requested.
+
+
+## November 28, 2026 Eastern — R30 owner-PC visual acceptance confirmed
+
+Owner supplied `Screenshot 2026-11-28 111039.png`, Library `libfile_4c518fabeba88191ae04953e3cef8509`,184662bytes, SHA256 `72837a4e2b6361586f01d4b8015db64ae9f586c0049e63289efb6e0b627f90ac`, and reported “it appears everything is in order.” Original image inspected and retained unchanged.
+
+**CONFIRMED visual scope:** title R30/bb602372a5a1; Misfire Monitor open; experimental GM-reference/SRX-support-unverified/reporting-period warning, blank source selector and Unknown–no Mode06 observations message visible above gauges; all reference gauges show Unknown; footer Disconnected with blank VIN. This confirms owner-PC launch and corrected layout at the supplied screen size. No repeat launch/screenshot/sample check required.
+
+Screenshot does not independently establish running-process EXE hash, physical cable state, actual provider/vehicle communication, supported Mode06 monitors, live accuracy or clean application exit. Those remain distinct scopes; existing software tests retain their acceptance. Reference cylinder7/8 cards are generic slots, not a claim about this six-cylinder vehicle. No new scan or driver change requested. Accepted R30/R29 ZIP preservation on master remains unchanged (876923c/af83c01); keep R29/R28/R27 fallbacks and PR29 Draft/unmerged.

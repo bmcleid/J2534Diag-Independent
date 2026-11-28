@@ -47,3 +47,61 @@ Steps1–10: refreshed Index267/registry/coordination/CI/owner/36branches/29stac
 Windows46092164755/job140815335851 at ec8c35d2d93138bb5270f1aebb8af610fe5779f9 concluded SUCCESS on its first attempt: three R29 exact-binary defect witnesses reproduced; production compiled with two pre-existing SelectedVehicleControl unused-field warnings; focused62 model/actual-form checkpoints passed with zero providers/handles. No full suites or vehicle actions. Package creation also passed. However independent screenshot inspection found the new toolbar hidden behind the embedded Fill layout: the source selector, unverified-status warning and worker-status label were not visible. Therefore this first package is superseded and is NOT accepted for delivery. Passing value/state assertions did not establish visual usability.
 
 Prepared correction places toolbar and gauges in separate TableLayoutPanel rows. Added visibility/bounds/source-selection checks at wide and narrow sizes. The next gate compiles this changed product once and runs only layout/source-selector acceptance;41 model checks, other lifecycle/GUI assertions and three exact-R29 witnesses are reused, not rerun. First artifact wrapper15242056682 SHA256a9dd16dc4d7a2d4bd87d338babc1c42e6f99ee4386de90be3a32bc0bf37eb680; superseded inner package1,901,612bytes SHA25655ea360361161bc59cde86fbf983f4c69ad256280e13980151b92efc290fea4e; EXE00480476819a5130becafec3d138645f0745102713768cb2ed31af630a3d5fc9. Original evidence artifact15241204269 SHA2566312f6a0a927c97ab63ae2679c7f5411002a3b7b5fc9122000f03499bba5ebf5 retained. This is a production layout defect, not a harness failure.
+
+## Verified completion — November 27, 2026 Eastern
+
+**CONFIRMED software acceptance:** corrected product source `bb602372a5a1e9832b892fadf2cf45279d7f145a`, [Windows46092433553](https://github.com/bmcleid/J2534Diag-Independent/actions/runs/46092433553), job140816188544, SUCCESS. This is the second product compile across two different source artifacts; no identical-SHA rerun. The first product/source ec8c35d2d93138bb5270f1aebb8af610fe5779f9 passed62 focused checks and three unchanged-R29 witnesses, but failed independent visual acceptance because the toolbar was hidden. That earlier package remains superseded. Both actual workflow conclusions were SUCCESS; the first product's visual defect is explicitly retained, not hidden by calling the release all green.
+
+The corrected source differs in toolbar layout only in production. The follow-up skipped the R29 download/witnesses and41 model checks and ran **seven layout checkpoints**: empty provider inventory; visible source/status controls; separate non-overlapping toolbar row; controls within wide bounds; actual source selection; narrow wrapping/bounds; zero API/device/channel/native handles. Screenshot inspected: source0x7E9 selector, experimental/unverified reporting-period warning, last-observed status and synthetic42 appear above separated gauges. The reference cylinder7/8 slots are generic GM references, not engine configuration; no real vehicle data were used. The62 earlier checks are reused at their tested scope, not claimed rerun against the final binary. No full/historical/native-ABI/virtual-driver/saved-review/dialog suite repeated.
+
+Final product compiled with two existing unused SelectedVehicleControl fields and no new product warnings/errors. Layout harness has one unused local-variable warning; no errors. Local preparation compiled the changed form/models/harness and executed41 model checks; expected seam-shadowing warnings are not Windows product warnings.
+
+### Exact package and evidence
+
+- Final inner `J2534Diag-R30-Windows.zip`: **1,901,701bytes**, SHA256 `fb0f81ff5549ddab9796643e5e45fabb53f02de17af3ff1c72d3fca64a6ec015`.
+- EXE SHA256 `c3a9fe6c3f58e1b35b636538d58e5fa2e55170d16cc5240283cc75932877d30b`.
+- Final runtime wrapper artifact15242161796:1,900,752bytes, SHA256 `38409777cfdc9bdea0345cedde7239582ff820c555a92d2f8aacd7b4f78a280c`.
+- Final layout evidence artifact15241324576:29,703bytes, SHA256 `81fe009eec55b1fd9cc0a822b9b05cb5279b84073999c9d760e3442158659993`.
+- Independent wrapper/inner ZIP CRC, all8 payload hashes and exact source/run manifest PASS. Original first and final screenshots, test/build logs, full hosted logs and artifact bytes preserved. No source CSV or original physical recording modified.
+- PR29 remains open/Draft/unmerged. Keep R29 accepted saved-review package and R28/R27 fallbacks; no owner install, scan or reconnection is required to close this plan. R30 is a scoped engineering preview, not a fully qualified SRX scanner.
+
+### Final thirty-step outcomes
+
+|Step|Verified result|
+|---|---|
+|1|Shared Index267 read at start; refreshed before guarded additive final update.|
+|2|Canonical registry/coordination and authoritative CI gate read; claim and results recorded.|
+|3|Owner branch and29 stacked Draft PRs/36branches reviewed; no overlapping Mode06 branch.|
+|4|Remaining requirements stated above; no expansion into sibling tools.|
+|5|Prior tests/evidence inventoried; completed suites reused.|
+|6|Requests traced:06 plus monitor ID; old unused00 query did not establish support.|
+|7|Supported-monitor discovery reviewed and explicitly remains absent/unverified.|
+|8|Legacy eight-cylinder reference table audited; names corrected, no eight-cylinder SRX claim.|
+|9|GM generic definitions/current footnotes and2012 SRX engine-document applicability reviewed.|
+|10|Generic reference definitions separated from unobserved installed-calibration support.|
+|11|Single-frame support/negative replies cannot become test results.|
+|12|Shared ISO-TP source/sequence handling checked with new Mode06 payload fixtures; receiver gating reviewed.|
+|13|Exact complete nine-byte record boundaries enforced; truncated final record rejects whole reply.|
+|14|Raw unsigned value/min/max preserved; only known reference count scaling labelled; no invented pass/fail.|
+|15|Missing/unknown-unit states explicit; measured zero retained.|
+|16|Three exact-R29 defects reproduced; UI assignment/null handling/marshalling corrected.|
+|17|Coupled worker cancellation, visible errors, bounded unanswered polling and checkbox wiring corrected.|
+|18|Retained ownership, blocked Stop, retry and duplicate Start checked; no real provider used.|
+|19|Unchanged R29 EXE witnesses confirmed at exact hash in first Windows gate.|
+|20|Coherent Mode06 correction implemented; screenshot-discovered layout defect corrected separately.|
+|21|Focused policy/production-UI and visibility regression checks added.|
+|22|Local41 model checks and compilation; Windows62 then scoped7 checks passed, with scopes/failures above.|
+|23|First and corrected actual UI screenshots inspected; corrected selector/status visibly accepted.|
+|24|README broad compatibility/Mode06/live-counter claims qualified.|
+|25|Fuel-trim evidence/source gaps reviewed without repeating accepted session.|
+|26|Existing deterministic freshness/source/missing/zero/form gates reused; no new missing offline assertion established.|
+|27|Physical support/accuracy/exact-build limits retained; no routine capture retest justified.|
+|28|Conditional minimum physical evidence plan recorded; active Mode06 qualification waits for a supported-request plan and separate authorization.|
+|29|Owner handoff/shared registry/coordination/index updated and read back before completion claim.|
+|30|Review results, package, preserved failure and exact remaining objective gaps reported.|
+
+### What remains for the complete objective
+
+The review/correction plan is complete; the entire scanner objective is **not** declared complete. Remaining requirements are supported-monitor discovery and installed-calibration Mode06 qualification, sustained live scalar support/freshness/accuracy evidence, and eventual exact-final-build hardware qualification if claiming full physical acceptance. Mode06 raw value/limit detail is in memory/tooltips, not added to the fuel-trim scalar CSV schema; persistent Mode06 reporting is not claimed. No validated misfire diagnosis, current cylinder fault or TCM/TFP meaning follows.
+
+First reuse any existing saved Mode06/support responses if available. Do not infer absence of support from no existing record or prescribe a routine scan. Any future active test must specify one selected feature, supported/request scope, exact binary/driver, existing output evidence and Stop/Disconnect conditions; it requires separate authorization. No programming, DTC clear, actuation, parking-brake procedure or merge is part of this completed plan.

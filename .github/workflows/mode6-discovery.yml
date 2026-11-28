@@ -1,0 +1,95 @@
+name: Focused Mode06 discovery
+on:
+  push:
+    paths:
+      - 'Forms/MisfireForm.cs'
+      - 'Services/Mode6DiscoverySession.cs'
+      - 'Tests/discovery/**'
+      - '.github/workflows/mode6-discovery.yml'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  focused:
+    if: "contains(github.event.head_commit.message, '[mode6-discovery]')"
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - uses: NuGet/setup-nuget@v2
+      - name: Offline provider preflight
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force diagnostics | Out-Null
+          foreach ($view in @([Microsoft.Win32.RegistryView]::Registry64,[Microsoft.Win32.RegistryView]::Registry32)) {
+            foreach ($hive in @([Microsoft.Win32.RegistryHive]::LocalMachine,[Microsoft.Win32.RegistryHive]::CurrentUser)) {
+              $root = [Microsoft.Win32.RegistryKey]::OpenBaseKey($hive,$view)
+              try {
+                foreach ($name in @('SOFTWARE\PassThruSupport.04.04','SOFTWARE\PassThruSupport.05.00')) {
+                  $key = $root.OpenSubKey($name)
+                  if ($key) { try { if ($key.GetSubKeyNames().Count -ne 0) { throw 'Registered provider found' } } finally { $key.Dispose() } }
+                }
+              } finally { $root.Dispose() }
+            }
+          }
+          'RegisteredProviders=0;Physical=False' | Set-Content diagnostics/preflight.txt
+      - name: Build R31 and focused discovery harness
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          nuget restore J2534Diag.sln -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw 'Restore failed' }
+          $identity = Get-Content Services/BuildIdentity.cs -Raw
+          $identity.Replace('SourceCommit = "workspace"',('SourceCommit = "'+$env:GITHUB_SHA+'"')) | Set-Content Services/BuildIdentity.cs -Encoding UTF8
+          & msbuild.exe J2534Diag.sln /p:Configuration=Release '/p:Platform=Any CPU' /verbosity:minimal 2>&1 | Tee-Object diagnostics/build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Product build failed' }
+          & msbuild.exe Tests/discovery/DiscoveryUiTests.csproj /p:Configuration=Release /verbosity:minimal 2>&1 | Tee-Object diagnostics/harness-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Harness build failed' }
+      - name: Focused model and production polling UI with zero handles
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $hash = (Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash
+          $p = Start-Process Tests/discovery/bin/Release/DiscoveryUiTests.exe -ArgumentList @((Join-Path $pwd diagnostics)) -PassThru -RedirectStandardOutput diagnostics/focused.log -RedirectStandardError diagnostics/focused-error.log
+          if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw 'Focused gate exceeded two minutes' }
+          Get-Content diagnostics/focused.log
+          Get-Content diagnostics/focused-error.log
+          if ($p.ExitCode -ne 0) { throw "Focused acceptance failed $($p.ExitCode)" }
+          if ((Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash -ne $hash) { throw 'Tested executable mutated' }
+      - name: Package exact tested R31 executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @('J2534Diag R31 - bounded Mode06 advertised-support discovery',
+            'One discovery and result snapshot per Misfire tab start; restart by changing tabs.',
+            'Advertised MID support does not prove TID/scaling or SRX calibration interpretation.',
+            'The generic eight-cylinder reference list does not identify this vehicle as eight-cylinder.',
+            'Keep accepted R30 in a separate folder. No vehicle test requested.',
+            'Discovery: one 06 00 functional request; advertised continuation/results directed per source.',
+            'App policy: 300 ms response window; 50 ms gap; 128 requests / 30 seconds scheduling cap.',
+            'Driver calls themselves cannot be preempted by the scheduling cap.',
+            "SourceCommit=$env:GITHUB_SHA") | Set-Content bin/Release/R31_README.txt
+          $out = (Resolve-Path bin/Release).Path
+          $hashes = Get-ChildItem $out -File | Sort-Object Name | ForEach-Object { (Get-FileHash $_.FullName -Algorithm SHA256).Hash+'  '+$_.Name }
+          @('Release=R31',"SourceCommit=$env:GITHUB_SHA","WorkflowRun=$env:GITHUB_RUN_ID",'FocusedDiscovery=PASS','Physical=False','ProviderHandles=0','Vehicle=UNVERIFIED','PayloadSHA256:') + $hashes | Set-Content bin/Release/ENGINEERING_PREVIEW_MANIFEST.txt
+          New-Item -ItemType Directory -Force deliverables | Out-Null
+          Compress-Archive bin/Release/* deliverables/J2534Diag-R31-Windows.zip
+          "ExecutableSHA256=$((Get-FileHash bin/Release/J2534Diag.exe -Algorithm SHA256).Hash)" | Set-Content diagnostics/package.txt
+          "PackageSHA256=$((Get-FileHash deliverables/J2534Diag-R31-Windows.zip -Algorithm SHA256).Hash)" | Add-Content diagnostics/package.txt
+          Copy-Item bin/Release/ENGINEERING_PREVIEW_MANIFEST.txt diagnostics/runtime-manifest.txt
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: J2534Diag-R31-Windows
+          path: deliverables/J2534Diag-R31-Windows.zip
+          retention-days: 90
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: J2534Diag-R31-discovery-evidence
+          path: diagnostics/**
+          retention-days: 30

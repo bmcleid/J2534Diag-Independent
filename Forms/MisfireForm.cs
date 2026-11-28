@@ -20,12 +20,15 @@ namespace J2534Diag
 
         private J2534Manager j2534Manager;
         private readonly ComboBox _sourceSelect = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 190 };
-        private readonly Label _status = new Label { AutoSize = true, Text = "Unknown — no Mode06 observations" };
+        private readonly Label _status = new Label { AutoSize = true, Text = "Undiscovered — no Mode06 support/results" };
         private readonly Dictionary<uint, Dictionary<int, Mode6Result>> _observed =
             new Dictionary<uint, Dictionary<int, Mode6Result>>();
         private int _generation;
         private int _activeGeneration;
-        private FuelTrimPollingGate _pollGate;
+        private Mode6DiscoverySession _mode6Session;
+        private Action<byte[]> _sendMode6;
+        private Func<int, CancellationToken, bool> _waitMode6;
+        private bool _extendedMode6;
         private string _lastFailure;
         private readonly ToolTip _details;
         private volatile bool _acceptFrames;
@@ -44,10 +47,12 @@ namespace J2534Diag
             this.j2534Manager = j2534Manager;
             if (components == null) components = new System.ComponentModel.Container();
             _details = new ToolTip(components);
+            _sendMode6 = frame => j2534Manager.SendDiagnosticMessage(frame);
+            _waitMode6 = (milliseconds, token) => token.WaitHandle.WaitOne(milliseconds);
 
             var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
             bar.Controls.Add(new Label { AutoSize = true,
-                Text = "Experimental Mode06 • GM reference labels; SRX support unverified. Results are not live counters." });
+                Text = "Mode06 advertised support ≠ diagnosis • GM labels unverified • not live counters" });
             bar.Controls.Add(_sourceSelect); bar.Controls.Add(_status);
             // Put the toolbar in its own measured row; a sibling Fill panel can
             // otherwise consume the entire embedded form and hide docked controls.
@@ -94,14 +99,9 @@ namespace J2534Diag
             _ownsReceiveChannel = true;
             _cts = new CancellationTokenSource();
             var cancellation = _cts;
-            _pollGate = new FuelTrimPollingGate(500, 100, 6);
-            var pollGate = _pollGate;
-            _activeGeneration = ++_generation;
+            BeginMode6Session();
             int generation = _activeGeneration;
-            _lastFailure = null;
-            _observed.Clear(); _sourceSelect.Items.Clear(); RefreshObservedValues();
-            lock (_frameSync) { _isoTpParser.Reset(); _acceptFrames = true; }
-            _status.Text = "Awaiting replies; support not established";
+            _status.Text = "Discovering support — results gated by responder advertisement";
             try
             {
 
@@ -143,18 +143,7 @@ namespace J2534Diag
             }, ex => WorkerFailed(ex, generation))) { IsBackground = true };
             _pollingThread = new Thread(() => ChannelLifecyclePolicy.RunCoupledWorker(cancellation, () =>
             {
-                pollGate.Run(() => Mode6TidMap.MisfireTests.Where(p => p.Enabled)
-                    .Select(p => p.MonitorId).Distinct().ToArray(), monitor =>
-                {
-                    if (cancellation.IsCancellationRequested) return;
-                    var request = new byte[12];
-                    byte[] id = j2534Manager.BitMode == BitType.BITS_11 ?
-                        new byte[] { 0, 0, 7, 0xDF } : new byte[] { 0x18, 0xDB, 0x33, 0xF1 };
-                    Array.Copy(id, request, 4); request[4] = 2; request[5] = 6; request[6] = monitor;
-                    j2534Manager.SendDiagnosticMessage(request);
-                }, cancellation.Token);
-                if (!cancellation.IsCancellationRequested)
-                    Post(generation, () => _status.Text = pollGate.LastStopReason + "; last observed values retained");
+                RunMode6Polling(cancellation.Token, generation);
             }, ex => WorkerFailed(ex, generation))) { IsBackground = true };
             _monitorThread.Start(); _pollingThread.Start();
             }
@@ -163,6 +152,41 @@ namespace J2534Diag
                 WorkerFailed(ex, generation);
                 StopListening();
             }
+        }
+
+        private void BeginMode6Session()
+        {
+            _activeGeneration = ++_generation;
+            int generation = _activeGeneration;
+            _extendedMode6 = j2534Manager.BitMode == BitType.BITS_29;
+            var session = new Mode6DiscoverySession(_extendedMode6);
+            _mode6Session = session;
+            _lastFailure = null;
+            _observed.Clear(); _sourceSelect.Items.Clear(); RefreshObservedValues();
+            lock (_frameSync) { _isoTpParser.Reset(); _acceptFrames = true; }
+            session.Changed += () => Post(generation, RefreshDiscovery);
+            session.Results += (source, records) => Post(generation, () => ApplyResults(source, records));
+        }
+        private void RunMode6Polling(CancellationToken token, int generation)
+        {
+            var session = _mode6Session;
+            session.Run(request =>
+            {
+                if (generation != _generation) throw new OperationCanceledException();
+                _sendMode6(request.ToCanFrame(_extendedMode6));
+            }, _waitMode6, () => Mode6TidMap.MisfireTests.Where(p => p.Enabled)
+                .Select(p => p.MonitorId).Distinct().ToArray(), token);
+        }
+        private void RefreshDiscovery()
+        {
+            if (_mode6Session == null) return;
+            foreach (var source in _mode6Session.Sources)
+                if (!_sourceSelect.Items.Contains(source.Source)) _sourceSelect.Items.Add(source.Source);
+            if (_sourceSelect.SelectedIndex < 0 && _sourceSelect.Items.Count > 0) _sourceSelect.SelectedIndex = 0;
+            RefreshObservedValues();
+            _status.Text = _mode6Session.Status;
+            _status.AccessibleDescription = string.Join(" | ", _mode6Session.Sources.Select(p => "0x" + p.Source.ToString("X") + ": " + p.Status));
+            _details.SetToolTip(_status, _status.AccessibleDescription);
         }
 
         private void WorkerFailed(Exception error, int generation)
@@ -190,22 +214,17 @@ namespace J2534Diag
             if (e.CanId == null || e.CanId.Length != 4 || e.Payload == null || e.Payload.Length < 2) return;
             uint source = ((uint)e.CanId[0] << 24) | ((uint)e.CanId[1] << 16) |
                 ((uint)e.CanId[2] << 8) | e.CanId[3];
-            if (e.Payload[0] != 0x46) return;
             if (e.FrameType == IsoTpFrameType.FirstFrame)
             {
-                if (!Mode6TidMap.MisfireTests.Any(p => p.MonitorId == e.Payload[1])) return;
+                if (e.Payload[0] != 0x46) return;
+                if (_mode6Session == null || !_mode6Session.AllowsFirstFrame(source, e.Payload[1])) return;
                 uint target = source <= 0x7FF ? source - 8 : 0x18DA00F1u | ((source & 255u) << 8);
                 j2534Manager.SendFlowControl(new[] { (byte)(target >> 24), (byte)(target >> 16),
                     (byte)(target >> 8), (byte)target }, blockSize: 0, separationTime: 0);
                 return;
             }
             if (!e.IsComplete) return;
-            List<Mode6Result> records;
-            if (!Mode6Response.TryRead(e.Payload, out records)) return;
-            foreach (var record in records.Where(r => r.IsReferenceMisfireCount))
-                _pollGate?.Observe(record.MonitorId);
-            int generation = _activeGeneration;
-            Post(generation, () => ApplyResults(source, records));
+            _mode6Session?.Accept(source, e.Payload);
         }
 
         private readonly Dictionary<int, PidDisplayControl> _misfireControls =
@@ -218,14 +237,14 @@ namespace J2534Diag
             {
                 if (_observed.Count >= 16) return;
                 values = new Dictionary<int, Mode6Result>(); _observed.Add(source, values);
-                _sourceSelect.Items.Add(source);
+                if (!_sourceSelect.Items.Contains(source)) _sourceSelect.Items.Add(source);
                 if (_sourceSelect.SelectedIndex < 0) _sourceSelect.SelectedIndex = 0;
             }
             foreach (var record in records)
                 if (_misfireControls.ContainsKey(((record.MonitorId << 8) | record.TestId)))
                     values[((record.MonitorId << 8) | record.TestId)] = record;
             RefreshObservedValues();
-            _status.Text = "Last observed Mode06 results; mapping/support on SRX unverified";
+            RefreshDiscovery();
         }
         private void RefreshObservedValues()
         {
@@ -235,7 +254,17 @@ namespace J2534Diag
             {
                 Mode6Result result;
                 bool found = values != null && values.TryGetValue(pair.Key, out result);
-                if (!found) { pair.Value.ValueText = "Unknown"; pair.Value.Unit = "counts (GM ref.)"; pair.Value.AccessibleDescription = "No observed result"; _details.SetToolTip(pair.Value, "No observed result"); continue; }
+                if (!found)
+                {
+                    Mode6SupportState support = _sourceSelect.SelectedItem is uint && _mode6Session != null ?
+                        _mode6Session.SupportFor((uint)_sourceSelect.SelectedItem, (byte)(pair.Key >> 8)) : Mode6SupportState.Undiscovered;
+                    pair.Value.ValueText = support == Mode6SupportState.NotAdvertised ? "Not advertised" :
+                        support == Mode6SupportState.Advertised ? "No result" :
+                        support == Mode6SupportState.Inconclusive ? "Unverified" : "Undiscovered";
+                    pair.Value.Unit = "counts (GM ref.)";
+                    pair.Value.AccessibleDescription = support + "; no observed TID result; monitor support is not proof of TID/scaling validity";
+                    _details.SetToolTip(pair.Value, pair.Value.AccessibleDescription); continue;
+                }
                 result = values[pair.Key];
                 pair.Value.ValueText = result.IsReferenceMisfireCount ? result.RawValue.ToString() : "Unknown units";
                 pair.Value.Unit = result.IsReferenceMisfireCount ? "counts (GM ref.)" : "unverified";
@@ -256,7 +285,7 @@ namespace J2534Diag
                     PidName = tid.Label,
                     Unit = "counts (GM ref.)",
                     IsEnabled = tid.Enabled,
-                    ValueText = "Unknown"
+                    ValueText = "Undiscovered"
                 };
 
                 control.IsEnabledChanged += (sender, e) => tid.Enabled = control.IsEnabled;
@@ -281,6 +310,7 @@ namespace J2534Diag
             _cts?.Cancel();
             _acceptFrames = false;
             ++_generation;
+            _mode6Session?.Stop();
             bool pollingStopped = ChannelLifecyclePolicy.RequestStopAndWait(_pollingThread, _cts, 3000);
             bool monitorStopped = ChannelLifecyclePolicy.RequestStopAndWait(_monitorThread, _cts, 3000);
             if (!pollingStopped || !monitorStopped)
@@ -301,7 +331,6 @@ namespace J2534Diag
                 return;
             }
             lock (_frameSync) _isoTpParser.Reset();
-            _pollGate?.Dispose(); _pollGate = null;
             _status.Text = _lastFailure == null ? "Stopped — last observed results retained" : "Stopped after error — " + _lastFailure;
             _cts?.Dispose();
             _cts = null;
